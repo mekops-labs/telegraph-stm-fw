@@ -74,6 +74,15 @@ static int16_t g_temp;
 
 static mutex_t g_fblock = NXMUTEX_INITIALIZER;
 
+/* The minutes of the local time from UTC. The RTC keeps UTC, thus this value
+ * changes the panels only.
+ *
+ * Note: the device has no store for this value. Thus the edge MCU sends it
+ * again after each reset of this board.
+ */
+
+static int16_t g_utcoffset;
+
 /* This is a 21x14 heart image. Bit 0 is the column at the left.
  *
  * Note: this image comes from the reverse engineered firmware. Thus a person
@@ -188,7 +197,7 @@ static int display_scanner(int argc, char *argv[])
            * bus.
            */
 
-          now = time(NULL);
+          now = time(NULL) + (time_t)g_utcoffset * 60;
           gmtime_r(&now, &tm);
 
           if (g_i2c != NULL && ++ticks >= TEMP_EVERY_TICKS)
@@ -222,6 +231,23 @@ int hazk03_display_text(int panel, const char *s, size_t len)
   nxmutex_unlock(&g_fblock);
 
   return OK;
+}
+
+int hazk03_display_brightness(uint8_t digits, uint8_t panels)
+{
+  tm1629a_setbrightness(digits, true);
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_setbrightness(&g_main, panels);
+  sm1626d_setbrightness(&g_sub, panels);
+  nxmutex_unlock(&g_fblock);
+
+  return OK;
+}
+
+void hazk03_display_utcoffset(int16_t minutes)
+{
+  g_utcoffset = minutes;
 }
 
 int16_t hazk03_display_temperature(void)
