@@ -42,13 +42,25 @@ The toolchain is standardized in a container image, so a host needs only
 podman (or docker) and git.
 
 ```sh
-podman build -t telegraph-fw -f Containerfile .
-podman run --rm -it --userns=keep-id --security-opt label=disable \
-    -v "$PWD:/src" telegraph-fw bash
+git submodule update --init --depth 1   # NuttX + nuttx-apps
+make image                              # toolchain container
+make build                              # configure + build
 ```
 
-The image carries the `arm-none-eabi` cross toolchain and the NuttX configure
-prerequisites. Builds are cached through ccache.
+`make help` lists the rest (`menuconfig`, `savedefconfig`, `clean`, `shell`).
+Every target runs inside the container, so a host needs only podman and git;
+the image carries the `arm-none-eabi` cross toolchain and the NuttX configure
+prerequisites, and builds are cached through ccache.
+
+### Board configuration
+
+The board lives in `boards/hazk03-stm32f105rb/` and is built **out of tree** —
+NuttX finds it through `CONFIG_ARCH_BOARD_CUSTOM_DIR` in the defconfig, so the
+submodules are never modified and rebase cleanly.
+
+`stm32_clockconfig.c` replaces the stock clock setup because the in-tree
+connectivity-line path always drives the PLL from the HSE input, which this
+board cannot use.
 
 ## License
 
