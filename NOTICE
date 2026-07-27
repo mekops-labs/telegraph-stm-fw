@@ -1,0 +1,19 @@
+Telegraph Firmware
+Copyright 2026 MekOps Labs
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product builds against the following third-party components, pulled
+as git submodules; each retains its own license at the path below.
+third_party/ is exempt from this project's own SPDX/Apache-2.0 source
+headers (see CONTRIBUTING.md).
+
+  - NuttX -- third_party/nuttx -- Apache-2.0 -- Copyright Apache NuttX
+    contributors
+  - NuttX apps -- third_party/nuttx-apps -- Apache-2.0 -- Copyright Apache
+    NuttX contributors
+
+Both ship their own NOTICE file (third_party/nuttx{,-apps}/NOTICE). Those
+notices apply when redistributing NuttX itself. This project does not
+redistribute NuttX sources; it overlays a board configuration onto an
+unmodified checkout at build time.
