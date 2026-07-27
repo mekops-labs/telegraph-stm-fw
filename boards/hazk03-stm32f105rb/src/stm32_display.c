@@ -8,9 +8,12 @@
 
 #include <debug.h>
 #include <sched.h>
+#include <time.h>
 
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
+
+#include <nuttx/i2c/i2c_master.h>
 
 #include "hazk03.h"
 #include "ds3231.h"
@@ -28,11 +31,18 @@
 
 #define BRIGHTNESS 4
 
-/* Measured at ~13 ms for a pass over both panels, so this reads the clock
+/* Measured at ~13 ms for a pass over both panels, so this ticks the digits
  * about once a second without needing a timer.
  */
 
-#define RTC_EVERY_PASSES 75
+#define TICK_EVERY_PASSES 75
+
+/* Anything done between scan passes is time the panels are dark, so the bus
+ * read for the temperature is kept rare - it changes far slower than once a
+ * second anyway.
+ */
+
+#define TEMP_EVERY_TICKS  30
 
 #define DISPLAY_STACKSIZE 1024
 
@@ -50,6 +60,8 @@
 
 static struct sm1626d_dev_s g_main;
 static struct sm1626d_dev_s g_sub;
+static struct i2c_master_s *g_i2c;
+static int16_t g_temp;
 
 /* 21x14 heart, bit 0 = leftmost column. Carried over from the reverse
  * engineered firmware so the sub-screen output is directly comparable.
@@ -116,22 +128,24 @@ static void draw_heart(struct sm1626d_dev_s *dev)
     }
 }
 
-static void show_time(const struct ds3231_time_s *t)
+static void show_time(const struct tm *t, int16_t temp)
 {
-  tm1629a_setchar(0, (t->hours / 10) ? '0' + t->hours / 10 : ' ');
-  tm1629a_setchar(1, '0' + t->hours % 10);
-  tm1629a_setchar(2, '0' + t->minutes / 10);
-  tm1629a_setchar(3, '0' + t->minutes % 10);
-  tm1629a_setchar(4, '0' + t->seconds / 10);
-  tm1629a_setchar(5, '0' + t->seconds % 10);
+  int mon = t->tm_mon + 1;
 
-  tm1629a_setchar(6, (t->month / 10) ? '0' + t->month / 10 : ' ');
-  tm1629a_setchar(7, '0' + t->month % 10);
-  tm1629a_setchar(8, (t->day / 10) ? '0' + t->day / 10 : ' ');
-  tm1629a_setchar(9, '0' + t->day % 10);
+  tm1629a_setchar(0, (t->tm_hour / 10) ? '0' + t->tm_hour / 10 : ' ');
+  tm1629a_setchar(1, '0' + t->tm_hour % 10);
+  tm1629a_setchar(2, '0' + t->tm_min / 10);
+  tm1629a_setchar(3, '0' + t->tm_min % 10);
+  tm1629a_setchar(4, '0' + t->tm_sec / 10);
+  tm1629a_setchar(5, '0' + t->tm_sec % 10);
 
-  tm1629a_setchar(10, '0' + (t->temperature / 100) % 10);
-  tm1629a_setchar(11, '0' + (t->temperature / 10) % 10);
+  tm1629a_setchar(6, (mon / 10) ? '0' + mon / 10 : ' ');
+  tm1629a_setchar(7, '0' + mon % 10);
+  tm1629a_setchar(8, (t->tm_mday / 10) ? '0' + t->tm_mday / 10 : ' ');
+  tm1629a_setchar(9, '0' + t->tm_mday % 10);
+
+  tm1629a_setchar(10, '0' + (temp / 100) % 10);
+  tm1629a_setchar(11, '0' + (temp / 10) % 10);
 
   tm1629a_flush();
 }
@@ -139,28 +153,34 @@ static void show_time(const struct ds3231_time_s *t)
 static int display_scanner(int argc, char *argv[])
 {
   unsigned int passes = 0;
+  unsigned int ticks = TEMP_EVERY_TICKS;
 
   for (; ; )
     {
       sm1626d_refresh(&g_main);
       sm1626d_refresh(&g_sub);
 
-      if (++passes >= RTC_EVERY_PASSES)
+      if (++passes >= TICK_EVERY_PASSES)
         {
-          struct ds3231_time_s t;
+          struct tm tm;
+          time_t now;
 
           passes = 0;
-          if (ds3231_read(&t) == OK)
+
+          /* The system clock is backed by the battery-backed DS3231, so this
+           * needs no bus traffic; only the temperature does.
+           */
+
+          now = time(NULL);
+          gmtime_r(&now, &tm);
+
+          if (g_i2c != NULL && ++ticks >= TEMP_EVERY_TICKS)
             {
-              show_time(&t);
-              syslog(LOG_INFO, "rtc %02u:%02u:%02u %02u-%02u temp %d.%d C\n",
-                     t.hours, t.minutes, t.seconds, t.day, t.month,
-                     t.temperature / 10, t.temperature % 10);
+              ticks = 0;
+              ds3231_temperature(g_i2c, &g_temp);
             }
-          else
-            {
-              syslog(LOG_ERR, "ds3231: no ack\n");
-            }
+
+          show_time(&tm, g_temp);
         }
     }
 
@@ -174,6 +194,8 @@ static int display_scanner(int argc, char *argv[])
 int hazk03_display_init(void)
 {
   int ret;
+
+  g_i2c = hazk03_rtc_initialize();
 
   tm1629a_init(BRIGHTNESS);
 
