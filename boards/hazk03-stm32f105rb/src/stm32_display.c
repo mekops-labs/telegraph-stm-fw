@@ -14,9 +14,11 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
+#include <nuttx/mutex.h>
 
 #include <nuttx/i2c/i2c_master.h>
 
+#include "font5x7.h"
 #include "hazk03.h"
 #include "ds3231.h"
 #include "sm1626d.h"
@@ -65,6 +67,12 @@ static struct sm1626d_dev_s g_main;
 static struct sm1626d_dev_s g_sub;
 static struct i2c_master_s *g_i2c;
 static int16_t g_temp;
+
+/* The scan thread reads the framebuffers. Another thread writes text into
+ * them. Thus a lock keeps a scan pass away from a partial image.
+ */
+
+static mutex_t g_fblock = NXMUTEX_INITIALIZER;
 
 /* This is a 21x14 heart image. Bit 0 is the column at the left.
  *
@@ -163,8 +171,10 @@ static int display_scanner(int argc, char *argv[])
 
   for (; ; )
     {
+      nxmutex_lock(&g_fblock);
       sm1626d_refresh(&g_main);
       sm1626d_refresh(&g_sub);
+      nxmutex_unlock(&g_fblock);
 
       if (++passes >= TICK_EVERY_PASSES)
         {
@@ -197,6 +207,27 @@ static int display_scanner(int argc, char *argv[])
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+int hazk03_display_text(int panel, const char *s, size_t len)
+{
+  struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
+
+  /* The panel has 14 rows, and the font has 7 rows. Thus this offset puts the
+   * text in the middle.
+   */
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_clear(dev);
+  sm1626d_drawtext(dev, 0, (dev->height - FONT5X7_HEIGHT) / 2, s, len);
+  nxmutex_unlock(&g_fblock);
+
+  return OK;
+}
+
+int16_t hazk03_display_temperature(void)
+{
+  return g_temp;
+}
 
 int hazk03_display_init(void)
 {

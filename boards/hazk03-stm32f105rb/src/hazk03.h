@@ -9,6 +9,9 @@
 
 #include <nuttx/config.h>
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <nuttx/i2c/i2c_master.h>
 
 #include "stm32_gpio.h"
@@ -103,5 +106,46 @@ int hazk03_display_init(void);
  ****************************************************************************/
 
 struct i2c_master_s *hazk03_rtc_initialize(void);
+
+/* The two panels. */
+
+#define HAZK03_PANEL_MAIN  0
+#define HAZK03_PANEL_SUB   1
+
+/****************************************************************************
+ * Name: hazk03_display_text
+ *
+ * Description:
+ *   Put a text on one panel. An empty text clears that panel.
+ *
+ *   Note: the function takes the lock of the framebuffer. Thus a scan pass
+ *   never gives a partial image.
+ *
+ ****************************************************************************/
+
+int hazk03_display_text(int panel, const char *s, size_t len);
+
+/****************************************************************************
+ * Name: hazk03_display_temperature
+ *
+ * Description:
+ *   Give the last temperature of the DS3231, in tenths of a degree Celsius.
+ *
+ ****************************************************************************/
+
+int16_t hazk03_display_temperature(void);
+
+/****************************************************************************
+ * Name: hazk03_ipc_init
+ *
+ * Description:
+ *   Start the task that serves the protocol on the UART of the edge MCU.
+ *
+ *   Note: this UART also carries the serial console. Thus only a build
+ *   without a console starts this task.
+ *
+ ****************************************************************************/
+
+int hazk03_ipc_init(void);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_HAZK03_H */

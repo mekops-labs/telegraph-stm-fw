@@ -79,6 +79,7 @@ extern "C" {
 #define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
 #define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
 #define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
+#define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
 #define IPC_OP_FLASH        0x20u  /* edge -> STM32: start the flash mode   */
 #define IPC_OP_ACK          0xf0u  /* the receiver accepted the frame       */
 #define IPC_OP_NACK         0xf1u  /* the receiver rejected the frame       */
@@ -107,6 +108,60 @@ extern "C" {
 #define IPC_ERR_ARG         (-1)  /* a pointer is NULL, or a value is bad   */
 #define IPC_ERR_SPACE       (-2)  /* the destination buffer is too small    */
 #define IPC_ERR_TOO_LARGE   (-3)  /* the payload is above IPC_MAX_PAYLOAD   */
+
+/****************************************************************************
+ * Payloads
+ ****************************************************************************/
+
+#define IPC_PROTO_VERSION   1u
+
+/* The payload of IPC_OP_SET_TIME. The value is a Unix time in seconds. */
+
+#define IPC_SET_TIME_LEN    4u
+
+/* The payload of IPC_OP_STATE. All the multiple-byte fields are
+ * little-endian.
+ */
+
+#define IPC_STATE_LEN       12u
+
+#define IPC_STATE_TIME      0u   /* u32: the Unix time of the RTC          */
+#define IPC_STATE_TEMP      4u   /* i16: tenths of a degree Celsius        */
+#define IPC_STATE_FRAMES    6u   /* u16: the count of the accepted frames  */
+#define IPC_STATE_CRC_ERR   8u   /* u16: the count of the CRC errors       */
+#define IPC_STATE_RESYNC    10u  /* u8:  the count of the resync operations */
+#define IPC_STATE_VERSION   11u  /* u8:  IPC_PROTO_VERSION                 */
+
+/****************************************************************************
+ * Byte order
+ ****************************************************************************/
+
+/* These functions read and write the little-endian fields of a payload. */
+
+static inline uint16_t ipc_get_u16(const uint8_t *p)
+{
+  return (uint16_t)(p[0] | (p[1] << 8));
+}
+
+static inline uint32_t ipc_get_u32(const uint8_t *p)
+{
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static inline void ipc_put_u16(uint8_t *p, uint16_t v)
+{
+  p[0] = (uint8_t)(v & 0xff);
+  p[1] = (uint8_t)(v >> 8);
+}
+
+static inline void ipc_put_u32(uint8_t *p, uint32_t v)
+{
+  p[0] = (uint8_t)(v & 0xff);
+  p[1] = (uint8_t)((v >> 8) & 0xff);
+  p[2] = (uint8_t)((v >> 16) & 0xff);
+  p[3] = (uint8_t)((v >> 24) & 0xff);
+}
 
 /****************************************************************************
  * Types
