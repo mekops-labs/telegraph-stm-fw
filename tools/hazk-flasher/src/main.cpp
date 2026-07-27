@@ -99,7 +99,12 @@ static inline void ledToggle() {
 // STM32 HARDWARE CONTROL
 // ==========================================
 
+#include "ipc_peer.h"
+
 void resetSTM32(bool enterBootloader) {
+    // A flash operation and the protocol cannot share the port.
+    if (ipcActive()) ipcEnd();
+
     digitalWrite(PIN_BOOT0, enterBootloader ? HIGH : LOW);
     delay(50);
     digitalWrite(PIN_RST, LOW);
@@ -235,9 +240,9 @@ uint8_t cmdLen = 0;
 
 void printHelp() {
 #ifdef HAS_WIFI
-    Serial.println("INFO commands: id | run | boot | flash <size> | wifi | scan | help");
+    Serial.println("INFO commands: id | run | boot | flash <size> | wifi | scan | ipc | help");
 #else
-    Serial.println("INFO commands: id | run | boot | flash <size> | help");
+    Serial.println("INFO commands: id | run | boot | flash <size> | ipc | help");
 #endif
 }
 
@@ -442,6 +447,10 @@ void handleCommand(char* line) {
     } else if (strncmp(line, "connect ", 8) == 0) {
         cmdWifiConnect(line + 8);
 #endif
+    } else if (strncmp(line, "ipc ", 4) == 0) {
+        ipcCommand(line + 4);
+    } else if (strcmp(line, "ipc") == 0) {
+        ipcHelp();
     } else if (strcmp(line, "help") == 0 || line[0] == '\0') {
         printHelp();
     } else {
@@ -676,6 +685,17 @@ void handleReset() {
     server.send(200, "text/plain", "OK target reset");
 }
 
+// Run a peer command that arrives in the query string, and give the output
+// back as text. Thus the protocol runs without a USB connection.
+void handleIpc() {
+    if (!server.hasArg("cmd")) {
+        server.send(400, "text/plain", "ERR missing cmd\n");
+        return;
+    }
+
+    server.send(200, "text/plain", ipcRun(server.arg("cmd").c_str()));
+}
+
 void handleUpdateResult() {
     Serial.println(flashSuccess ? "FLASH COMPLETE" : "FLASH FAILED");
     returnToBridge();
@@ -803,6 +823,7 @@ void setupWiFi() {
     server.on("/baud", handleBaud);
     server.on("/uarttest", handleUartTest);
     server.on("/reset", handleReset);
+    server.on("/ipc", handleIpc);
     server.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
     server.begin();
 
@@ -861,6 +882,13 @@ void loop() {
 #endif
 
     pollConsole();
+
+    // The peer owns the port while it is active. Thus the raw bridge stays
+    // out of the frames of the protocol.
+    if (ipcActive()) {
+        ipcPoll();
+        return;
+    }
 
     if (!flashingMode) {
         // STM32 -> USB & Network
