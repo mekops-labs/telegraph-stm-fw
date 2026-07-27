@@ -32,10 +32,19 @@ static uint16_t g_nextCorrId = 1;
 static uint16_t g_waitCorrId = 0;
 static bool g_replied = false;
 
-// The last credit count of an ACK. A count of zero stops the sender.
-static uint8_t g_credits = 0xff;
+// The allowance of the sender. Each frame takes one credit, and each ACK
+// gives the current count of the receiver.
+//
+// Note: the protocol has no initial grant. Thus the peer starts with one
+// frame, and it learns the true capacity from the first ACK.
+static uint8_t g_credits = 1;
+static uint8_t g_minCredits = 0xff;
+static uint32_t g_stalls = 0;
 
 static unsigned long g_lastByteMs = 0;
+
+// A burst gives one line for each frame. This flag keeps that output away.
+static bool g_quiet = false;
 
 // The output goes to the USB console. A caller over the network also captures
 // it, thus the peer runs without a USB connection.
@@ -79,8 +88,9 @@ static void ipcReport(void *arg, const struct ipc_frame_s *frame) {
     switch (frame->opcode) {
         case IPC_OP_ACK:
             g_credits = frame->payload_len ? frame->payload[0] : 0;
-            ipcOut("ACK  id=%u credits=%u\n", frame->corr_id,
-                          g_credits);
+            if (g_credits < g_minCredits) g_minCredits = g_credits;
+            if (!g_quiet)
+                ipcOut("ACK  id=%u credits=%u\n", frame->corr_id, g_credits);
             break;
 
         case IPC_OP_NACK:
@@ -161,27 +171,93 @@ static void ipcNoise() {
     ipcRequest(IPC_OP_GET_STATE, NULL, 0);
 }
 
-// Transmit more than one frame without a wait for the ACK.
+// Transmit one frame that carries a text for the sub panel.
+static int ipcSendText(unsigned int i) {
+    uint16_t id = ipcNextCorrId();
+    char text[4];
+    int n;
+
+    snprintf(text, sizeof(text), "%03u", i % 1000);
+    n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_SMALL, id, text, 3);
+
+    if (n > 0) Serial1.write(g_tx, (size_t)n);
+    return n;
+}
+
+// Transmit frames, and obey the credits.
 //
-// Note: this test shows the credits under a burst. The count falls while the
-// receive buffer fills. The opcode sets the text of the sub panel, because
-// only an ACK carries the credits.
+// Note: this test shows the flow control. The sender stops at zero credits,
+// and it starts again at the next ACK. Only an ACK carries the count.
 static void ipcBurst(unsigned int count) {
-    for (unsigned int i = 0; i < count; i++) {
-        uint16_t id = ipcNextCorrId();
-        char text[4];
-        int n;
+    unsigned long t0 = millis();
+    unsigned int sent = 0;
 
-        snprintf(text, sizeof(text), "%03u", i % 1000);
-        n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_SMALL, id, text, 3);
+    g_minCredits = 0xff;
+    g_stalls = 0;
+    g_quiet = true;
 
-        if (n > 0) Serial1.write(g_tx, (size_t)n);
+    while (sent < count) {
+        if (g_credits == 0) {
+            // The receiver has no space. Wait for an ACK.
+            unsigned long deadline = millis() + IPC_REPLY_MS;
+
+            g_stalls++;
+            while (g_credits == 0 && (long)(millis() - deadline) < 0) {
+                ipcPoll();
+            }
+
+            if (g_credits == 0) break;
+            continue;
+        }
+
+        int n = ipcSendText(sent);
+
+        if (n > 0) {
+            uint8_t cost = (uint8_t)IPC_FRAME_CREDITS(3);
+
+            g_credits = (g_credits > cost) ? (uint8_t)(g_credits - cost) : 0;
+            sent++;
+        }
+
+        ipcPoll();
     }
-
-    ipcOut("INFO sent %u requests without a wait\n", count);
 
     unsigned long deadline = millis() + IPC_REPLY_MS;
     while ((long)(millis() - deadline) < 0) ipcPoll();
+
+    g_quiet = false;
+    ipcOut("INFO sent=%u in %lums min_credits=%u stalls=%lu\n", sent,
+           millis() - t0, g_minCredits, (unsigned long)g_stalls);
+    ipcOut("INFO parser frames=%lu crcerr=%lu badlen=%lu resync=%lu\n",
+           (unsigned long)g_parser.stats.frames,
+           (unsigned long)g_parser.stats.crc_errors,
+           (unsigned long)g_parser.stats.bad_length,
+           (unsigned long)g_parser.stats.resyncs);
+}
+
+// Transmit frames without any regard for the credits.
+//
+// Note: this test shows the condition that the flow control prevents. The
+// receive buffer of the target fills, and the data that comes after is lost.
+static void ipcFlood(unsigned int count) {
+    unsigned long t0 = millis();
+
+    g_minCredits = 0xff;
+    g_quiet = true;
+
+    for (unsigned int i = 0; i < count; i++) ipcSendText(i);
+
+    unsigned long deadline = millis() + 2000;
+    while ((long)(millis() - deadline) < 0) ipcPoll();
+
+    g_quiet = false;
+    ipcOut("INFO flooded %u frames in %lums, min_credits=%u\n", count,
+           millis() - t0, g_minCredits);
+    ipcOut("INFO replies=%lu crcerr=%lu badlen=%lu resync=%lu\n",
+           (unsigned long)g_parser.stats.frames,
+           (unsigned long)g_parser.stats.crc_errors,
+           (unsigned long)g_parser.stats.bad_length,
+           (unsigned long)g_parser.stats.resyncs);
 }
 
 // Reset the STM32, and keep the peer active.
@@ -205,7 +281,8 @@ void ipcBegin(unsigned long baud) {
     Serial1.begin(baud, SERIAL_8N1, STM_RX_PIN, STM_TX_PIN);
     ipc_parser_init(&g_parser);
     g_active = true;
-    g_credits = 0xff;
+    g_credits = 1;
+    g_minCredits = 0xff;
     ipcOut("OK ipc on at %lu baud\n", baud);
 }
 
@@ -313,6 +390,8 @@ void ipcCommand(const char *args) {
         ipcNoise();
     } else if (strncmp(args, "burst ", 6) == 0) {
         ipcBurst((unsigned int)strtoul(args + 6, NULL, 10));
+    } else if (strncmp(args, "flood ", 6) == 0) {
+        ipcFlood((unsigned int)strtoul(args + 6, NULL, 10));
     } else if (strcmp(args, "stats") == 0) {
         ipcOut("INFO frames=%lu crcerr=%lu badlen=%lu resync=%lu "
                       "dropped=%lu credits=%u\n",
