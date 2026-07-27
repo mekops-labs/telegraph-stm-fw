@@ -8,13 +8,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* 16 scan rows; 10 bytes covers the 80 column bits the main screen shifts. */
+/* There are 16 scan rows. The main screen sends 80 column bits, thus 10 bytes
+ * are sufficient for one row.
+ */
 
 #define SM1626D_ROWS      16
 #define SM1626D_ROW_BYTES 10
 
-/* Both screens share CLK, OE and STB and differ only in their data input, so
- * an instance is really just a framebuffer plus a DIN pin.
+/* Both screens share the CLK, OE and STB signals. Only the data input is
+ * different. Thus one instance holds a framebuffer and a data pin.
  */
 
 struct sm1626d_dev_s
@@ -35,8 +37,10 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);
  * Name: sm1626d_refresh
  *
  * Description:
- *   Scan the panel once. The display holds an image only while it is being
- *   scanned, so this must be called continuously.
+ *   Scan the panel one time.
+ *
+ *   Note: the panel keeps an image only during a scan. Thus the caller calls
+ *   this function again and again.
  *
  ****************************************************************************/
 
