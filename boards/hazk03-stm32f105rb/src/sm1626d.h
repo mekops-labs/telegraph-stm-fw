@@ -27,6 +27,9 @@
 struct sm1626d_dev_s
 {
   uint32_t din;                                       /* GPIO pin config */
+  uint32_t din_bsrr;                       /* set-reset register of the pin */
+  uint32_t din_set;
+  uint32_t din_clr;
   uint8_t width;
   uint8_t height;
   uint8_t bright;
