@@ -9,6 +9,8 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/i2c/i2c_master.h>
+
 #include "stm32_gpio.h"
 
 /****************************************************************************
@@ -83,5 +85,16 @@ int stm32_bringup(void);
  ****************************************************************************/
 
 int hazk03_display_init(void);
+
+/****************************************************************************
+ * Name: hazk03_rtc_initialize
+ *
+ * Description:
+ *   Bring up the bit-banged bus and bind the battery-backed DS3231 to it as
+ *   the system RTC. Returns the bus for the device's other registers.
+ *
+ ****************************************************************************/
+
+struct i2c_master_s *hazk03_rtc_initialize(void);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_HAZK03_H */

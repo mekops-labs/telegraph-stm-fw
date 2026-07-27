@@ -63,9 +63,6 @@ int stm32_bringup(void)
   stm32_configgpio(GPIO_SM1626D_DIN_MAIN);
   stm32_configgpio(GPIO_SM1626D_DIN_SUB);
 
-  stm32_configgpio(GPIO_DS3231_SCL);
-  stm32_configgpio(GPIO_DS3231_SDA);
-
   hazk03_display_init();
 
 #ifdef CONFIG_FS_PROCFS

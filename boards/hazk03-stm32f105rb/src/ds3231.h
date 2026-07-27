@@ -7,27 +7,18 @@
 
 #include <stdint.h>
 
-struct ds3231_time_s
-{
-  uint8_t seconds;
-  uint8_t minutes;
-  uint8_t hours;        /* 24-hour */
-  uint8_t wday;         /* 1 = Monday .. 7 = Sunday */
-  uint8_t day;
-  uint8_t month;
-  uint8_t year;         /* Years since 2000 */
-  int16_t temperature;  /* Tenths of a degree Celsius */
-};
+#include <nuttx/i2c/i2c_master.h>
 
 /****************************************************************************
- * Name: ds3231_read
+ * Name: ds3231_temperature
  *
  * Description:
- *   Read the calendar and the temperature registers. Returns OK, or -EIO if
- *   the device did not acknowledge its address.
+ *   Read the on-die temperature sensor, in tenths of a degree Celsius.
+ *   Timekeeping belongs to the stock DS3231 RTC driver; only this register
+ *   pair is left to the board.
  *
  ****************************************************************************/
 
-int ds3231_read(struct ds3231_time_s *out);
+int ds3231_temperature(struct i2c_master_s *i2c, int16_t *out);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_DS3231_H */
