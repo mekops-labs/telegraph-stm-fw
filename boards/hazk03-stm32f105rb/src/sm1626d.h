@@ -6,6 +6,7 @@
 #include <nuttx/config.h>
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* There are 16 scan rows. The main screen sends 80 column bits, thus 10 bytes
@@ -45,5 +46,20 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);
  ****************************************************************************/
 
 void sm1626d_refresh(struct sm1626d_dev_s *dev);
+
+/****************************************************************************
+ * Name: sm1626d_drawtext
+ *
+ * Description:
+ *   Draw a text with the 5x7 font. The position x,y is the top left corner of
+ *   the first character.
+ *
+ *   Note: the function stops at the right edge of the panel. It draws no
+ *   partial character.
+ *
+ ****************************************************************************/
+
+void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
+                      const char *s, size_t len);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_SM1626D_H */

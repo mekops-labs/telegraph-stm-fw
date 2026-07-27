@@ -68,6 +68,14 @@ int stm32_bringup(void)
 
   hazk03_display_init();
 
+#ifdef CONFIG_NO_SERIAL_CONSOLE
+  /* This build has no console. Thus the UART carries the protocol of the
+   * edge MCU.
+   */
+
+  hazk03_ipc_init();
+#endif
+
 #ifdef CONFIG_FS_PROCFS
   int ret = mount(NULL, "/proc", "procfs", 0, NULL);
   if (ret < 0)
