@@ -98,6 +98,7 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x01` | edge to STM32 | Set the RTC |
 | `0x02` | edge to STM32 | Set the text of the main panel |
 | `0x03` | edge to STM32 | Set the text of the sub panel |
+| `0x04` | edge to STM32 | Set the brightness |
 | `0x10` | edge to STM32 | Request the state |
 | `0x11` | STM32 to edge | The state |
 | `0x12` | STM32 to edge | A log line, a push frame |
@@ -107,11 +108,22 @@ one caller shares the UART, and the callers need no lock between them.
 
 ### `0x01` Set the RTC
 
-The payload holds 4 bytes. This value is a Unix time in seconds. The format is
-little-endian.
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 4 | The Unix time in seconds, UTC |
+| 4 | 2 | The minutes of the local time from UTC, signed, optional |
+
+A payload of 4 bytes sets the time only. A payload of 6 bytes also sets the
+offset.
 
 The STM32 writes the DS3231. A battery holds that device, thus the time stays
 correct after a power interruption.
+
+**The RTC keeps UTC. The offset changes the panels only.** Thus a change of
+the season needs no change of the RTC, and the `0x11` frame always gives UTC.
+
+The board has no store for the offset. Send the offset again after each reset
+of the board.
 
 The reply is an ACK.
 
@@ -123,6 +135,23 @@ An empty payload clears the panel.
 
 The font is 5x7. The main panel holds 11 characters, and the sub panel holds
 3 characters. The driver removes the characters above the limit.
+
+The reply is an ACK.
+
+### `0x04` Set the brightness
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The brightness of the digits, 0 to 7 |
+| 1 | 1 | The brightness of the panels, 0 to 7, optional |
+
+A payload of 1 byte gives the same level to both devices.
+
+The TM1629A has its own control for the digits. The panels have no such
+control, thus the driver makes the on-time of each row shorter. The level 7 is
+the full on-time.
+
+Note: a value above 7 gets a NACK with the code `0x03`.
 
 The reply is an ACK.
 

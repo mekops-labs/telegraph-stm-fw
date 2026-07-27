@@ -112,7 +112,8 @@ A flash operation stops the peer.
 | `ipc on [baud]` | Start the peer. The default rate is 115200 |
 | `ipc off` | Stop the peer, and start the bridge |
 | `ipc state` | Request the state, and show the fields |
-| `ipc time <epoch>` | Set the RTC of the target |
+| `ipc time <epoch> [offset]` | Set the RTC, UTC, and the minutes from UTC |
+| `ipc bright <digits> [panels]` | Set the brightness, 0 to 7 |
 | `ipc large <text>` | Put a text on the main panel |
 | `ipc small <text>` | Put a text on the sub panel |
 | `ipc clear` | Clear both panels |

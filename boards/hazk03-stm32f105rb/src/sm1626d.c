@@ -84,6 +84,7 @@ static inline void sm_latch(void)
 void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
                   uint8_t width, uint8_t height)
 {
+  dev->bright = SM1626D_BRIGHT_MAX;
   dev->din    = din;
   dev->width  = width;
   dev->height = height;
@@ -95,6 +96,11 @@ void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
   stm32_gpiowrite(GPIO_SM1626D_OE, true);
   stm32_gpiowrite(GPIO_SM1626D_STB, false);
   stm32_gpiowrite(GPIO_SM1626D_CLK, false);
+}
+
+void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level)
+{
+  dev->bright = (level > SM1626D_BRIGHT_MAX) ? SM1626D_BRIGHT_MAX : level;
 }
 
 void sm1626d_clear(struct sm1626d_dev_s *dev)
@@ -141,6 +147,7 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
 void sm1626d_refresh(struct sm1626d_dev_s *dev)
 {
   int colbits = SM_COLBITS(dev->width);
+  int on_us = (SM_ROW_US * (dev->bright + 1)) / (SM1626D_BRIGHT_MAX + 1);
   int row;
   int col;
   int rbit;
@@ -163,7 +170,22 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev)
         }
 
       sm_latch();
-      up_udelay(SM_ROW_US);
+
+      /* The output-enable signal gives the brightness. A lower level makes
+       * the on-time of each row shorter.
+       */
+
+      if (on_us >= SM_ROW_US)
+        {
+          up_udelay(SM_ROW_US);
+        }
+      else
+        {
+          up_udelay(on_us);
+          stm32_gpiowrite(GPIO_SM1626D_OE, true);
+          up_udelay(SM_ROW_US - on_us);
+          stm32_gpiowrite(GPIO_SM1626D_OE, false);
+        }
     }
 
   stm32_gpiowrite(GPIO_SM1626D_OE, true);

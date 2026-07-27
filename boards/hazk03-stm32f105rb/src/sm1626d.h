@@ -14,6 +14,10 @@
  */
 
 #define SM1626D_ROWS      16
+
+/* The brightness level. The value 0 is the lowest, and it stays visible. */
+
+#define SM1626D_BRIGHT_MAX 7
 #define SM1626D_ROW_BYTES 10
 
 /* Both screens share the CLK, OE and STB signals. Only the data input is
@@ -25,11 +29,16 @@ struct sm1626d_dev_s
   uint32_t din;                                       /* GPIO pin config */
   uint8_t width;
   uint8_t height;
+  uint8_t bright;
   uint8_t fb[SM1626D_ROWS][SM1626D_ROW_BYTES];
 };
 
 void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
                   uint8_t width, uint8_t height);
+
+/* Set the brightness. The driver makes the on-time of each row shorter. */
+
+void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level);
 
 void sm1626d_clear(struct sm1626d_dev_s *dev);
 void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);

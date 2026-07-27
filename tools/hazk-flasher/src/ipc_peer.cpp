@@ -263,14 +263,41 @@ void ipcCommand(const char *args) {
     } else if (strcmp(args, "state") == 0) {
         ipcRequest(IPC_OP_GET_STATE, NULL, 0);
     } else if (strncmp(args, "time ", 5) == 0) {
-        uint8_t payload[IPC_SET_TIME_LEN];
+        // The form is "time <epoch> [offset]". The epoch is UTC, and the
+        // offset gives the minutes of the local time from UTC.
+        uint8_t payload[IPC_SET_TIME_TZ_LEN];
+        char *end = NULL;
+        uint32_t epoch = (uint32_t)strtoul(args + 5, &end, 10);
+        uint16_t len = IPC_SET_TIME_LEN;
 
-        ipc_put_u32(payload, (uint32_t)strtoul(args + 5, NULL, 10));
-        ipcRequest(IPC_OP_SET_TIME, payload, sizeof(payload));
+        ipc_put_u32(&payload[IPC_SET_TIME_UTC], epoch);
+
+        if (end != NULL && *end != '\0') {
+            long offset = strtol(end, NULL, 10);
+
+            ipc_put_u16(&payload[IPC_SET_TIME_OFFSET], (uint16_t)(int16_t)offset);
+            len = IPC_SET_TIME_TZ_LEN;
+        }
+
+        ipcRequest(IPC_OP_SET_TIME, payload, len);
     } else if (strncmp(args, "large ", 6) == 0) {
         ipcRequest(IPC_OP_SET_LARGE, args + 6, (uint16_t)strlen(args + 6));
     } else if (strncmp(args, "small ", 6) == 0) {
         ipcRequest(IPC_OP_SET_SMALL, args + 6, (uint16_t)strlen(args + 6));
+    } else if (strncmp(args, "bright ", 7) == 0) {
+        // The form is "bright <digits> [panels]". Permitted values are 0 to 7.
+        uint8_t payload[IPC_SET_BRIGHT2_LEN];
+        char *end = NULL;
+        uint16_t len = IPC_SET_BRIGHT_LEN;
+
+        payload[0] = (uint8_t)strtoul(args + 7, &end, 10);
+
+        if (end != NULL && *end != '\0') {
+            payload[1] = (uint8_t)strtoul(end, NULL, 10);
+            len = IPC_SET_BRIGHT2_LEN;
+        }
+
+        ipcRequest(IPC_OP_SET_BRIGHT, payload, len);
     } else if (strcmp(args, "clear") == 0) {
         ipcRequest(IPC_OP_SET_LARGE, NULL, 0);
         ipcRequest(IPC_OP_SET_SMALL, NULL, 0);
