@@ -73,4 +73,15 @@
 
 int stm32_bringup(void);
 
+/****************************************************************************
+ * Name: hazk03_display_init
+ *
+ * Description:
+ *   Initialise the panels and the digits, and start the scan loop that keeps
+ *   them lit.
+ *
+ ****************************************************************************/
+
+int hazk03_display_init(void);
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_HAZK03_H */

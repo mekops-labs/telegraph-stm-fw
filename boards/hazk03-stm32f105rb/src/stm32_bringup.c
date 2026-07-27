@@ -66,6 +66,8 @@ int stm32_bringup(void)
   stm32_configgpio(GPIO_DS3231_SCL);
   stm32_configgpio(GPIO_DS3231_SDA);
 
+  hazk03_display_init();
+
 #ifdef CONFIG_FS_PROCFS
   int ret = mount(NULL, "/proc", "procfs", 0, NULL);
   if (ret < 0)
