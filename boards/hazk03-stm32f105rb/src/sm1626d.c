@@ -88,9 +88,9 @@ void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
 
   memset(dev->fb, 0, sizeof(dev->fb));
 
-  /* OE is active low: drive it low to enable the panel. */
+  /* Blanked until a scan runs. */
 
-  stm32_gpiowrite(GPIO_SM1626D_OE, false);
+  stm32_gpiowrite(GPIO_SM1626D_OE, true);
   stm32_gpiowrite(GPIO_SM1626D_STB, false);
   stm32_gpiowrite(GPIO_SM1626D_CLK, false);
 }
@@ -128,12 +128,20 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
     }
 }
 
+/* Output enable is active low and shared by both panels. The scan leaves it
+ * blanked on exit: whatever row was latched last would otherwise stay lit for
+ * the whole gap until the next pass, and against a 200 us row dwell even a
+ * fraction of a millisecond makes that single row conspicuously brighter.
+ */
+
 void sm1626d_refresh(struct sm1626d_dev_s *dev)
 {
   int colbits = SM_COLBITS(dev->width);
   int row;
   int col;
   int rbit;
+
+  stm32_gpiowrite(GPIO_SM1626D_OE, false);
 
   for (row = 0; row < SM1626D_ROWS; row++)
     {
@@ -153,4 +161,6 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev)
       sm_latch();
       up_udelay(SM_ROW_US);
     }
+
+  stm32_gpiowrite(GPIO_SM1626D_OE, true);
 }
