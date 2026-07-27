@@ -136,6 +136,34 @@ int hazk03_display_text(int panel, const char *s, size_t len);
 int16_t hazk03_display_temperature(void);
 
 /****************************************************************************
+ * Name: hazk03_display_utcoffset
+ *
+ * Description:
+ *   Set the minutes of the local time from UTC. The panels show the local
+ *   time, and the RTC keeps UTC.
+ *
+ *   Note: the board has no store for this value. Thus the edge MCU sends it
+ *   again after each reset.
+ *
+ ****************************************************************************/
+
+void hazk03_display_utcoffset(int16_t minutes);
+
+/****************************************************************************
+ * Name: hazk03_display_brightness
+ *
+ * Description:
+ *   Set the brightness of the digits and of the panels. Permitted values are
+ *   0 to 7.
+ *
+ *   Note: the TM1629A has its own control. The panels use the on-time of
+ *   each row.
+ *
+ ****************************************************************************/
+
+int hazk03_display_brightness(uint8_t digits, uint8_t panels);
+
+/****************************************************************************
  * Name: hazk03_ipc_init
  *
  * Description:

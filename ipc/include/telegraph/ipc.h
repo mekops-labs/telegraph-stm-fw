@@ -77,6 +77,7 @@ extern "C" {
 #define IPC_OP_SET_TIME     0x01u  /* edge -> STM32: set the RTC            */
 #define IPC_OP_SET_LARGE    0x02u  /* edge -> STM32: text on the main panel */
 #define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
+#define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
 #define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
 #define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
 #define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
@@ -115,9 +116,29 @@ extern "C" {
 
 #define IPC_PROTO_VERSION   1u
 
-/* The payload of IPC_OP_SET_TIME. The value is a Unix time in seconds. */
+/* The payload of IPC_OP_SET_TIME.
+ *
+ * The first 4 bytes are a Unix time in seconds, and this value is UTC. The
+ * 2 bytes that come after are optional. They give the offset of the local
+ * time from UTC, in minutes, with a sign.
+ *
+ * Note: the RTC keeps UTC only. The offset changes the panels, thus a change
+ * of the season needs no change of the RTC.
+ */
 
-#define IPC_SET_TIME_LEN    4u
+#define IPC_SET_TIME_LEN     4u
+#define IPC_SET_TIME_TZ_LEN  6u
+
+/* The payload of IPC_OP_SET_BRIGHT. One byte sets both devices. Two bytes
+ * set the digits and the panels.
+ */
+
+#define IPC_BRIGHT_MAX       7u
+#define IPC_SET_BRIGHT_LEN   1u
+#define IPC_SET_BRIGHT2_LEN  2u
+
+#define IPC_SET_TIME_UTC     0u  /* u32: the Unix time, UTC                */
+#define IPC_SET_TIME_OFFSET  4u  /* i16: minutes from UTC, with a sign     */
 
 /* The payload of IPC_OP_STATE. All the multiple-byte fields are
  * little-endian.

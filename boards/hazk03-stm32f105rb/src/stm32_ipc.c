@@ -180,14 +180,25 @@ static void ipc_set_time(struct ipc_ctx_s *ctx,
 {
   struct timespec ts;
 
-  if (frame->payload_len != IPC_SET_TIME_LEN)
+  if (frame->payload_len != IPC_SET_TIME_LEN &&
+      frame->payload_len != IPC_SET_TIME_TZ_LEN)
     {
       ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
       return;
     }
 
-  ts.tv_sec  = (time_t)ipc_get_u32(frame->payload);
+  ts.tv_sec  = (time_t)ipc_get_u32(&frame->payload[IPC_SET_TIME_UTC]);
   ts.tv_nsec = 0;
+
+  /* The panels show the local time. The RTC keeps UTC, thus the offset stays
+   * with the display.
+   */
+
+  if (frame->payload_len == IPC_SET_TIME_TZ_LEN)
+    {
+      hazk03_display_utcoffset(
+          (int16_t)ipc_get_u16(&frame->payload[IPC_SET_TIME_OFFSET]));
+    }
 
   /* The system clock is the DS3231, and a battery holds that device. Thus
    * this value stays correct after a power interruption.
@@ -224,6 +235,33 @@ static void ipc_set_text(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
+static void ipc_set_bright(struct ipc_ctx_s *ctx,
+                           const struct ipc_frame_s *frame)
+{
+  uint8_t digits;
+  uint8_t panels;
+
+  if (frame->payload_len != IPC_SET_BRIGHT_LEN &&
+      frame->payload_len != IPC_SET_BRIGHT2_LEN)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  digits = frame->payload[0];
+  panels = (frame->payload_len == IPC_SET_BRIGHT2_LEN) ?
+           frame->payload[1] : digits;
+
+  if (digits > IPC_BRIGHT_MAX || panels > IPC_BRIGHT_MAX)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  hazk03_display_brightness(digits, panels);
+  ipc_ack(ctx, frame->corr_id);
+}
+
 static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 {
   struct ipc_ctx_s *ctx = (struct ipc_ctx_s *)arg;
@@ -240,6 +278,10 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 
       case IPC_OP_SET_SMALL:
         ipc_set_text(ctx, frame, HAZK03_PANEL_SUB);
+        break;
+
+      case IPC_OP_SET_BRIGHT:
+        ipc_set_bright(ctx, frame);
         break;
 
       case IPC_OP_GET_STATE:
