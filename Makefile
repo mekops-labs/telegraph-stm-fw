@@ -30,6 +30,9 @@ help:
 	@echo "  clean         remove the build output, keep the configuration"
 	@echo "  distclean     remove the build output and the configuration"
 	@echo "  shell         start a shell in the container"
+	@echo
+	@echo "Configurations: nsh (the interactive shell), ipc (the protocol)."
+	@echo "Select one with CONFIG=<name>. Do a distclean before a change."
 
 image:
 	$(CONTAINER) build -t $(IMAGE) -f Containerfile .
@@ -44,8 +47,15 @@ RUN := $(CONTAINER) run --rm -it --userns=keep-id --security-opt label=disable \
        -v "$(CURDIR):/src" -w /src -e INSIDE_CONTAINER=1 $(IMAGE)
 endif
 
+# Give configure.sh the full path of the configuration directory. The form
+# with a colon is for a board in the NuttX tree only.
+#
+# Note: the path is absolute, and the container gives the source a different
+# path than the host. Thus the shell resolves it.
+
 $(NUTTX)/.config:
-	$(RUN) sh -c 'cd $(NUTTX) && ./tools/configure.sh -l $(CURDIR)/$(BOARD_DIR):$(CONFIG)'
+	$(RUN) sh -c 'top=$$PWD; cd $(NUTTX) && \
+	  ./tools/configure.sh -l "$$top/$(BOARD_DIR)/configs/$(CONFIG)"'
 
 configure: $(NUTTX)/.config
 
