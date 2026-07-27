@@ -3,6 +3,7 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <sys/mount.h>
 
 #include <nuttx/board.h>
 
@@ -64,6 +65,14 @@ int stm32_bringup(void)
 
   stm32_configgpio(GPIO_DS3231_SCL);
   stm32_configgpio(GPIO_DS3231_SDA);
+
+#ifdef CONFIG_FS_PROCFS
+  int ret = mount(NULL, "/proc", "procfs", 0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: mount /proc failed: %d\n", ret);
+    }
+#endif
 
   return OK;
 }
