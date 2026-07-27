@@ -22,3 +22,5 @@ boards/*/src/Make.dep
 # The WiFi credentials of the tools stay out of the repository
 credentials.ini
 .pio/
+__pycache__/
+*.pyc

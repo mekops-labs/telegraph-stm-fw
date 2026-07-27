@@ -99,6 +99,37 @@ Note: during a `flash` command the device sends an ACK for each block of 256 byt
 
 If the console is idle, the target output goes to the USB port. Thus the `monitor` command also shows the log of the target.
 
+## IPC peer
+
+The flasher is also the peer of the STM32 for the IPC protocol. Refer to
+`docs/ipc-protocol.md`.
+
+The peer owns the UART while it is active. Thus the transparent bridge stops.
+A flash operation stops the peer.
+
+| Command | Effect |
+| :--- | :--- |
+| `ipc on [baud]` | Start the peer. The default rate is 115200 |
+| `ipc off` | Stop the peer, and start the bridge |
+| `ipc state` | Request the state, and show the fields |
+| `ipc time <epoch>` | Set the RTC of the target |
+| `ipc large <text>` | Put a text on the main panel |
+| `ipc small <text>` | Put a text on the sub panel |
+| `ipc clear` | Clear both panels |
+| `ipc bad` | Transmit an unknown opcode, thus the target sends a NACK |
+| `ipc badlen` | Transmit an incorrect length, thus the target sends a NACK |
+| `ipc reset` | Reset the target, then show its push frame |
+| `ipc noise` | Transmit false start-of-frame bytes, then a good frame |
+| `ipc burst <n>` | Transmit n frames without a wait, thus the credits fall |
+| `ipc stats` | Show the counts of the parser |
+
+The same commands go through the network. Thus the peer needs no USB
+connection:
+
+```sh
+curl -s --get --data-urlencode "cmd=state" http://<address>/ipc
+```
+
 ## Web interface
 
 Requires WiFi credentials.
