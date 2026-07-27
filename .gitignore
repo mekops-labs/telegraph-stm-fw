@@ -5,4 +5,15 @@ build/
 *.bin
 *.hex
 *.map
+
+# ccache lands here because the container HOME is the bind-mounted source
+.cache/
 .ccache/
+
+# NuttX build outputs inside the submodule
+third_party/nuttx/.config
+third_party/nuttx/.config.old
+third_party/nuttx/.version
+third_party/nuttx/nuttx
+third_party/nuttx/Make.defs
+boards/*/scripts/ld.script.tmp
