@@ -18,3 +18,7 @@ third_party/nuttx/nuttx
 third_party/nuttx/Make.defs
 boards/*/scripts/ld.script.tmp
 boards/*/src/Make.dep
+
+# The WiFi credentials of the tools stay out of the repository
+credentials.ini
+.pio/
