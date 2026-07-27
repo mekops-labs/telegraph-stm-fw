@@ -317,7 +317,13 @@ static int ipc_server(int argc, char *argv[])
       pfd.fd     = ctx->fd;
       pfd.events = POLLIN;
 
-      ret = poll(&pfd, 1, IPC_IDLE_MS);
+      /* A wait with a limit is necessary only for a partial frame. Without
+       * that condition the task blocks. Thus it does not interrupt the scan
+       * loop of the display 50 times each second.
+       */
+
+      ret = poll(&pfd, 1,
+                 ipc_parser_pending(&ctx->parser) ? IPC_IDLE_MS : -1);
 
       if (ret > 0)
         {
