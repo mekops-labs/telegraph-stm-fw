@@ -13,13 +13,18 @@ CONTAINER   ?= podman
 # Thus the build does not modify the submodule.
 BOARD_DIR   := boards/$(BOARD)
 
-.PHONY: help image shell configure build clean distclean menuconfig savedefconfig
+UNITY       := third_party/unity
+BUILD       := build
+
+.PHONY: help image shell configure build clean distclean menuconfig \
+        savedefconfig test
 
 help:
 	@echo "Targets:"
 	@echo "  image         build the container image with the toolchain"
 	@echo "  configure     configure NuttX for $(BOARD):$(CONFIG)"
 	@echo "  build         build the firmware, and configure it if necessary"
+	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
 	@echo "  clean         remove the build output, keep the configuration"
@@ -48,6 +53,17 @@ build: configure
 	$(RUN) $(MAKE) -C $(NUTTX) -j$(shell nproc)
 	@echo
 	@$(RUN) sh -c 'size $(NUTTX)/nuttx' || true
+
+# The IPC library is portable C99. Thus the host compiler builds it, and the
+# tests run without the hardware.
+IPC_SRC   := $(wildcard ipc/src/*.c)
+IPC_CF    := -std=c99 -Wall -Wextra -Werror -Iipc/include
+TEST_BIN  := $(BUILD)/test_ipc
+
+test:
+	$(RUN) sh -c 'mkdir -p $(BUILD) && \
+	  cc $(IPC_CF) -I$(UNITY)/src $(IPC_SRC) ipc/tests/test_ipc.c \
+	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN)'
 
 menuconfig: configure
 	$(RUN) $(MAKE) -C $(NUTTX) menuconfig
