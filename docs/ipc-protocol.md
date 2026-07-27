@@ -16,11 +16,16 @@ compile the same source.
 | STM32 pins | PA9 (TX) and PA10 (RX), USART1 |
 | Edge MCU pins | UART1, refer to the board documentation |
 | Format | 8N1 |
-| Rate | 115200 for bring-up, then 921600 |
+| Rate | 115200 for bring-up, then 460800. Refer to the note below |
 | Flow control | credits in the protocol, refer to [Flow control](#flow-control) |
 
 The two MCUs have 3.3 V logic. Thus the link needs no level shifter. Keep a
 ground wire in the same cable.
+
+**The two directions do not have the same limit.** The direction from the
+STM32 to the edge MCU is correct at 2 Mbps. The opposite direction fails at
+921600, and it is correct at 460800. Test each direction after a change of
+the cable.
 
 The module gives no RTS or CTS pin. Thus the protocol carries the flow
 control.
@@ -210,17 +215,24 @@ the frame itself.
 
 ## Flow control
 
-Each ACK carries a credit count. This count gives the number of the additional
-frames that the receiver accepts.
+Each ACK carries a credit count. **One credit gives 64 bytes of the receive
+buffer.** A frame with a length above 64 bytes thus costs more than one
+credit.
+
+The protocol has no initial grant. Thus a sender starts with one frame, and it
+learns the true capacity from the first ACK.
 
 Obey these rules:
 
-1. Transmit a frame, then wait for the ACK.
-2. Read the credit count of the ACK.
-3. If the count is zero, stop until the next ACK.
+1. Transmit a frame, and subtract its cost in credits.
+2. If the count is zero, stop until the next ACK.
+3. Read the credit count of each ACK, and use that value.
 
-The STM32 calculates the count from the free space of its receive buffer. A
-count of zero occurs only during a burst.
+The STM32 calculates the count from the free space of its receive buffer.
+
+**A sender that ignores the credits loses data.** A test of 200 frames without
+the credits lost near two thirds of them. The same test with the credits sent
+500 frames with no loss.
 
 ## Recovery from an error
 
