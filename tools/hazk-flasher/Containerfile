@@ -1,0 +1,30 @@
+# Use the amd64 architecture only.
+#
+# Note: the PlatformIO toolchains are binaries for the host architecture. An
+# arm64 image makes the full build run under qemu.
+FROM --platform=linux/amd64 docker.io/library/debian:trixie-slim
+
+# PlatformIO build environment for the HAZK-03 projects.
+#
+# Note: this image builds the flasher for the ESP32-S3. It also builds the
+# STM32F105 target firmware. Mount the necessary project at /project.
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip \
+        git curl ca-certificates \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV VIRTUAL_ENV=/opt/pio-venv
+RUN python3 -m venv "$VIRTUAL_ENV"
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN pip install --no-cache-dir platformio esptool
+
+# PlatformIO puts the toolchains and the framework packages here.
+#
+# Note: mount a host directory at this path. Thus the downloads of near 1 GB
+# stay available for the next run.
+ENV PLATFORMIO_CORE_DIR=/pio
+
+WORKDIR /project
+CMD ["pio", "run"]
