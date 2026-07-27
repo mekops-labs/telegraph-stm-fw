@@ -17,8 +17,10 @@
  * Name: stm32_boardinitialize
  *
  * Description:
- *   Called early in the boot sequence, before any device drivers are
- *   initialised and before the memory subsystem is up.
+ *   Do nothing.
+ *
+ *   Note: the boot sequence calls this function early. At that time the
+ *   device drivers and the memory system are not available.
  *
  ****************************************************************************/
 
@@ -30,8 +32,10 @@ void stm32_boardinitialize(void)
  * Name: board_late_initialize
  *
  * Description:
- *   Runs after the OS is fully up, so bringup can use driver registration
- *   and the filesystem.
+ *   Do the start-up steps for this board.
+ *
+ *   Note: the system calls this function after the OS start. Thus the
+ *   start-up steps can use the drivers and the file system.
  *
  ****************************************************************************/
 

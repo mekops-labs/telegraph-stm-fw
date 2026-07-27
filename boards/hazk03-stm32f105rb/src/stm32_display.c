@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* Display bring-up: owns the two matrix panels and the 7-segment digits, and
- * runs the scan loop that keeps them lit.
+/* Display start-up.
+ *
+ * Note: this file controls the two matrix panels and the 7-segment digits. It
+ * also runs the scan loop that keeps the panels on.
  */
 
 #include <nuttx/config.h>
@@ -31,25 +33,26 @@
 
 #define BRIGHTNESS 4
 
-/* Measured at ~13 ms for a pass over both panels, so this ticks the digits
- * about once a second without needing a timer.
+/* One pass over both panels takes near 13 ms. Thus this count gives an update
+ * of the digits near one time each second. A timer is not necessary.
  */
 
 #define TICK_EVERY_PASSES 75
 
-/* Anything done between scan passes is time the panels are dark, so the bus
- * read for the temperature is kept rare - it changes far slower than once a
- * second anyway.
+/* The panels stay dark during all work between two scan passes. Thus the bus
+ * read for the temperature occurs rarely. The temperature changes slowly.
  */
 
 #define TEMP_EVERY_TICKS  30
 
 #define DISPLAY_STACKSIZE 1024
 
-/* Below the shell's priority on purpose. The scan loop is a busy wait with
- * nowhere to block, so anything above the shell starves it outright; NSH
- * spends nearly all its time blocked on console input, which leaves the scan
- * loop the CPU it needs.
+/* This priority is less than the priority of the shell.
+ *
+ * Note: the scan loop is a wait loop. It has no point to stop at. A thread
+ * above the shell thus stops the shell fully. The shell waits for console
+ * input almost all of the time. Thus the scan loop gets the necessary CPU
+ * time.
  */
 
 #define DISPLAY_PRIORITY  90
@@ -63,8 +66,10 @@ static struct sm1626d_dev_s g_sub;
 static struct i2c_master_s *g_i2c;
 static int16_t g_temp;
 
-/* 21x14 heart, bit 0 = leftmost column. Carried over from the reverse
- * engineered firmware so the sub-screen output is directly comparable.
+/* This is a 21x14 heart image. Bit 0 is the column at the left.
+ *
+ * Note: this image comes from the reverse engineered firmware. Thus a person
+ * can compare the sub-screen output with that firmware.
  */
 
 static const uint32_t g_heart[SUB_H] =
@@ -77,9 +82,10 @@ static const uint32_t g_heart[SUB_H] =
  * Private Functions
  ****************************************************************************/
 
-/* A border plus both diagonals: an error in the column mapping shows up as a
- * broken or stepped diagonal, and the border proves all five shift registers
- * reach their outer columns.
+/* Draw a border and the two diagonals.
+ *
+ * Note: an error in the column calculation gives a broken diagonal. The
+ * border shows that all five shift registers reach their outer columns.
  */
 
 static void draw_geometry_test(struct sm1626d_dev_s *dev)
@@ -167,8 +173,9 @@ static int display_scanner(int argc, char *argv[])
 
           passes = 0;
 
-          /* The system clock is backed by the battery-backed DS3231, so this
-           * needs no bus traffic; only the temperature does.
+          /* Read the system clock. The DS3231 with the battery keeps that
+           * clock. Thus this step uses no bus. Only the temperature uses the
+           * bus.
            */
 
           now = time(NULL);

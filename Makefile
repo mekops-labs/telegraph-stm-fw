@@ -7,27 +7,31 @@ APPS        := third_party/nuttx-apps
 IMAGE       := telegraph-fw
 CONTAINER   ?= podman
 
-# The board lives out of tree; NuttX finds it through ARCH_BOARD_CUSTOM_DIR in
-# the defconfig, so the submodule is never modified.
+# The board directory is outside the NuttX tree.
+#
+# Note: NuttX finds the board through ARCH_BOARD_CUSTOM_DIR in the defconfig.
+# Thus the build does not modify the submodule.
 BOARD_DIR   := boards/$(BOARD)
 
 .PHONY: help image shell configure build clean distclean menuconfig savedefconfig
 
 help:
 	@echo "Targets:"
-	@echo "  image         build the toolchain container image"
+	@echo "  image         build the container image with the toolchain"
 	@echo "  configure     configure NuttX for $(BOARD):$(CONFIG)"
-	@echo "  build         build the firmware (configures first if needed)"
-	@echo "  menuconfig    open the NuttX configuration UI"
-	@echo "  savedefconfig write the current config back to the board defconfig"
-	@echo "  clean         remove build outputs, keep the configuration"
-	@echo "  distclean     remove the configuration too"
-	@echo "  shell         interactive shell in the toolchain container"
+	@echo "  build         build the firmware, and configure it if necessary"
+	@echo "  menuconfig    start the NuttX configuration program"
+	@echo "  savedefconfig write the configuration to the board defconfig"
+	@echo "  clean         remove the build output, keep the configuration"
+	@echo "  distclean     remove the build output and the configuration"
+	@echo "  shell         start a shell in the container"
 
 image:
 	$(CONTAINER) build -t $(IMAGE) -f Containerfile .
 
-# Everything below runs inside the container; RUN is a no-op when already in it.
+# All targets below run in the container.
+#
+# Note: if the shell is already in the container, the RUN variable is empty.
 ifdef INSIDE_CONTAINER
 RUN :=
 else

@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Twelve logical digit positions, 0 leftmost. */
+/* There are twelve logical digit positions. Position 0 is at the left. */
 
 #define TM1629A_NDIGITS 12
 
@@ -16,19 +16,27 @@
  * Name: tm1629a_init
  *
  * Description:
- *   Drive the pins to their idle levels, clear the display and apply
- *   brightness (0-7).
+ *   Set the pins to their idle levels.
+ *   Clear the display.
+ *   Set the brightness. Permitted values are 0 to 7.
  *
  ****************************************************************************/
 
 void tm1629a_init(uint8_t brightness);
 
-/* Brightness 0-7; `on` gates the display without disturbing the framebuffer. */
+/* Set the brightness. Permitted values are 0 to 7.
+ *
+ * Note: the `on` parameter turns the display on or off. It does not change
+ * the framebuffer.
+ */
 
 void tm1629a_setbrightness(uint8_t level, bool on);
 
-/* Stage a raw segment mask (bit 0 = A .. bit 6 = G) or a character. Neither
- * touches the hardware until tm1629a_flush().
+/* Put a segment mask or a character into the framebuffer. In the mask, bit 0
+ * is segment A and bit 6 is segment G.
+ *
+ * Note: these two functions do not write to the hardware. The function
+ * tm1629a_flush() writes the framebuffer to the part.
  */
 
 void tm1629a_setraw(uint8_t digit, uint8_t segments);

@@ -21,11 +21,14 @@
  * Name: hazk03_jtag_reclaim
  *
  * Description:
- *   Free PA13 for use as the sub-screen serial data line. Out of reset it is
- *   SWDIO, and the debug port keeps it regardless of the GPIO configuration
- *   until the JTAG/SWD remap is applied.
+ *   Release PA13 for use as the serial data line of the sub-screen.
  *
- *   A hardware debugger cannot attach after this runs, until the next reset.
+ *   Note: after a reset, PA13 is the SWDIO signal. The debug port keeps that
+ *   pin until this function changes the JTAG and SWD configuration. The GPIO
+ *   configuration alone has no effect on this.
+ *
+ *   Note: after this function runs, a hardware debugger cannot connect. A
+ *   reset makes the debug port available again.
  *
  ****************************************************************************/
 
@@ -49,7 +52,7 @@ static void hazk03_jtag_reclaim(void)
 
 int stm32_bringup(void)
 {
-  /* Must precede the PA13 configuration below. */
+  /* Do this step before the configuration of PA13 below. */
 
   hazk03_jtag_reclaim();
 

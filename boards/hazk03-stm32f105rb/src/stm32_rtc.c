@@ -1,15 +1,18 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* DS3231 on a bit-banged bus.
+/* DS3231 on a bus in software.
  *
- * PC6/PC7 do not map to an I2C peripheral on this part, so the board supplies
- * the pin half of the generic bit-bang master and hands the resulting bus to
- * the stock DS3231 driver. That driver backs the system clock, so the RTC is
- * read at boot and written by any clock_settime() - `date -s` at the shell.
+ * Note: the pins PC6 and PC7 have no connection to an I2C peripheral on this
+ * part. Thus the board gives the pin functions to the generic software bus
+ * master. The board then gives that bus to the standard DS3231 driver.
  *
- * The lines are open-drain against the board pull-ups: driving them high
- * releases the wire rather than forcing it, which is what lets the device
- * acknowledge and clock-stretch.
+ * Note: this driver gives the time to the system clock. The system reads the
+ * RTC at start-up. A call to clock_settime() writes the RTC. The `date -s`
+ * command at the shell makes that call.
+ *
+ * Note: the two lines are open-drain against the pull-up resistors on the
+ * board. A high level releases the wire. It does not drive the wire. Thus the
+ * device can acknowledge and hold the clock.
  */
 
 #include <nuttx/config.h>
@@ -81,9 +84,11 @@ static struct i2c_bitbang_lower_dev_s g_i2c_lower =
  * Name: up_rtc_initialize
  *
  * Description:
- *   Called from clock initialisation, long before any bus exists. The RTC
- *   sits on a bit-banged bus that is not usable this early, so the real
- *   binding is deferred to hazk03_rtc_initialize() during board bringup.
+ *   Do nothing.
+ *
+ *   Note: the clock initialisation calls this function very early. At that
+ *   time the software bus is not available. Thus the function
+ *   hazk03_rtc_initialize() does the true initialisation later.
  *
  ****************************************************************************/
 
@@ -96,8 +101,10 @@ int up_rtc_initialize(void)
  * Name: hazk03_rtc_initialize
  *
  * Description:
- *   Bring up the bit-banged bus and bind the DS3231 to it. Returns the bus so
- *   the caller can reuse it for the device's non-RTC registers.
+ *   Start the software bus. Then attach the DS3231 to that bus.
+ *
+ *   Note: the function returns the bus. The caller uses the bus for the other
+ *   registers of the device.
  *
  ****************************************************************************/
 
@@ -120,8 +127,10 @@ struct i2c_master_s *hazk03_rtc_initialize(void)
       return i2c;
     }
 
-  /* Seed the system clock from the RTC; without this the clock starts at the
-   * build-time default until something sets it.
+  /* Set the system clock from the RTC.
+   *
+   * Note: without this step, the clock keeps the default value from the
+   * build.
    */
 
   clock_synchronize(NULL);

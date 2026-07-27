@@ -13,9 +13,10 @@
  * Name: ds3231_temperature
  *
  * Description:
- *   Read the on-die temperature sensor, in tenths of a degree Celsius.
- *   Timekeeping belongs to the stock DS3231 RTC driver; only this register
- *   pair is left to the board.
+ *   Read the temperature sensor. The unit is tenths of a degree Celsius.
+ *
+ *   Note: the standard DS3231 RTC driver keeps the time and the date. Only
+ *   these temperature registers stay with the board.
  *
  ****************************************************************************/
 

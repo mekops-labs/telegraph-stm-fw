@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* TM1629A 7-segment driver, 3-wire serial (STB/CLK/DIO), LSB first.
+/* TM1629A 7-segment driver. The interface is a 3-wire serial bus with STB,
+ * CLK and DIO. The bus sends the least significant bit first.
  *
- * The part is wired so that one logical digit's segments are scattered across
- * the controller's address space rather than living in one byte: segment N of
- * every digit shares address N*2 (+1 for digits in the upper bit half), and
- * the digit selects a bit within that address. tm1629a_setraw does that
- * scatter; the framebuffer mirrors controller memory and is pushed whole.
+ * Note: the wiring puts the segments of one digit at different controller
+ * addresses. Segment N of every digit uses address N*2. Digits in the upper
+ * bit half add 1 to that address. The digit selects one bit at the address.
+ *
+ * Note: the function tm1629a_setraw() does this distribution. The framebuffer
+ * holds a copy of the controller memory. The flush function writes all of it.
  */
 
 #include <nuttx/config.h>
@@ -31,8 +33,10 @@
 #define TM_CMD_DISP_OFF 0x80
 #define TM_CMD_DISP_ON  0x88  /* Or'd with brightness 0-7 */
 
-/* The part accepts at most 1 MHz. Direct register writes would clock far
- * faster than that, so each edge is spaced deliberately.
+/* The maximum bus frequency of this part is 1 MHz.
+ *
+ * Note: direct register writes are much faster than this limit. Thus the code
+ * puts a delay between each edge.
  */
 
 #define TM_EDGE_US      1
@@ -45,8 +49,10 @@ static uint8_t g_fb[TM_FB_LEN];
 static uint8_t g_brightness = 7;
 static bool g_display_on = true;
 
-/* Logical digit to controller bit index; 10 and 11 are non-contiguous because
- * bits 10-11 drive decorative LEDs rather than digits.
+/* This table changes a logical digit into a controller bit index.
+ *
+ * Note: the last two entries are not adjacent to the others. Bits 10 and 11
+ * drive decorative LEDs, not digits.
  */
 
 static const uint8_t g_digit_to_bit[TM1629A_NDIGITS] =
@@ -54,7 +60,7 @@ static const uint8_t g_digit_to_bit[TM1629A_NDIGITS] =
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13
 };
 
-/* Bit 0 = A .. bit 6 = G. Index 16 is blank. */
+/* Bit 0 is segment A. Bit 6 is segment G. Index 16 gives a blank digit. */
 
 static const uint8_t g_font[] =
 {
@@ -85,7 +91,7 @@ static void tm_write_byte(uint8_t val)
       val >>= 1;
       up_udelay(TM_EDGE_US);
 
-      /* Data is sampled on the rising edge. */
+      /* The part reads the data at the rising edge of the clock. */
 
       stm32_gpiowrite(GPIO_TM1629A_CLK, true);
       up_udelay(TM_EDGE_US);

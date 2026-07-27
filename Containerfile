@@ -1,6 +1,8 @@
-# Pinned to amd64: the ARM cross toolchain and the NuttX kconfig frontends are
-# host-arch binaries, and letting this resolve to arm64 on an x86_64 host
-# silently drags the whole build through qemu.
+# Use the amd64 architecture only.
+#
+# Note: the ARM cross toolchain and the NuttX kconfig frontends are binaries
+# for the host architecture. On an x86_64 host, an arm64 image makes the full
+# build run under qemu.
 FROM --platform=linux/amd64 docker.io/library/debian:trixie-slim
 
 LABEL maintainer="mek.xgt@gmail.com"
@@ -8,20 +10,22 @@ LABEL maintainer="mek.xgt@gmail.com"
 RUN apt-get update \
     && export DEBIAN_FRONTEND=noninteractive \
     && apt-get install -y --no-install-recommends \
-    # Host build toolchain (NuttX builds its own host tools during kbuild)
+    # Toolchain for the host. NuttX builds its own host tools.
     build-essential \
     ccache \
     cmake \
     ninja-build \
-    # ARM cross toolchain — STM32F105 is a Cortex-M3
+    # ARM cross toolchain. The STM32F105 has a Cortex-M3 core.
     gcc-arm-none-eabi \
     binutils-arm-none-eabi \
     libnewlib-arm-none-eabi \
     libstdc++-arm-none-eabi-newlib \
     gdb-multiarch \
-    # NuttX configure/build prerequisites. kconfig-frontends provides
-    # kconfig-conf/kconfig-tweak, which `tools/configure.sh` and `menuconfig`
-    # both require.
+    # These packages are necessary to configure and to build NuttX.
+    #
+    # Note: the kconfig-frontends package gives the kconfig-conf and the
+    # kconfig-tweak programs. The script tools/configure.sh and the menuconfig
+    # target need these two programs.
     kconfig-frontends \
     genromfs \
     gperf \
@@ -39,13 +43,16 @@ RUN apt-get update \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Route compiles through ccache. The package ships gcc/g++ symlinks; add cc/c++
-# because the NuttX kbuild invokes `cc` directly.
+# Send all compile steps through ccache.
+#
+# Note: the package gives symbolic links for gcc and g++ only. The NuttX build
+# calls `cc` directly. Thus this step adds links for cc and c++.
 RUN ln -sf ../../bin/ccache /usr/lib/ccache/cc \
     && ln -sf ../../bin/ccache /usr/lib/ccache/c++
 ENV PATH="/usr/lib/ccache:${PATH}"
 
-# The bind-mounted source is owned by the host user, not by whoever runs here.
+# The host user owns the source directory. The user in the container is
+# different. Thus git needs this setting.
 RUN printf '[safe]\n\tdirectory = *\n' > /etc/gitconfig
 
 WORKDIR /src

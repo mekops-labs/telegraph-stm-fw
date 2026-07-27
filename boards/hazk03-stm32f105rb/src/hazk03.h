@@ -17,9 +17,10 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Display hardware pin map.
+/* Pin map of the display hardware.
  *
- * TM1629A drives the 7-segment clock digits over a 3-wire serial bus.
+ * Note: the TM1629A drives the 7-segment clock digits. It uses a 3-wire
+ * serial bus.
  */
 
 #define GPIO_TM1629A_STB  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
@@ -29,8 +30,8 @@
 #define GPIO_TM1629A_DIO  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
                            GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN4)
 
-/* SM1626D dot matrix. Both screens share the clock, output-enable and strobe
- * lines and differ only in their serial data input.
+/* SM1626D dot matrix. Both screens share the clock, the output-enable and the
+ * strobe lines. Only the serial data input is different.
  */
 
 #define GPIO_SM1626D_CLK  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
@@ -43,16 +44,19 @@
                           (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
                            GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN15)
 
-/* Sub-screen data input. PA13 is SWDIO out of reset; see hazk03_jtag_reclaim
- * in stm32_bringup.c.
+/* This is the data input of the sub-screen.
+ *
+ * Note: after a reset, PA13 is the SWDIO signal. Refer to the function
+ * hazk03_jtag_reclaim() in the file stm32_bringup.c.
  */
 
 #define GPIO_SM1626D_DIN_SUB \
                           (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
                            GPIO_OUTPUT_CLEAR | GPIO_PORTA | GPIO_PIN13)
 
-/* DS3231 RTC. PC6/PC7 do not map to an I2C peripheral on this part, so the
- * bus is bit-banged; both lines are open-drain with board pull-ups.
+/* DS3231 RTC. The pins PC6 and PC7 have no connection to an I2C peripheral on
+ * this part. Thus software drives the bus. Both lines are open-drain and use
+ * the pull-up resistors on the board.
  */
 
 #define GPIO_DS3231_SCL   (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | \
@@ -68,8 +72,9 @@
  * Name: stm32_bringup
  *
  * Description:
- *   Perform architecture-specific initialisation: reclaim the debug pins and
- *   place every display line in a defined state.
+ *   Do the initialisation for this board.
+ *   Release the debug pins.
+ *   Set every display line to a known state.
  *
  ****************************************************************************/
 
@@ -79,8 +84,8 @@ int stm32_bringup(void);
  * Name: hazk03_display_init
  *
  * Description:
- *   Initialise the panels and the digits, and start the scan loop that keeps
- *   them lit.
+ *   Initialise the panels and the digits.
+ *   Start the scan loop that keeps the panels on.
  *
  ****************************************************************************/
 
@@ -90,8 +95,10 @@ int hazk03_display_init(void);
  * Name: hazk03_rtc_initialize
  *
  * Description:
- *   Bring up the bit-banged bus and bind the battery-backed DS3231 to it as
- *   the system RTC. Returns the bus for the device's other registers.
+ *   Start the software bus.
+ *   Attach the DS3231 with the battery to that bus as the system RTC.
+ *
+ *   Note: the function returns the bus for the other registers of the device.
  *
  ****************************************************************************/
 

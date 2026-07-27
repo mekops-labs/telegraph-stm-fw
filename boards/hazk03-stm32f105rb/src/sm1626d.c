@@ -2,14 +2,16 @@
 
 /* SM1626D dot-matrix driver.
  *
- * Two coordinate transforms sit between logical pixels and the panel, and both
- * are load-bearing - getting either wrong produces a mirrored or shifted
- * image:
+ * Two coordinate changes are between the logical pixels and the panel. Keep
+ * both of them. An error in one of them gives a mirrored or a moved image.
  *
- *   X: the 16-bit shift registers are wired in reverse, so a pixel's position
- *      within its own 16-column block is flipped end for end.
- *   Y: the sub-screen occupies scan rows 0 and 1, so every logical row is
- *      pushed down by two.
+ * The two coordinate changes are:
+ *
+ *   - X: the wiring of each 16-bit shift register is in the opposite
+ *     direction. Thus the driver turns the position of a pixel in its own
+ *     16-column block end for end.
+ *   - Y: the sub-screen uses the scan rows 0 and 1. Thus the driver moves
+ *     every logical row down by two rows.
  */
 
 #include <nuttx/config.h>
@@ -27,15 +29,15 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Row dwell time. 16 rows at this interval gives a ~312 Hz frame rate, above
- * the flicker threshold.
+/* This is the time for one row. With 16 rows, the frame rate is near 312 Hz.
+ * That rate is above the limit for visible flicker.
  */
 
 #define SM_ROW_US       200
 
 #define SM_ROW_SELECT_BITS 16
 
-/* The main screen spans five shift registers, the sub-screen two. */
+/* The main screen uses five shift registers. The sub-screen uses two. */
 
 #define SM_COLBITS(w)   (((w) > 32) ? 80 : 32)
 
@@ -59,7 +61,7 @@ static inline int sm_mapy(int y)
   return y + SM_Y_OFFSET;
 }
 
-/* Data is sampled on the rising edge. */
+/* The part reads the data at the rising edge of the clock. */
 
 static inline void sm_shiftbit(uint32_t din, bool val)
 {
@@ -88,7 +90,7 @@ void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
 
   memset(dev->fb, 0, sizeof(dev->fb));
 
-  /* Blanked until a scan runs. */
+  /* The panels stay blank until a scan starts. */
 
   stm32_gpiowrite(GPIO_SM1626D_OE, true);
   stm32_gpiowrite(GPIO_SM1626D_STB, false);
@@ -128,10 +130,12 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
     }
 }
 
-/* Output enable is active low and shared by both panels. The scan leaves it
- * blanked on exit: whatever row was latched last would otherwise stay lit for
- * the whole gap until the next pass, and against a 200 us row dwell even a
- * fraction of a millisecond makes that single row conspicuously brighter.
+/* The output-enable signal is active low. Both panels share it.
+ *
+ * Note: this function blanks the panels before it returns. Without that step,
+ * the last row stays on until the next scan. The time for one row is only
+ * 200 us. Thus a short delay makes that one row much brighter than the
+ * others.
  */
 
 void sm1626d_refresh(struct sm1626d_dev_s *dev)
@@ -151,7 +155,7 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev)
           sm_shiftbit(dev->din, on);
         }
 
-      /* One-hot row select, most significant bit first. */
+      /* Select one row. The most significant bit goes first. */
 
       for (rbit = SM_ROW_SELECT_BITS - 1; rbit >= 0; rbit--)
         {
