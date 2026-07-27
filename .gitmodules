@@ -6,3 +6,6 @@
 	path = third_party/nuttx-apps
 	url = https://github.com/mekops-labs/nuttx-apps.git
 	branch = wanted
+[submodule "third_party/unity"]
+	path = third_party/unity
+	url = https://github.com/ThrowTheSwitch/Unity.git
