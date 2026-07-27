@@ -50,12 +50,6 @@
 
 #define IPC_READ_CHUNK    128
 
-/* The credit count gives the number of the additional frames that this board
- * accepts. The calculation divides the free space of the receive buffer by
- * the size of a usual control frame.
- */
-
-#define IPC_CREDIT_UNIT   64
 
 /* The main panel holds 11 characters, and the sub panel holds 3 characters.
  * A longer text loses its end.
@@ -126,7 +120,7 @@ static uint8_t ipc_credits(struct ipc_ctx_s *ctx)
       free_bytes = 0;
     }
 
-  free_bytes /= IPC_CREDIT_UNIT;
+  free_bytes /= (int)IPC_CREDIT_UNIT;
 
   return (free_bytes > 255) ? 255 : (uint8_t)free_bytes;
 }

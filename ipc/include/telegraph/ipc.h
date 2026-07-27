@@ -83,6 +83,17 @@ extern "C" {
 #define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
 #define IPC_OP_FLASH        0x20u  /* edge -> STM32: start the flash mode   */
 #define IPC_OP_ACK          0xf0u  /* the receiver accepted the frame       */
+
+/* One credit gives this many bytes of the receive buffer. A frame thus costs
+ * more than one credit if its length is above this value.
+ */
+
+#define IPC_CREDIT_UNIT     64u
+
+/* The credits that a frame of this length costs. */
+
+#define IPC_FRAME_CREDITS(len) \
+  (((len) + IPC_FRAME_OVERHEAD + IPC_CREDIT_UNIT - 1) / IPC_CREDIT_UNIT)
 #define IPC_OP_NACK         0xf1u  /* the receiver rejected the frame       */
 
 /****************************************************************************
