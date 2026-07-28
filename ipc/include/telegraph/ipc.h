@@ -80,6 +80,7 @@ extern "C" {
 #define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
 #define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
 #define IPC_OP_SET_SLEEP    0x0bu  /* edge -> STM32: the period without light */
+#define IPC_OP_WRITE_ASSET  0x0cu  /* edge -> STM32: a part of a file       */
 #define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
 #define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
 #define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
@@ -127,7 +128,27 @@ extern "C" {
  * Payloads
  ****************************************************************************/
 
-#define IPC_PROTO_VERSION   1u
+#define IPC_PROTO_VERSION   2u
+
+/* The payload of IPC_OP_SET_LARGE and IPC_OP_SET_SMALL.
+ *
+ *   [attributes u8] [the text in UTF-8]
+ *
+ * An empty payload clears the panel. A payload of one byte alone also clears
+ * it, because the text is then empty.
+ *
+ * The bits 0 and 1 of the attributes give the place of the text across the
+ * panel. The value 0 puts it in the middle, thus a sender that writes no
+ * attribute gets a text in the middle. The other bits are 0.
+ */
+
+#define IPC_TEXT_ATTRS       0u
+#define IPC_TEXT_BODY        1u
+
+#define IPC_ALIGN_MASK       0x03u
+#define IPC_ALIGN_CENTRE     0u
+#define IPC_ALIGN_LEFT       1u
+#define IPC_ALIGN_RIGHT      2u
 
 /* The payload of IPC_OP_SET_TIME.
  *
@@ -167,6 +188,29 @@ extern "C" {
  * Note: the period does not change the brightness. Thus the display takes its
  * previous levels at the end of the period.
  */
+
+/* The payload of IPC_OP_WRITE_ASSET. The frame carries one part of a file of
+ * the assets.
+ *
+ *   [flags u8] [length of the path u8] [the path] [the data]
+ *
+ * The first part makes the file empty, and the last part closes it. A file
+ * that takes one part alone carries both marks.
+ *
+ * Note: the board keeps one file open. A first part closes a file that an
+ * earlier transfer left open.
+ *
+ * Note: the path of every part of one file must be the same.
+ */
+
+#define IPC_ASSET_FLAGS      0u
+#define IPC_ASSET_PATHLEN    1u
+#define IPC_ASSET_PATH       2u
+
+#define IPC_ASSET_FIRST      0x01u
+#define IPC_ASSET_LAST       0x02u
+
+#define IPC_ASSET_PATH_MAX   64u
 
 #define IPC_SET_SLEEP_LEN    4u
 #define IPC_SLEEP_START      0u  /* u16: the minute that stops the light   */

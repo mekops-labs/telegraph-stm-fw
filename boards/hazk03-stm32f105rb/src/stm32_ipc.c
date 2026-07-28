@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/kthread.h>
@@ -126,6 +127,12 @@ static uint8_t ipc_credits(struct ipc_ctx_s *ctx)
   return (free_bytes > 255) ? 255 : (uint8_t)free_bytes;
 }
 
+#ifdef CONFIG_FS_SMARTFS
+/* The file of the assets that a transfer holds open. */
+
+static int g_asset_fd = -1;
+#endif
+
 static void ipc_ack(struct ipc_ctx_s *ctx, uint16_t corr_id)
 {
   ipc_send(ctx, ipc_encode_ack(ctx->tx, sizeof(ctx->tx), corr_id,
@@ -220,7 +227,33 @@ static void ipc_set_text(struct ipc_ctx_s *ctx,
                          const struct ipc_frame_s *frame, int panel)
 {
   char text[IPC_TEXT_MAX];
-  size_t len = frame->payload_len;
+  uint8_t align = IPC_ALIGN_CENTRE;
+  size_t len = 0;
+
+  /* The first byte carries the attributes. An empty payload clears the
+   * panel, thus it needs no such byte.
+   */
+
+  if (frame->payload_len > 0)
+    {
+      uint8_t attrs = frame->payload[IPC_TEXT_ATTRS];
+
+      if ((attrs & ~IPC_ALIGN_MASK) != 0)
+        {
+          ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+          return;
+        }
+
+      align = attrs & IPC_ALIGN_MASK;
+
+      if (align > IPC_ALIGN_RIGHT)
+        {
+          ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+          return;
+        }
+
+      len = frame->payload_len - IPC_TEXT_BODY;
+    }
 
   if (len > sizeof(text))
     {
@@ -232,8 +265,8 @@ static void ipc_set_text(struct ipc_ctx_s *ctx,
    * step copies the text before the next frame arrives.
    */
 
-  memcpy(text, frame->payload, len);
-  hazk03_display_text(panel, text, len);
+  memcpy(text, &frame->payload[IPC_TEXT_BODY], len);
+  hazk03_display_text(panel, text, len, align);
 
   ipc_ack(ctx, frame->corr_id);
 }
@@ -308,6 +341,95 @@ static void ipc_set_sleep(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
+#ifdef CONFIG_FS_SMARTFS
+/* Make the directory of a path. A path with no directory does nothing. */
+
+static void ipc_asset_mkdir(char *path)
+{
+  char *slash = strrchr(path, '/');
+
+  if (slash == NULL || slash == path)
+    {
+      return;
+    }
+
+  *slash = '\0';
+  mkdir(path, 0777);
+  *slash = '/';
+}
+
+static void ipc_write_asset(struct ipc_ctx_s *ctx,
+                            const struct ipc_frame_s *frame)
+{
+  char path[IPC_ASSET_PATH_MAX + 1];
+  const uint8_t *data;
+  uint8_t flags;
+  uint8_t pathlen;
+  uint16_t datalen;
+
+  if (frame->payload_len < IPC_ASSET_PATH)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  flags   = frame->payload[IPC_ASSET_FLAGS];
+  pathlen = frame->payload[IPC_ASSET_PATHLEN];
+
+  if (pathlen == 0 || pathlen > IPC_ASSET_PATH_MAX ||
+      frame->payload_len < (uint16_t)(IPC_ASSET_PATH + pathlen))
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  memcpy(path, &frame->payload[IPC_ASSET_PATH], pathlen);
+  path[pathlen] = '\0';
+
+  data    = &frame->payload[IPC_ASSET_PATH + pathlen];
+  datalen = frame->payload_len - (uint16_t)(IPC_ASSET_PATH + pathlen);
+
+  if ((flags & IPC_ASSET_FIRST) != 0)
+    {
+      if (g_asset_fd >= 0)
+        {
+          close(g_asset_fd);
+        }
+
+      g_asset_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+      if (g_asset_fd < 0)
+        {
+          /* The directory of the file may be absent on a new board. */
+
+          ipc_asset_mkdir(path);
+          g_asset_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        }
+    }
+
+  if (g_asset_fd < 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+      return;
+    }
+
+  if (datalen > 0 && write(g_asset_fd, data, datalen) != (ssize_t)datalen)
+    {
+      close(g_asset_fd);
+      g_asset_fd = -1;
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+      return;
+    }
+
+  if ((flags & IPC_ASSET_LAST) != 0)
+    {
+      close(g_asset_fd);
+      g_asset_fd = -1;
+    }
+
+  ipc_ack(ctx, frame->corr_id);
+}
+#endif
+
 static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 {
   struct ipc_ctx_s *ctx = (struct ipc_ctx_s *)arg;
@@ -325,6 +447,12 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
       case IPC_OP_SET_SMALL:
         ipc_set_text(ctx, frame, HAZK03_PANEL_SUB);
         break;
+
+#ifdef CONFIG_FS_SMARTFS
+      case IPC_OP_WRITE_ASSET:
+        ipc_write_asset(ctx, frame);
+        break;
+#endif
 
       case IPC_OP_SET_TEMPOFF:
         ipc_set_tempoff(ctx, frame);

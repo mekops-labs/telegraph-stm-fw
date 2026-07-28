@@ -12,6 +12,7 @@
 #include "chip.h"
 #include "stm32_gpio.h"
 
+#include "fontext.h"
 #include "hazk03.h"
 
 /****************************************************************************
@@ -84,6 +85,14 @@ int stm32_bringup(void)
           syslog(LOG_INFO, "config: offset=%d bright=%u/%u\n",
                  cfg.utcoffset, cfg.digits, cfg.panels);
         }
+
+#ifdef CONFIG_FS_SMARTFS
+      /* The extended font holds the letters outside the ASCII table. A board
+       * without that file keeps the font of the firmware.
+       */
+
+      fontext_load(HAZK03_FONT_PATH);
+#endif
     }
 #endif
 

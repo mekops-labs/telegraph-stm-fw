@@ -11,8 +11,11 @@ CSRCS  = stm32_boot.c stm32_bringup.c stm32_clockconfig.c
 CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c
 
 # Every configuration shows the version on the main panel at start.
+#
+# The font of 5x7 is the fallback in the firmware. The extended font comes
+# from the flash, and it holds the letters outside the ASCII table.
 
-CSRCS += font5x7.c sm1626d_text.c
+CSRCS += font5x7.c fontext.c sm1626d_text.c
 
 ifeq ($(CONFIG_MTD_W25),y)
 CSRCS += stm32_spi.c stm32_flash.c

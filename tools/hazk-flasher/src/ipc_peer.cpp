@@ -189,11 +189,14 @@ static void ipcNoise() {
 // Transmit one frame that carries a text for the sub panel.
 static int ipcSendText(unsigned int i) {
     uint16_t id = ipcNextCorrId();
-    char text[4];
+    uint8_t payload[IPC_TEXT_BODY + 3];
     int n;
 
-    snprintf(text, sizeof(text), "%03u", i % 1000);
-    n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_SMALL, id, text, 3);
+    payload[IPC_TEXT_ATTRS] = IPC_ALIGN_CENTRE;
+    snprintf((char *)&payload[IPC_TEXT_BODY], 4, "%03u", i % 1000);
+
+    n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_SMALL, id, payload,
+                   sizeof(payload));
 
     if (n > 0) Serial1.write(g_tx, (size_t)n);
     return n;
@@ -228,7 +231,7 @@ static void ipcBurst(unsigned int count) {
         int n = ipcSendText(sent);
 
         if (n > 0) {
-            uint8_t cost = (uint8_t)IPC_FRAME_CREDITS(3);
+            uint8_t cost = (uint8_t)IPC_FRAME_CREDITS(IPC_TEXT_BODY + 3);
 
             g_credits = (g_credits > cost) ? (uint8_t)(g_credits - cost) : 0;
             sent++;
@@ -279,6 +282,37 @@ static void ipcFlood(unsigned int count) {
 //
 // Note: the STM32 transmits a log frame at its start. Thus this command shows
 // a push frame.
+
+// Send a text to one panel. The form is "[-l|-c|-r ]<text>", and the flag
+// gives the place of the text across the panel. Without a flag the text goes
+// in the middle.
+static void ipcText(uint8_t opcode, const char *text)
+{
+    static uint8_t payload[IPC_TEXT_BODY + 256];
+    uint8_t align = IPC_ALIGN_CENTRE;
+
+    if (strncmp(text, "-l ", 3) == 0) {
+        align = IPC_ALIGN_LEFT;
+        text += 3;
+    } else if (strncmp(text, "-r ", 3) == 0) {
+        align = IPC_ALIGN_RIGHT;
+        text += 3;
+    } else if (strncmp(text, "-c ", 3) == 0) {
+        text += 3;
+    }
+
+    size_t len = strlen(text);
+
+    if (len > sizeof(payload) - IPC_TEXT_BODY) {
+        len = sizeof(payload) - IPC_TEXT_BODY;
+    }
+
+    payload[IPC_TEXT_ATTRS] = align;
+    memcpy(&payload[IPC_TEXT_BODY], text, len);
+
+    ipcRequest(opcode, payload, (uint16_t)(IPC_TEXT_BODY + len));
+}
+
 static void ipcReset() {
     digitalWrite(PIN_BOOT0, LOW);
     delay(20);
@@ -373,9 +407,9 @@ void ipcCommand(const char *args) {
 
         ipcRequest(IPC_OP_SET_TIME, payload, len);
     } else if (strncmp(args, "large ", 6) == 0) {
-        ipcRequest(IPC_OP_SET_LARGE, args + 6, (uint16_t)strlen(args + 6));
+        ipcText(IPC_OP_SET_LARGE, args + 6);
     } else if (strncmp(args, "small ", 6) == 0) {
-        ipcRequest(IPC_OP_SET_SMALL, args + 6, (uint16_t)strlen(args + 6));
+        ipcText(IPC_OP_SET_SMALL, args + 6);
     } else if (strncmp(args, "bright ", 7) == 0) {
         // The form is "bright <digits> [panels]". Permitted values are 0 to
         // 8. The value 0 turns the device off.
@@ -420,6 +454,52 @@ void ipcCommand(const char *args) {
         ipc_put_u16(&payload[IPC_SLEEP_START], start);
         ipc_put_u16(&payload[IPC_SLEEP_END], end);
         ipcRequest(IPC_OP_SET_SLEEP, payload, IPC_SET_SLEEP_LEN);
+    } else if (strncmp(args, "putfile ", 8) == 0) {
+        // The form is "putfile <path> <hex>". One command carries the whole
+        // file, thus the size fits in one frame.
+        char path[IPC_ASSET_PATH_MAX + 1];
+        const char *p = args + 8;
+        const char *space = strchr(p, ' ');
+        size_t pathlen = (space != NULL) ? (size_t)(space - p) : 0;
+
+        if (pathlen == 0 || pathlen > IPC_ASSET_PATH_MAX) {
+            ipcOut("ERR path\n");
+            return;
+        }
+
+        memcpy(path, p, pathlen);
+        path[pathlen] = '\0';
+
+        const char *hex = space + 1;
+        size_t hexlen = strlen(hex);
+
+        if ((hexlen % 2) != 0) {
+            ipcOut("ERR hex\n");
+            return;
+        }
+
+        size_t datalen = hexlen / 2;
+        size_t total = IPC_ASSET_PATH + pathlen + datalen;
+
+        if (total > IPC_MAX_PAYLOAD) {
+            ipcOut("ERR too large: %u bytes\n", (unsigned)total);
+            return;
+        }
+
+        static uint8_t payload[IPC_MAX_PAYLOAD];
+
+        payload[IPC_ASSET_FLAGS] = IPC_ASSET_FIRST | IPC_ASSET_LAST;
+        payload[IPC_ASSET_PATHLEN] = (uint8_t)pathlen;
+        memcpy(&payload[IPC_ASSET_PATH], path, pathlen);
+
+        for (size_t i = 0; i < datalen; i++) {
+            char byte[3] = { hex[i * 2], hex[i * 2 + 1], '\0' };
+            payload[IPC_ASSET_PATH + pathlen + i] =
+                (uint8_t)strtoul(byte, NULL, 16);
+        }
+
+        ipcOut("INFO %s, %u bytes\n", path, (unsigned)datalen);
+        ipcRequest(IPC_OP_WRITE_ASSET, payload, (uint16_t)total);
     } else if (strcmp(args, "clear") == 0) {
         ipcRequest(IPC_OP_SET_LARGE, NULL, 0);
         ipcRequest(IPC_OP_SET_SMALL, NULL, 0);
