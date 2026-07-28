@@ -118,16 +118,25 @@ A flash operation stops the peer.
 | `ipc tempoff <tenths>` | Correct the temperature, in tenths of a degree |
 | `ipc sleep <start> <end>` | Stop the light between two times, each HH or HH:MM |
 | `ipc sleep off` | Keep the light through the day |
-| `ipc large [-l\|-c\|-r] <text>` | Put a text on the main panel |
-| `ipc small [-l\|-c\|-r] <text>` | Put a text on the sub panel |
-| `ipc scroll <x> <y> <w> <h> <period> <step> <text>` | Scroll a text across a rectangle. Give it 11 rows or more, or a letter loses its accent |
-| `ipc scrollv ...` | The same, moving down |
-| `ipc sprite <x> <y> <w> <h> <period> <srcw> <srch> <hex>` | Cycle the frames of a sprite |
-| `ipc animoff` | Stop the animations |
-| `ipc pix <x> <y> <w> <h> <hex>` | Set a rectangle of pixels on the main panel |
-| `ipc pixs <x> <y> <w> <h> <hex>` | The same on the sub panel |
-| `ipc putfile <path> <hex>` | Write a file into the assets, such as a font |
-| `ipc clear` | Clear both panels |
+| `ipc font <path>` | Take a font from the flash, such as the compact one |
+| `ipc putfile <path> <hex>` | Write a file into the assets |
+
+**A panel below is `l` for the main one or `s` for the sub one.** One opcode of
+the protocol serves both, thus these commands take the panel as an argument
+rather than each having a name of its own.
+
+| Command | Effect |
+| :--- | :--- |
+| `ipc text <l\|s> [-l\|-c\|-r] [-t\|-b] <text>` | Put a text on a panel. `-t` and `-b` give the top and the bottom line |
+| `ipc pix <l\|s> <x> <y> <w> <h> <hex>` | Set a rectangle of pixels |
+| `ipc scroll <l\|s> [-v] <x> <y> <w> <h> <period> <step> <text>` | Move a text through a rectangle. Give it 11 rows or more for the font of 5x7, or a letter loses its accent |
+| `ipc play <l\|s> <x> <y> <w> <h> <period> <path>` | Play a sprite from the flash |
+| `ipc speed <l\|s> <period> [step]` | Change the rate of a running animation |
+| `ipc animoff [l\|s]` | Stop the animations |
+| `ipc clear [l\|s]` | Clear a panel, or both |
+
+| Command | Effect |
+| :--- | :--- |
 | `ipc bad` | Transmit an unknown opcode, thus the target sends a NACK |
 | `ipc badlen` | Transmit an incorrect length, thus the target sends a NACK |
 | `ipc reset` | Reset the target, then show its push frame |

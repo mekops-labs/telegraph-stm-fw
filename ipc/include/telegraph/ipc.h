@@ -71,21 +71,33 @@ extern "C" {
 #define IPC_CORR_ID_PUSH    0x0000u
 
 /****************************************************************************
+ * Panels
+ ****************************************************************************/
+
+/* Every operation that names a panel takes this value as the first byte of
+ * its payload. Thus one opcode serves both panels, and an operation needs no
+ * opcode of its own for each of them.
+ */
+
+#define IPC_PANEL_MAIN      0u
+#define IPC_PANEL_SUB       1u
+
+/****************************************************************************
  * Opcodes
  ****************************************************************************/
 
 #define IPC_OP_SET_TIME     0x01u  /* edge -> STM32: set the RTC            */
-#define IPC_OP_SET_LARGE    0x02u  /* edge -> STM32: text on the main panel */
-#define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
+#define IPC_OP_SET_TEXT     0x02u  /* edge -> STM32: text on a panel        */
 #define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
-#define IPC_OP_ANIM_LARGE   0x05u  /* edge -> STM32: animate a rectangle    */
-#define IPC_OP_ANIM_SMALL   0x06u  /* edge -> STM32: the same, sub panel    */
+#define IPC_OP_SET_ANIM     0x05u  /* edge -> STM32: animate a rectangle    */
 #define IPC_OP_ANIM_STOP    0x07u  /* edge -> STM32: stop an animation      */
-#define IPC_OP_SET_PIX_LARGE 0x08u /* edge -> STM32: pixels on the main panel */
-#define IPC_OP_SET_PIX_SMALL 0x09u /* edge -> STM32: pixels on the sub panel  */
+#define IPC_OP_SET_PIXELS   0x08u  /* edge -> STM32: pixels on a panel      */
 #define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
 #define IPC_OP_SET_SLEEP    0x0bu  /* edge -> STM32: the period without light */
 #define IPC_OP_WRITE_ASSET  0x0cu  /* edge -> STM32: a part of a file       */
+#define IPC_OP_CLEAR        0x0du  /* edge -> STM32: clear a panel or both  */
+#define IPC_OP_ANIM_SPEED   0x0fu  /* edge -> STM32: the rate of a movement */
+#define IPC_OP_SET_FONT     0x13u  /* edge -> STM32: take a font from flash */
 #define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
 #define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
 #define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
@@ -151,13 +163,27 @@ extern "C" {
  * attribute gets a text in the middle. The other bits are 0.
  */
 
-#define IPC_TEXT_ATTRS       0u
-#define IPC_TEXT_BODY        1u
+#define IPC_TEXT_PANEL       0u
+#define IPC_TEXT_ATTRS       1u
+#define IPC_TEXT_BODY        2u
 
 #define IPC_ALIGN_MASK       0x03u
 #define IPC_ALIGN_CENTRE     0u
 #define IPC_ALIGN_LEFT       1u
 #define IPC_ALIGN_RIGHT      2u
+
+/* The bits 2 and 3 give the place of the text down the panel. A compact font
+ * from the flash gives two lines on a panel of 14 rows, thus one text takes
+ * the top and another takes the bottom.
+ */
+
+#define IPC_VALIGN_SHIFT     2u
+#define IPC_VALIGN_MASK      0x0cu
+#define IPC_VALIGN_MIDDLE    0u
+#define IPC_VALIGN_TOP       1u
+#define IPC_VALIGN_BOTTOM    2u
+
+#define IPC_TEXT_ATTR_MASK   (IPC_ALIGN_MASK | IPC_VALIGN_MASK)
 
 /* The payload of IPC_OP_SET_TIME.
  *
@@ -197,12 +223,13 @@ extern "C" {
  * main panel thus takes 126 bytes of pixels, far inside one frame.
  */
 
-#define IPC_PIX_X            0u
-#define IPC_PIX_Y            1u
-#define IPC_PIX_W            2u
-#define IPC_PIX_H            3u
-#define IPC_PIX_BITS         4u
-#define IPC_PIX_HEADER       4u
+#define IPC_PIX_PANEL        0u
+#define IPC_PIX_X            1u
+#define IPC_PIX_Y            2u
+#define IPC_PIX_W            3u
+#define IPC_PIX_H            4u
+#define IPC_PIX_BITS         5u
+#define IPC_PIX_HEADER       5u
 
 /* The payload of IPC_OP_ANIM_LARGE and IPC_OP_ANIM_SMALL.
  *
@@ -230,25 +257,77 @@ extern "C" {
  * sub panel holds half of that. A larger source gets a NACK.
  */
 
-#define IPC_ANIM_X           0u
-#define IPC_ANIM_Y           1u
-#define IPC_ANIM_W           2u
-#define IPC_ANIM_H           3u
-#define IPC_ANIM_FLAGS       4u
-#define IPC_ANIM_PERIOD      5u
-#define IPC_ANIM_STEP        7u
-#define IPC_ANIM_SRCW        8u
-#define IPC_ANIM_SRCH        9u
-#define IPC_ANIM_BODY        10u
+#define IPC_ANIM_PANEL       0u
+#define IPC_ANIM_X           1u
+#define IPC_ANIM_Y           2u
+#define IPC_ANIM_W           3u
+#define IPC_ANIM_H           4u
+#define IPC_ANIM_FLAGS       5u
+#define IPC_ANIM_PERIOD      6u
+#define IPC_ANIM_STEP        8u
+#define IPC_ANIM_SRCW        9u
+#define IPC_ANIM_SRCH        10u
+#define IPC_ANIM_BODY        11u
 
 #define IPC_ANIM_VERTICAL    0x01u
 #define IPC_ANIM_TEXT        0x02u
-#define IPC_ANIM_FLAG_MASK   0x03u
+#define IPC_ANIM_FILE        0x04u
+#define IPC_ANIM_FLAG_MASK   0x07u
+
+/* With IPC_ANIM_FILE the body is the path of a sprite in the flash of the
+ * board, and not pixels. That file gives the size of the source and the step,
+ * thus the payload carries the rectangle and the period alone.
+ *
+ * A sprite file starts with a header of 10 bytes:
+ *
+ *   [magic u32 "TGS1"] [width u16] [height u16] [step u8] [flags u8]
+ *
+ * The pixels follow, row by row, as in the operations above.
+ */
+
+#define IPC_SPRITE_MAGIC     0x31534754u
+#define IPC_SPRITE_HEADER    10u
 
 #define IPC_ANIM_SRC_MAX     512u
 
-/* The payload of IPC_OP_ANIM_STOP is empty. The rectangle keeps the pixels of
- * its last step.
+/* The payload of IPC_OP_ANIM_STOP names a panel, or it is empty for both. The
+ * rectangle keeps the pixels of its last step.
+ */
+
+/* The payload of IPC_OP_SET_FONT is the path of a font in the flash.
+ *
+ * A font carries its own cell. The font of 5 by 7 gives one line on a panel of
+ * 14 rows, and a compact font gives two.
+ */
+
+/* The payload of IPC_OP_ANIM_SPEED.
+ *
+ *   [panel u8] [period u16] [step u8]
+ *
+ * The panel is 0 for the main one and 1 for the sub one. The period is the
+ * time of one step in milliseconds, and a step of 0 keeps the step that the
+ * animation already has.
+ *
+ * The animation keeps its source and its place, thus the rate changes without
+ * the cost of sending that source again.
+ *
+ * Note: a panel without an animation gets a NACK with the code 0x03.
+ */
+
+#define IPC_SPEED_PANEL      0u
+#define IPC_SPEED_PERIOD     1u
+#define IPC_SPEED_STEP       3u
+#define IPC_SPEED_LEN        4u
+
+/* The payload of IPC_OP_CLEAR names the panel, or it is empty.
+ *
+ *   (empty)              both panels
+ *   [IPC_PANEL_MAIN]     the main panel alone
+ *   [IPC_PANEL_SUB]      the sub panel alone
+ *
+ * The panel loses every pixel. An animation of that panel stops as well,
+ * because an animation that kept its steps would draw over the panel again at
+ * its next one.
  */
 
 /* The payload of IPC_OP_SET_TEMPOFF. The value is a correction in tenths of a

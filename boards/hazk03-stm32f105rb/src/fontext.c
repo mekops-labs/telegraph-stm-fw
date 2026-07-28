@@ -27,6 +27,14 @@ static uint16_t g_cp[FONTEXT_MAX_GLYPHS];
 static uint16_t g_cols[FONTEXT_MAX_GLYPHS][FONTEXT_WIDTH];
 static uint16_t g_count;
 
+/* The cell that the loaded font uses. Without a font these hold the cell of
+ * the font of the firmware.
+ */
+
+static int g_width  = FONTEXT_WIDTH;
+static int g_rows   = FONTEXT_ROWS;
+static int g_ascent = FONTEXT_ASCENT;
+
 /* The columns of one character of the font of the firmware, after the move to
  * the taller cell.
  */
@@ -121,7 +129,7 @@ static const uint16_t *fontext_fromascii(uint32_t cp)
 
   for (col = 0; col < FONTEXT_WIDTH; col++)
     {
-      g_fallback[col] = (uint16_t)(glyph[col] << FONTEXT_ASCENT);
+      g_fallback[col] = (uint16_t)(glyph[col] << g_ascent);
     }
 
   return g_fallback;
@@ -160,10 +168,15 @@ int fontext_load(const char *path)
 
   count = fontext_get_u16(&header[4]);
 
-  if (header[6] != FONTEXT_WIDTH || header[7] != FONTEXT_ROWS ||
-      header[8] != FONTEXT_ASCENT)
+  /* The file carries its own cell. A cell larger than the store of this build
+   * is the only one that it refuses.
+   */
+
+  if (header[6] == 0 || header[6] > FONTEXT_WIDTH ||
+      header[7] == 0 || header[7] > 16 || header[8] >= header[7])
     {
-      syslog(LOG_ERR, "font: %s has another cell\n", path);
+      syslog(LOG_ERR, "font: %s has a cell of %u by %u that does not fit\n",
+             path, header[6], header[7]);
       goto done;
     }
 
@@ -177,8 +190,9 @@ int fontext_load(const char *path)
   for (i = 0; i < count; i++)
     {
       int col;
+      size_t entrylen = 2 + ((size_t)header[6] * 2);
 
-      if (read(fd, entry, sizeof(entry)) != (ssize_t)sizeof(entry))
+      if (read(fd, entry, entrylen) != (ssize_t)entrylen)
         {
           goto done;
         }
@@ -187,14 +201,19 @@ int fontext_load(const char *path)
 
       for (col = 0; col < FONTEXT_WIDTH; col++)
         {
-          g_cols[i][col] = fontext_get_u16(&entry[2 + (col * 2)]);
+          g_cols[i][col] = (col < header[6]) ?
+              fontext_get_u16(&entry[2 + (col * 2)]) : 0;
         }
     }
 
-  g_count = count;
+  g_count  = count;
+  g_width  = header[6];
+  g_rows   = header[7];
+  g_ascent = header[8];
   ret = OK;
 
-  syslog(LOG_INFO, "font: %s gives %u characters\n", path, count);
+  syslog(LOG_INFO, "font: %s gives %u characters in a cell of %d by %d\n",
+         path, count, g_width, g_rows);
 
 done:
   close(fd);
@@ -223,4 +242,29 @@ size_t fontext_next(const char *s, size_t len, const uint16_t **cols)
   *cols = fontext_fromascii((cp >= 0x20 && cp <= 0x7e) ? cp : ' ');
 
   return used;
+}
+
+int fontext_width(void)
+{
+  return g_width;
+}
+
+int fontext_rows(void)
+{
+  return g_rows;
+}
+
+int fontext_ascent(void)
+{
+  return g_ascent;
+}
+
+int fontext_advance(void)
+{
+  return g_width + 1;
+}
+
+int fontext_lineheight(void)
+{
+  return g_rows;
 }

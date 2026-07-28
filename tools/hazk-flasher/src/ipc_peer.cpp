@@ -227,7 +227,7 @@ static int ipcSendText(unsigned int i) {
     payload[IPC_TEXT_ATTRS] = IPC_ALIGN_CENTRE;
     snprintf((char *)&payload[IPC_TEXT_BODY], 4, "%03u", i % 1000);
 
-    n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_SMALL, id, payload,
+    n = ipc_encode(g_tx, sizeof(g_tx), IPC_OP_SET_TEXT, id, payload,
                    sizeof(payload));
 
     if (n > 0) Serial1.write(g_tx, (size_t)n);
@@ -319,18 +319,51 @@ static void ipcFlood(unsigned int count) {
 // Send a text to one panel. The form is "[-l|-c|-r ]<text>", and the flag
 // gives the place of the text across the panel. Without a flag the text goes
 // in the middle.
-static void ipcText(uint8_t opcode, const char *text)
+// Every command that names a panel starts with l or s, thus the commands
+// follow the protocol, where one opcode serves both panels.
+//
+// Note: the function moves the pointer past that letter and its space.
+static int ipcPanelArg(const char **args)
+{
+    const char *p = *args;
+
+    if (p[0] == 'l' && p[1] == ' ') {
+        *args = p + 2;
+        return IPC_PANEL_MAIN;
+    }
+
+    if (p[0] == 's' && p[1] == ' ') {
+        *args = p + 2;
+        return IPC_PANEL_SUB;
+    }
+
+    return -1;
+}
+
+static void ipcText(uint8_t panel, const char *text)
 {
     static uint8_t payload[IPC_TEXT_BODY + 256];
     uint8_t align = IPC_ALIGN_CENTRE;
+    uint8_t valign = IPC_VALIGN_MIDDLE;
 
-    if (strncmp(text, "-l ", 3) == 0) {
-        align = IPC_ALIGN_LEFT;
-        text += 3;
-    } else if (strncmp(text, "-r ", 3) == 0) {
-        align = IPC_ALIGN_RIGHT;
-        text += 3;
-    } else if (strncmp(text, "-c ", 3) == 0) {
+    // The flags come in any order, thus "-t -c" works as well as "-c -t".
+    for (; ; ) {
+        if (strncmp(text, "-l ", 3) == 0) {
+            align = IPC_ALIGN_LEFT;
+        } else if (strncmp(text, "-r ", 3) == 0) {
+            align = IPC_ALIGN_RIGHT;
+        } else if (strncmp(text, "-c ", 3) == 0) {
+            align = IPC_ALIGN_CENTRE;
+        } else if (strncmp(text, "-t ", 3) == 0) {
+            valign = IPC_VALIGN_TOP;
+        } else if (strncmp(text, "-b ", 3) == 0) {
+            valign = IPC_VALIGN_BOTTOM;
+        } else if (strncmp(text, "-m ", 3) == 0) {
+            valign = IPC_VALIGN_MIDDLE;
+        } else {
+            break;
+        }
+
         text += 3;
     }
 
@@ -340,10 +373,12 @@ static void ipcText(uint8_t opcode, const char *text)
         len = sizeof(payload) - IPC_TEXT_BODY;
     }
 
-    payload[IPC_TEXT_ATTRS] = align;
+    payload[IPC_TEXT_PANEL] = panel;
+    payload[IPC_TEXT_ATTRS] = align |
+                              (uint8_t)(valign << IPC_VALIGN_SHIFT);
     memcpy(&payload[IPC_TEXT_BODY], text, len);
 
-    ipcRequest(opcode, payload, (uint16_t)(IPC_TEXT_BODY + len));
+    ipcRequest(IPC_OP_SET_TEXT, payload, (uint16_t)(IPC_TEXT_BODY + len));
 }
 
 static void ipcReset() {
@@ -398,9 +433,16 @@ void ipcPoll() {
 }
 
 void ipcHelp() {
-    ipcOut("INFO ipc: on [baud] | off | state | time <epoch> | large <text> |\n");
-    ipcOut("INFO      small <text> | clear | bad | badlen | reset | noise |\n");
-    ipcOut("INFO      burst <n> | stats\n");
+    ipcOut("INFO ipc: on [baud] | off | state | stats | reset\n");
+    ipcOut("INFO   time <epoch> [offset] | bright <d> [p] | tempoff <t>\n");
+    ipcOut("INFO   sleep <start> <end>|off | font <path> | putfile <path> <hex>\n");
+    ipcOut("INFO   a panel below is l or s:\n");
+    ipcOut("INFO   text <l|s> [-l|-c|-r] [-t|-b] <text>\n");
+    ipcOut("INFO   pix <l|s> <x> <y> <w> <h> <hex>\n");
+    ipcOut("INFO   scroll <l|s> [-v] <x> <y> <w> <h> <period> <step> <text>\n");
+    ipcOut("INFO   play <l|s> <x> <y> <w> <h> <period> <path>\n");
+    ipcOut("INFO   speed <l|s> <period> [step] | animoff [l|s] | clear [l|s]\n");
+    ipcOut("INFO   bad | badlen | noise | burst <n> | flood <n>\n");
 }
 
 // Run a command, and give the output back as text.
@@ -439,10 +481,16 @@ void ipcCommand(const char *args) {
         }
 
         ipcRequest(IPC_OP_SET_TIME, payload, len);
-    } else if (strncmp(args, "large ", 6) == 0) {
-        ipcText(IPC_OP_SET_LARGE, args + 6);
-    } else if (strncmp(args, "small ", 6) == 0) {
-        ipcText(IPC_OP_SET_SMALL, args + 6);
+    } else if (strncmp(args, "text ", 5) == 0) {
+        const char *p = args + 5;
+        int panel = ipcPanelArg(&p);
+
+        if (panel < 0) {
+            ipcOut("ERR name the panel: text <l|s> ...\n");
+            return;
+        }
+
+        ipcText((uint8_t)panel, p);
     } else if (strncmp(args, "bright ", 7) == 0) {
         // The form is "bright <digits> [panels]". Permitted values are 0 to
         // 8. The value 0 turns the device off.
@@ -487,13 +535,25 @@ void ipcCommand(const char *args) {
         ipc_put_u16(&payload[IPC_SLEEP_START], start);
         ipc_put_u16(&payload[IPC_SLEEP_END], end);
         ipcRequest(IPC_OP_SET_SLEEP, payload, IPC_SET_SLEEP_LEN);
-    } else if (strncmp(args, "scroll ", 7) == 0 ||
-               strncmp(args, "scrollv ", 8) == 0) {
-        // The form is "scroll <x> <y> <w> <h> <period> <step> <text>".
-        // The board draws the text, thus the message goes out one time.
-        bool vert = (args[6] == 'v');
-        const char *p = args + (vert ? 8 : 7);
+    } else if (strncmp(args, "scroll ", 7) == 0) {
+        // The form is "scroll <l|s> [-v] <x> <y> <w> <h> <period> <step>
+        // <text>". The board draws the text, thus the message goes out one
+        // time.
+        const char *p = args + 7;
+        int panel = ipcPanelArg(&p);
+        bool vert = false;
         char *end = NULL;
+
+        if (panel < 0) {
+            ipcOut("ERR name the panel: scroll <l|s> ...\n");
+            return;
+        }
+
+        if (strncmp(p, "-v ", 3) == 0) {
+            vert = true;
+            p += 3;
+        }
+
         long x = strtol(p, &end, 10);
         long y = strtol(end, &end, 10);
         long w = strtol(end, &end, 10);
@@ -506,6 +566,7 @@ void ipcCommand(const char *args) {
         size_t tlen = (end != NULL) ? strlen(end) : 0;
         static uint8_t payload[IPC_MAX_PAYLOAD];
 
+        payload[IPC_ANIM_PANEL] = (uint8_t)panel;
         payload[IPC_ANIM_X] = (uint8_t)x;
         payload[IPC_ANIM_Y] = (uint8_t)y;
         payload[IPC_ANIM_W] = (uint8_t)w;
@@ -518,10 +579,57 @@ void ipcCommand(const char *args) {
         payload[IPC_ANIM_SRCH] = 0;
         memcpy(&payload[IPC_ANIM_BODY], end, tlen);
 
-        ipcRequest(IPC_OP_ANIM_LARGE, payload,
+        ipcRequest(IPC_OP_SET_ANIM, payload,
                    (uint16_t)(IPC_ANIM_BODY + tlen));
+    } else if (strncmp(args, "play ", 5) == 0) {
+        // The form is "play <l|s> <x> <y> <w> <h> <period> <path>". The board
+        // reads the sprite from its own flash, thus no pixels go over the
+        // link.
+        const char *p = args + 5;
+        int panel = ipcPanelArg(&p);
+        char *end = NULL;
+
+        if (panel < 0) {
+            ipcOut("ERR name the panel: play <l|s> ...\n");
+            return;
+        }
+
+        long x = strtol(p, &end, 10);
+        long y = strtol(end, &end, 10);
+        long w = strtol(end, &end, 10);
+        long h = strtol(end, &end, 10);
+        long period = strtol(end, &end, 10);
+
+        while (end != NULL && *end == ' ') end++;
+
+        size_t plen = (end != NULL) ? strlen(end) : 0;
+        static uint8_t payload[IPC_MAX_PAYLOAD];
+
+        payload[IPC_ANIM_PANEL] = (uint8_t)panel;
+        payload[IPC_ANIM_X] = (uint8_t)x;
+        payload[IPC_ANIM_Y] = (uint8_t)y;
+        payload[IPC_ANIM_W] = (uint8_t)w;
+        payload[IPC_ANIM_H] = (uint8_t)h;
+        payload[IPC_ANIM_FLAGS] = IPC_ANIM_FILE;
+        ipc_put_u16(&payload[IPC_ANIM_PERIOD], (uint16_t)period);
+        payload[IPC_ANIM_STEP] = 0;
+        payload[IPC_ANIM_SRCW] = 0;
+        payload[IPC_ANIM_SRCH] = 0;
+        memcpy(&payload[IPC_ANIM_BODY], end, plen);
+
+        ipcRequest(IPC_OP_SET_ANIM, payload,
+                   (uint16_t)(IPC_ANIM_BODY + plen));
+    } else if (strncmp(args, "font ", 5) == 0) {
+        ipcRequest(IPC_OP_SET_FONT, args + 5,
+                   (uint16_t)strlen(args + 5));
     } else if (strcmp(args, "animoff") == 0) {
         ipcRequest(IPC_OP_ANIM_STOP, NULL, 0);
+    } else if (strcmp(args, "animoff l") == 0) {
+        uint8_t p = IPC_PANEL_MAIN;
+        ipcRequest(IPC_OP_ANIM_STOP, &p, 1);
+    } else if (strcmp(args, "animoff s") == 0) {
+        uint8_t p = IPC_PANEL_SUB;
+        ipcRequest(IPC_OP_ANIM_STOP, &p, 1);
     } else if (strncmp(args, "sprite ", 7) == 0) {
         // The form is "sprite <x> <y> <w> <h> <period> <srcw> <srch> <hex>".
         // A step of the width of the rectangle gives the frames.
@@ -541,6 +649,7 @@ void ipcCommand(const char *args) {
         size_t datalen = hexlen / 2;
         static uint8_t payload[IPC_MAX_PAYLOAD];
 
+        payload[IPC_ANIM_PANEL] = IPC_PANEL_MAIN;
         payload[IPC_ANIM_X] = (uint8_t)x;
         payload[IPC_ANIM_Y] = (uint8_t)y;
         payload[IPC_ANIM_W] = (uint8_t)w;
@@ -556,15 +665,20 @@ void ipcCommand(const char *args) {
             payload[IPC_ANIM_BODY + i] = (uint8_t)strtoul(byte, NULL, 16);
         }
 
-        ipcRequest(IPC_OP_ANIM_LARGE, payload,
+        ipcRequest(IPC_OP_SET_ANIM, payload,
                    (uint16_t)(IPC_ANIM_BODY + datalen));
-    } else if (strncmp(args, "pix ", 4) == 0 ||
-               strncmp(args, "pixs ", 5) == 0) {
-        // The form is "pix <x> <y> <w> <h> <hex>" for the main panel, and
-        // "pixs" for the sub panel. The pixels go row by row.
-        bool sub = (args[3] == 's');
-        const char *p = args + (sub ? 5 : 4);
+    } else if (strncmp(args, "pix ", 4) == 0) {
+        // The form is "pix <l|s> <x> <y> <w> <h> <hex>". The pixels go row by
+        // row.
+        const char *p = args + 4;
+        int panel = ipcPanelArg(&p);
         char *end = NULL;
+
+        if (panel < 0) {
+            ipcOut("ERR name the panel: pix <l|s> ...\n");
+            return;
+        }
+
         long x = strtol(p, &end, 10);
         long y = strtol(end, &end, 10);
         long w = strtol(end, &end, 10);
@@ -584,6 +698,7 @@ void ipcCommand(const char *args) {
 
         static uint8_t payload[IPC_MAX_PAYLOAD];
 
+        payload[IPC_PIX_PANEL] = (uint8_t)panel;
         payload[IPC_PIX_X] = (uint8_t)x;
         payload[IPC_PIX_Y] = (uint8_t)y;
         payload[IPC_PIX_W] = (uint8_t)w;
@@ -594,8 +709,8 @@ void ipcCommand(const char *args) {
             payload[IPC_PIX_BITS + i] = (uint8_t)strtoul(byte, NULL, 16);
         }
 
-        ipcRequest(sub ? IPC_OP_SET_PIX_SMALL : IPC_OP_SET_PIX_LARGE,
-                   payload, (uint16_t)(IPC_PIX_HEADER + datalen));
+        ipcRequest(IPC_OP_SET_PIXELS, payload,
+                   (uint16_t)(IPC_PIX_HEADER + datalen));
     } else if (strncmp(args, "putfile ", 8) == 0) {
         // The form is "putfile <path> <hex>". One command carries the whole
         // file, thus the size fits in one frame.
@@ -643,8 +758,34 @@ void ipcCommand(const char *args) {
         ipcOut("INFO %s, %u bytes\n", path, (unsigned)datalen);
         ipcRequest(IPC_OP_WRITE_ASSET, payload, (uint16_t)total);
     } else if (strcmp(args, "clear") == 0) {
-        ipcRequest(IPC_OP_SET_LARGE, NULL, 0);
-        ipcRequest(IPC_OP_SET_SMALL, NULL, 0);
+        ipcRequest(IPC_OP_CLEAR, NULL, 0);
+    } else if (strcmp(args, "clear l") == 0) {
+        uint8_t p = IPC_PANEL_MAIN;
+        ipcRequest(IPC_OP_CLEAR, &p, 1);
+    } else if (strcmp(args, "clear s") == 0) {
+        uint8_t p = IPC_PANEL_SUB;
+        ipcRequest(IPC_OP_CLEAR, &p, 1);
+    } else if (strncmp(args, "speed ", 6) == 0) {
+        // The form is "speed <l|s> <period> [step]".
+        uint8_t payload[IPC_SPEED_LEN];
+        const char *p = args + 6;
+        int panel = ipcPanelArg(&p);
+        char *end = NULL;
+        long period;
+
+        if (panel < 0) {
+            ipcOut("ERR name the panel: speed <l|s> ...\n");
+            return;
+        }
+
+        period = strtol(p, &end, 10);
+        long step = (end != NULL && *end != '\0') ? strtol(end, NULL, 10) : 0;
+
+        payload[IPC_SPEED_PANEL] = (uint8_t)panel;
+        ipc_put_u16(&payload[IPC_SPEED_PERIOD], (uint16_t)period);
+        payload[IPC_SPEED_STEP] = (uint8_t)step;
+
+        ipcRequest(IPC_OP_ANIM_SPEED, payload, IPC_SPEED_LEN);
     } else if (strcmp(args, "bad") == 0) {
         // The STM32 has no opcode 0x7F. Thus it answers with a NACK.
         ipcRequest(0x7f, NULL, 0);

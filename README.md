@@ -143,6 +143,18 @@ one set of shapes.
 Note: a text of the protocol is in UTF-8. A character that neither font holds
 gives a space.
 
+**The compact font gives two lines.** The font of 5x7 takes 10 rows of a panel
+of 14, thus one line fills it. The compact font takes 5 rows for a letter in a
+cell of 7, and two of those fit.
+
+```sh
+make compactfont            # build it, and print the command that sends it
+make sprites                # build the sprites for the animation
+```
+
+The board takes a font from the flash at any time, thus one panel shows a large
+line and later two small ones.
+
 ### Board configuration
 
 The board directory is `boards/hazk03-stm32f105rb/`. The build keeps it

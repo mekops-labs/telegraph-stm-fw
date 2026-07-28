@@ -26,6 +26,7 @@
 
 #include <telegraph/ipc.h>
 
+#include "fontext.h"
 #include "hazk03.h"
 #include "version.h"
 
@@ -223,30 +224,53 @@ static void ipc_set_time(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
-static void ipc_set_text(struct ipc_ctx_s *ctx,
-                         const struct ipc_frame_s *frame, int panel)
+/* Take the panel from the first byte of a payload. */
+
+static int ipc_panel_of(const struct ipc_frame_s *frame)
 {
+  if (frame->payload_len == 0 || frame->payload[0] > IPC_PANEL_SUB)
+    {
+      return -1;
+    }
+
+  return (frame->payload[0] == IPC_PANEL_SUB) ? HAZK03_PANEL_SUB
+                                              : HAZK03_PANEL_MAIN;
+}
+
+static void ipc_set_text(struct ipc_ctx_s *ctx,
+                         const struct ipc_frame_s *frame)
+{
+  int panel = ipc_panel_of(frame);
+
   char text[IPC_TEXT_MAX];
   uint8_t align = IPC_ALIGN_CENTRE;
+  uint8_t valign = IPC_VALIGN_MIDDLE;
   size_t len = 0;
 
-  /* The first byte carries the attributes. An empty payload clears the
-   * panel, thus it needs no such byte.
+  if (panel < 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  /* The byte after the panel carries the attributes. A payload of the panel
+   * alone clears that panel, thus it needs no such byte.
    */
 
-  if (frame->payload_len > 0)
+  if (frame->payload_len > IPC_TEXT_ATTRS)
     {
       uint8_t attrs = frame->payload[IPC_TEXT_ATTRS];
 
-      if ((attrs & ~IPC_ALIGN_MASK) != 0)
+      if ((attrs & ~IPC_TEXT_ATTR_MASK) != 0)
         {
           ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
           return;
         }
 
-      align = attrs & IPC_ALIGN_MASK;
+      align  = attrs & IPC_ALIGN_MASK;
+      valign = (attrs & IPC_VALIGN_MASK) >> IPC_VALIGN_SHIFT;
 
-      if (align > IPC_ALIGN_RIGHT)
+      if (align > IPC_ALIGN_RIGHT || valign > IPC_VALIGN_BOTTOM)
         {
           ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
           return;
@@ -266,7 +290,7 @@ static void ipc_set_text(struct ipc_ctx_s *ctx,
    */
 
   memcpy(text, &frame->payload[IPC_TEXT_BODY], len);
-  hazk03_display_text(panel, text, len, align);
+  hazk03_display_text(panel, text, len, align, valign);
 
   ipc_ack(ctx, frame->corr_id);
 }
@@ -299,14 +323,22 @@ static void ipc_set_bright(struct ipc_ctx_s *ctx,
 }
 
 static void ipc_animate(struct ipc_ctx_s *ctx,
-                        const struct ipc_frame_s *frame, int panel)
+                        const struct ipc_frame_s *frame)
 {
+  int panel = ipc_panel_of(frame);
   uint8_t flags;
   bool text;
+  bool file;
   int srcw;
   int srch;
   size_t srclen;
   int ret;
+
+  if (panel < 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
 
   if (frame->payload_len <= IPC_ANIM_BODY)
     {
@@ -323,11 +355,12 @@ static void ipc_animate(struct ipc_ctx_s *ctx,
     }
 
   text   = (flags & IPC_ANIM_TEXT) != 0;
+  file   = (flags & IPC_ANIM_FILE) != 0;
   srcw   = frame->payload[IPC_ANIM_SRCW];
   srch   = frame->payload[IPC_ANIM_SRCH];
   srclen = frame->payload_len - IPC_ANIM_BODY;
 
-  if (!text)
+  if (!text && !file)
     {
       /* The pixels must match the size of the source. */
 
@@ -347,7 +380,7 @@ static void ipc_animate(struct ipc_ctx_s *ctx,
                                (flags & IPC_ANIM_VERTICAL) != 0,
                                ipc_get_u16(&frame->payload[IPC_ANIM_PERIOD]),
                                frame->payload[IPC_ANIM_STEP],
-                               text, srcw, srch,
+                               text, file, srcw, srch,
                                &frame->payload[IPC_ANIM_BODY], srclen);
 
   if (ret < 0)
@@ -361,13 +394,20 @@ static void ipc_animate(struct ipc_ctx_s *ctx,
 }
 
 static void ipc_set_pixels(struct ipc_ctx_s *ctx,
-                           const struct ipc_frame_s *frame, int panel)
+                           const struct ipc_frame_s *frame)
 {
+  int panel = ipc_panel_of(frame);
   uint8_t x;
   uint8_t y;
   uint8_t w;
   uint8_t h;
   uint16_t need;
+
+  if (panel < 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
 
   if (frame->payload_len < IPC_PIX_HEADER)
     {
@@ -540,12 +580,8 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
         ipc_set_time(ctx, frame);
         break;
 
-      case IPC_OP_SET_LARGE:
-        ipc_set_text(ctx, frame, HAZK03_PANEL_MAIN);
-        break;
-
-      case IPC_OP_SET_SMALL:
-        ipc_set_text(ctx, frame, HAZK03_PANEL_SUB);
+      case IPC_OP_SET_TEXT:
+        ipc_set_text(ctx, frame);
         break;
 
 #ifdef CONFIG_FS_SMARTFS
@@ -554,12 +590,74 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
         break;
 #endif
 
-      case IPC_OP_ANIM_LARGE:
-        ipc_animate(ctx, frame, HAZK03_PANEL_MAIN);
+      case IPC_OP_SET_ANIM:
+        ipc_animate(ctx, frame);
         break;
 
-      case IPC_OP_ANIM_SMALL:
-        ipc_animate(ctx, frame, HAZK03_PANEL_SUB);
+      case IPC_OP_ANIM_SPEED:
+        if (frame->payload_len != IPC_SPEED_LEN)
+          {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+          }
+        else if (hazk03_display_animspeed(
+                     frame->payload[IPC_SPEED_PANEL],
+                     ipc_get_u16(&frame->payload[IPC_SPEED_PERIOD]),
+                     frame->payload[IPC_SPEED_STEP]) < 0)
+          {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+          }
+        else
+          {
+            ipc_ack(ctx, frame->corr_id);
+          }
+        break;
+
+      case IPC_OP_SET_FONT:
+        {
+          char path[64];
+          size_t plen = frame->payload_len;
+
+          if (plen == 0 || plen >= sizeof(path))
+            {
+              ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+              break;
+            }
+
+          memcpy(path, frame->payload, plen);
+          path[plen] = '\0';
+
+          if (fontext_load(path) < 0)
+            {
+              ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+            }
+          else
+            {
+              ipc_ack(ctx, frame->corr_id);
+            }
+        }
+        break;
+
+      case IPC_OP_CLEAR:
+        if (frame->payload_len == 0)
+          {
+            hazk03_display_clear(HAZK03_PANEL_MAIN);
+            hazk03_display_clear(HAZK03_PANEL_SUB);
+            ipc_ack(ctx, frame->corr_id);
+          }
+        else if (frame->payload_len != 1)
+          {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+          }
+        else if (frame->payload[0] > IPC_PANEL_SUB)
+          {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+          }
+        else
+          {
+            hazk03_display_clear(frame->payload[0] == IPC_PANEL_SUB ?
+                                 HAZK03_PANEL_SUB : HAZK03_PANEL_MAIN);
+            ipc_ack(ctx, frame->corr_id);
+          }
         break;
 
       case IPC_OP_ANIM_STOP:
@@ -568,12 +666,8 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
         ipc_ack(ctx, frame->corr_id);
         break;
 
-      case IPC_OP_SET_PIX_LARGE:
-        ipc_set_pixels(ctx, frame, HAZK03_PANEL_MAIN);
-        break;
-
-      case IPC_OP_SET_PIX_SMALL:
-        ipc_set_pixels(ctx, frame, HAZK03_PANEL_SUB);
+      case IPC_OP_SET_PIXELS:
+        ipc_set_pixels(ctx, frame);
         break;
 
       case IPC_OP_SET_TEMPOFF:
