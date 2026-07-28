@@ -5,7 +5,7 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-07-28
 
 ### Added
 
@@ -21,6 +21,17 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The operation `0x0B` sets a period without light, such as 23:00 until 06:00.
   The period does not change the brightness, thus the display takes its
   previous levels at the end of the period.
+- The operation `0x0C` writes a file into the assets, and it makes the
+  directory of that file.
+- The panels carry the content of the board until the edge MCU sends a text.
+  The main panel gives a greeting, and the sub panel gives the day of the week.
+- An extended font at `/assets/fonts/default.tgf`, for the letters outside the
+  ASCII table. Its cell has 10 rows for a letter of 7 rows: two rows above the
+  letter carry a mark such as an acute, and one row below carries a mark such
+  as an ogonek. Thus a letter keeps its full height.
+- The tool `tools/mkfont.py` builds that font, and the target `make font` calls
+  it. The tool takes the shapes of the ASCII table from the source of the
+  firmware, thus the two fonts keep one set of shapes.
 - The Makefile builds the firmware of both MCUs, and it sends the firmware of
   the edge MCU over the air.
 
@@ -34,6 +45,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The edge MCU sends the offset of the local time one time, and not after each
   reset of the board.
+- **The texts of the panels now start with a byte of attributes.** The bits 0
+  and 1 of that byte give the place of the text across the panel. A byte of 0
+  puts the text in the middle, and earlier versions always put it at the left.
+  The version of the protocol is now 2.
+- A text of the panels is in UTF-8. A character that neither font holds gives a
+  space.
 
 ## [0.1.0] - 2026-07-28
 
@@ -108,10 +125,11 @@ module, and it answers a binary protocol on the UART of the edge MCU.
 - One UART carries the console and the protocol, thus a build gives one or the
   other.
 - The board keeps no settings. The edge MCU sends the UTC offset again after
-  each reset of the board. *(The unreleased version above adds a store.)*
+  each reset of the board. *(0.1.1 adds a store.)*
 - The main panel shows 11 characters, and the sub panel shows 3. Longer text
   loses its end.
 - The scan loop uses the CPU. It does not use DMA.
 - The firmware gives no animation, and it reads no USB device.
 
+[0.1.1]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.1.1
 [0.1.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.1.0
