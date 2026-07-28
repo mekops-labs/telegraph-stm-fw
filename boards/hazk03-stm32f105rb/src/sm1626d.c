@@ -160,9 +160,57 @@ void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level, bool on)
   dev->on = on;
 }
 
+void sm1626d_begin(struct sm1626d_dev_s *dev)
+{
+  if (!dev->dirty)
+    {
+      /* The other image holds what the scan showed two images ago. Copy the
+       * one on the panel now, thus a change of one part keeps the rest.
+       */
+
+      memcpy(dev->fb[dev->front ^ 1], dev->fb[dev->front],
+             sizeof(dev->fb[0]));
+      dev->dirty = true;
+    }
+}
+
+void sm1626d_commit(struct sm1626d_dev_s *dev)
+{
+  dev->swap = true;
+}
+
+void sm1626d_swapnow(struct sm1626d_dev_s *dev)
+{
+  if (dev->swap)
+    {
+      dev->front = dev->front ^ 1;
+      dev->swap  = false;
+      dev->dirty = false;
+    }
+}
+
 void sm1626d_clear(struct sm1626d_dev_s *dev)
 {
-  memset(dev->fb, 0, sizeof(dev->fb));
+  memset(dev->fb[dev->front ^ 1], 0, sizeof(dev->fb[0]));
+}
+
+void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y,
+                        int w, int h, const uint8_t *bits)
+{
+  int stride = (w + 7) / 8;
+  int row;
+  int col;
+
+  for (row = 0; row < h; row++)
+    {
+      for (col = 0; col < w; col++)
+        {
+          bool on = (bits[(row * stride) + (col / 8)] &
+                     (0x80 >> (col % 8))) != 0;
+
+          sm1626d_drawpixel(dev, x + col, y + row, on);
+        }
+    }
 }
 
 void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
@@ -185,11 +233,11 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
 
   if (on)
     {
-      dev->fb[py][px / 8] |= (1 << (px % 8));
+      dev->fb[dev->front ^ 1][py][px / 8] |= (1 << (px % 8));
     }
   else
     {
-      dev->fb[py][px / 8] &= ~(1 << (px % 8));
+      dev->fb[dev->front ^ 1][py][px / 8] &= ~(1 << (px % 8));
     }
 }
 
@@ -236,7 +284,8 @@ void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
         {
           int col = mcols - 1 - i;
 
-          mval = (main->fb[row][col / 8] & (1 << (col % 8))) != 0;
+          mval = (main->fb[main->front][row][col / 8] &
+                  (1 << (col % 8))) != 0;
         }
       else
         {
@@ -249,7 +298,8 @@ void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
             {
               int col = mcols - 1 - i;
 
-              sval = (sub->fb[row][col / 8] & (1 << (col % 8))) != 0;
+              sval = (sub->fb[sub->front][row][col / 8] &
+                      (1 << (col % 8))) != 0;
             }
           else
             {
@@ -288,7 +338,8 @@ void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
 
           int col = colbits - 1 - i;
 
-          on = (dev->fb[row][col / 8] & (1 << (col % 8))) != 0;
+          on = (dev->fb[dev->front][row][col / 8] &
+                (1 << (col % 8))) != 0;
         }
       else
         {
@@ -353,7 +404,8 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev)
 
       for (col = colbits - 1; col >= 0; col--)
         {
-          bool on = (dev->fb[row][col / 8] & (1 << (col % 8))) != 0;
+          bool on = (dev->fb[dev->front][row][col / 8] &
+                     (1 << (col % 8))) != 0;
           sm_shiftbit(dev, on);
         }
 

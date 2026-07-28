@@ -125,13 +125,6 @@ static int16_t g_temp;
 
 static mutex_t g_fblock = NXMUTEX_INITIALIZER;
 
-/* A writer of the framebuffer sets this flag. The interrupt then gives no
- * light for that row, because a mutex has no place in an interrupt and a
- * partial image would show.
- */
-
-static volatile bool g_fbbusy;
-
 /* The timer that paces the rows, the row that comes next, and the count of
  * the images. The interrupt owns these.
  */
@@ -321,10 +314,10 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
   int y = (dev->height - FONT5X7_HEIGHT) / 2;
 
   nxmutex_lock(&g_fblock);
-  g_fbbusy = true;
+  sm1626d_begin(dev);
   sm1626d_clear(dev);
   sm1626d_drawtext(dev, x, y, s, len);
-  g_fbbusy = false;
+  sm1626d_commit(dev);
   nxmutex_unlock(&g_fblock);
 }
 
@@ -425,6 +418,13 @@ static int display_ontimer(int irq, void *context, void *arg)
     {
       g_slot = 0;
       g_frames++;
+
+      /* A writer may have finished an image. The change takes effect here,
+       * between two images, thus no image mixes the old and the new.
+       */
+
+      sm1626d_swapnow(&g_main);
+      sm1626d_swapnow(&g_sub);
     }
 
   /* The transfer of that row belongs to a thread, and not to this interrupt.
@@ -449,10 +449,7 @@ static int display_shifter(int argc, char *argv[])
     {
       nxsem_wait_uninterruptible(&g_rowsem);
 
-      if (!g_fbbusy)
-        {
-          sm1626d_shiftcombined(&g_main, &g_sub, g_slot);
-        }
+      sm1626d_shiftcombined(&g_main, &g_sub, g_slot);
     }
 
   return 0;
@@ -542,6 +539,31 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align)
     }
 
   draw_text(dev, s, len, align);
+
+  return OK;
+}
+
+int hazk03_display_pixels(int panel, int x, int y, int w, int h,
+                          const uint8_t *bits)
+{
+  struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
+
+  /* The edge MCU owns this panel from now on. */
+
+  if (panel == HAZK03_PANEL_SUB)
+    {
+      g_sub_default = false;
+    }
+  else
+    {
+      g_main_default = false;
+    }
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_begin(dev);
+  sm1626d_drawbitmap(dev, x, y, w, h, bits);
+  sm1626d_commit(dev);
+  nxmutex_unlock(&g_fblock);
 
   return OK;
 }

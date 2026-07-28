@@ -34,8 +34,62 @@ struct sm1626d_dev_s
   uint8_t height;
   uint8_t bright;
   bool on;
-  uint8_t fb[SM1626D_ROWS][SM1626D_ROW_BYTES];
+
+  /* The panel keeps two images. The scan reads one of them and a writer
+   * changes the other, thus no scan ever shows a partial image.
+   */
+
+  uint8_t       front;   /* the image that the scan reads                  */
+  bool          dirty;   /* a writer has changed the other image           */
+  volatile bool swap;    /* the scan takes the other image at the next one */
+
+  uint8_t fb[2][SM1626D_ROWS][SM1626D_ROW_BYTES];
 };
+
+/****************************************************************************
+ * Name: sm1626d_begin
+ *
+ * Description:
+ *   Start a change of the image. The first change after a swap copies the
+ *   image that the scan reads, thus a change of one part keeps the rest.
+ *
+ ****************************************************************************/
+
+void sm1626d_begin(struct sm1626d_dev_s *dev);
+
+/****************************************************************************
+ * Name: sm1626d_commit
+ *
+ * Description:
+ *   Give the changed image to the scan. The scan takes it at the start of the
+ *   next image, thus no image ever mixes the two.
+ *
+ ****************************************************************************/
+
+void sm1626d_commit(struct sm1626d_dev_s *dev);
+
+/****************************************************************************
+ * Name: sm1626d_swapnow
+ *
+ * Description:
+ *   Take the changed image, if a writer gave one. The scan calls this at the
+ *   start of an image, and it calls nothing else that a writer also calls.
+ *
+ ****************************************************************************/
+
+void sm1626d_swapnow(struct sm1626d_dev_s *dev);
+
+/****************************************************************************
+ * Name: sm1626d_drawbitmap
+ *
+ * Description:
+ *   Put a rectangle of pixels into the image. The bits go row by row, and
+ *   each row starts at a byte. Bit 7 of a byte is the pixel at the left.
+ *
+ ****************************************************************************/
+
+void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y,
+                        int w, int h, const uint8_t *bits);
 
 void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
                   uint8_t width, uint8_t height);

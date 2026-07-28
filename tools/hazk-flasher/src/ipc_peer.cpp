@@ -487,6 +487,44 @@ void ipcCommand(const char *args) {
         ipc_put_u16(&payload[IPC_SLEEP_START], start);
         ipc_put_u16(&payload[IPC_SLEEP_END], end);
         ipcRequest(IPC_OP_SET_SLEEP, payload, IPC_SET_SLEEP_LEN);
+    } else if (strncmp(args, "pix ", 4) == 0 ||
+               strncmp(args, "pixs ", 5) == 0) {
+        // The form is "pix <x> <y> <w> <h> <hex>" for the main panel, and
+        // "pixs" for the sub panel. The pixels go row by row.
+        bool sub = (args[3] == 's');
+        const char *p = args + (sub ? 5 : 4);
+        char *end = NULL;
+        long x = strtol(p, &end, 10);
+        long y = strtol(end, &end, 10);
+        long w = strtol(end, &end, 10);
+        long h = strtol(end, &end, 10);
+
+        while (end != NULL && *end == ' ') end++;
+
+        size_t hexlen = (end != NULL) ? strlen(end) : 0;
+        size_t datalen = hexlen / 2;
+        size_t need = ((w + 7) / 8) * h;
+
+        if (datalen != need) {
+            ipcOut("ERR need %u bytes of pixels, got %u\n",
+                   (unsigned)need, (unsigned)datalen);
+            return;
+        }
+
+        static uint8_t payload[IPC_MAX_PAYLOAD];
+
+        payload[IPC_PIX_X] = (uint8_t)x;
+        payload[IPC_PIX_Y] = (uint8_t)y;
+        payload[IPC_PIX_W] = (uint8_t)w;
+        payload[IPC_PIX_H] = (uint8_t)h;
+
+        for (size_t i = 0; i < datalen; i++) {
+            char byte[3] = { end[i * 2], end[i * 2 + 1], '\0' };
+            payload[IPC_PIX_BITS + i] = (uint8_t)strtoul(byte, NULL, 16);
+        }
+
+        ipcRequest(sub ? IPC_OP_SET_PIX_SMALL : IPC_OP_SET_PIX_LARGE,
+                   payload, (uint16_t)(IPC_PIX_HEADER + datalen));
     } else if (strncmp(args, "putfile ", 8) == 0) {
         // The form is "putfile <path> <hex>". One command carries the whole
         // file, thus the size fits in one frame.
