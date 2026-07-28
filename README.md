@@ -54,11 +54,18 @@ make image                              # toolchain container
 make build                              # configure + build
 ```
 
+The repository holds the firmware of both MCUs. The target `make build` gives
+the STM32 image. The target `make flasher` gives the image of the edge MCU in
+`tools/hazk-flasher/`, and `make all` gives both.
+
 The command `make help` gives the other targets. These are `menuconfig`,
 `savedefconfig`, `clean` and `shell`.
 
 Note: every target runs in the container. The image holds the `arm-none-eabi`
 cross toolchain and the packages that NuttX needs. The build uses ccache.
+
+Note: the edge MCU has its own toolchain, thus it has its own image. The
+target `make flasher-image` builds it.
 
 ### Version
 
