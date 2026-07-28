@@ -201,6 +201,43 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
  * others.
  */
 
+void sm1626d_shiftrow(struct sm1626d_dev_s *dev, int row)
+{
+  int colbits = SM_COLBITS(dev->width);
+  int col;
+  int rbit;
+
+  for (col = colbits - 1; col >= 0; col--)
+    {
+      bool on = (dev->fb[row][col / 8] & (1 << (col % 8))) != 0;
+      sm_shiftbit(dev, on);
+    }
+
+  /* Select one row. The most significant bit goes first. */
+
+  for (rbit = SM_ROW_SELECT_BITS - 1; rbit >= 0; rbit--)
+    {
+      sm_shiftbit(dev, rbit == row);
+    }
+
+  sm_latch();
+}
+
+void sm1626d_output(bool enable)
+{
+  sm_output(enable);
+}
+
+int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us)
+{
+  if (!dev->on)
+    {
+      return 0;
+    }
+
+  return (rowtime_us * g_duty[dev->bright]) / SM_DUTY_STEPS;
+}
+
 void sm1626d_refresh(struct sm1626d_dev_s *dev)
 {
   int colbits;

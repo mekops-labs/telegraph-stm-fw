@@ -65,6 +65,39 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);
 void sm1626d_refresh(struct sm1626d_dev_s *dev);
 
 /****************************************************************************
+ * Name: sm1626d_shiftrow
+ *
+ * Description:
+ *   Send the columns of one row and the selection of that row, then latch
+ *   them. The function drives no output-enable signal and it waits for no
+ *   time, thus a timer gives the pace.
+ *
+ ****************************************************************************/
+
+void sm1626d_shiftrow(struct sm1626d_dev_s *dev, int row);
+
+/****************************************************************************
+ * Name: sm1626d_output
+ *
+ * Description:
+ *   Give light to the panels, or take it away. Both panels share this line.
+ *
+ ****************************************************************************/
+
+void sm1626d_output(bool enable);
+
+/****************************************************************************
+ * Name: sm1626d_ontime
+ *
+ * Description:
+ *   Give the time with light for one row, in microseconds, at the brightness
+ *   of this panel. A panel that is off gives zero.
+ *
+ ****************************************************************************/
+
+int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us);
+
+/****************************************************************************
  * Name: sm1626d_drawtext
  *
  * Description:
