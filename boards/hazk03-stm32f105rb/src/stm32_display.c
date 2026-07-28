@@ -17,6 +17,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
 #include <nuttx/mutex.h>
+#include <nuttx/semaphore.h>
 #include <nuttx/signal.h>
 
 #include "stm32_tim.h"
@@ -53,14 +54,12 @@
  * which is 21.7 us at 460800 baud. Thus the link keeps its bytes.
  */
 
-#define SHIFT_CHUNKS      4
-
-/* The priority of the timer interrupt. A larger value is a lower priority on
- * this core, and the default of the system is 0x80.
+/* The thread that sends the rows. It runs above the task of the protocol,
+ * because a row that comes late shows as a dark line.
  */
 
-#define DISPLAY_IRQ_PRIORITY 0xc0
-#define CHUNK_US          (ROW_US / SHIFT_CHUNKS)
+#define SHIFT_PRIORITY    200
+#define SHIFT_STACKSIZE   1024
 
 /* The timer that paces the rows. TIM3 has no other user on this board. */
 
@@ -126,6 +125,10 @@ static volatile bool g_fbbusy;
 
 static struct stm32_tim_dev_s *g_tim;
 static volatile int      g_slot;
+
+/* The interrupt of the row wakes the thread that sends the bits. */
+
+static sem_t g_rowsem = SEM_INITIALIZER(0);
 static volatile uint32_t g_frames;
 
 /* The minutes of the local time from UTC. The RTC keeps UTC, thus this value
@@ -368,7 +371,7 @@ static void show_time(const struct tm *t, int16_t temp)
 static int display_ontimer(int irq, void *context, void *arg)
 {
   struct sm1626d_dev_s *dev;
-  int chunk = -1;
+  int on_us;
 
   if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC1IF))
     {
@@ -379,74 +382,75 @@ static int display_ontimer(int irq, void *context, void *arg)
       sm1626d_output(false);
     }
 
-  if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
+  if (!STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
     {
-      int on_us;
-
-      STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
-
-      /* Every bit of the row is in the register now. The latch gives them to
-       * the panel, and the light of this row starts.
-       */
-
-      dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
-      sm1626d_latch();
-
-      on_us = sm1626d_ontime(dev, ROW_US);
-      if (on_us > 0)
-        {
-          sm1626d_output(true);
-
-          if (on_us < ROW_US)
-            {
-              STM32_TIM_SETCOMPARE(g_tim, 1, on_us);
-              STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
-            }
-        }
-
-      /* The next row belongs to the other panel. */
-
-      if (++g_slot >= SM1626D_ROWS * 2)
-        {
-          g_slot = 0;
-          g_frames++;
-        }
-
-      chunk = 0;
-    }
-  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC2IF))
-    {
-      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC2IF);
-      chunk = 1;
-    }
-  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC3IF))
-    {
-      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC3IF);
-      chunk = 2;
-    }
-  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC4IF))
-    {
-      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC4IF);
-      chunk = 3;
+      return OK;
     }
 
-  /* Send one part of the next row while the panel holds the row of the last
-   * latch. A part is short, thus the UART keeps its bytes.
+  STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
+
+  /* Every bit of the row is in the register now. The latch gives them to the
+   * panel, and the light of this row starts.
    */
 
-  if (chunk >= 0 && !g_fbbusy)
+  dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
+  sm1626d_latch();
+
+  on_us = sm1626d_ontime(dev, ROW_US);
+  if (on_us > 0)
     {
-      int total;
-      int per;
+      sm1626d_output(true);
 
-      dev   = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
-      total = sm1626d_rowbits(dev);
-      per   = (total + SHIFT_CHUNKS - 1) / SHIFT_CHUNKS;
-
-      sm1626d_shiftbits(dev, g_slot % SM1626D_ROWS, chunk * per, per);
+      if (on_us < ROW_US)
+        {
+          STM32_TIM_SETCOMPARE(g_tim, 1, on_us);
+          STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
+        }
     }
 
+  /* The next row belongs to the other panel. */
+
+  if (++g_slot >= SM1626D_ROWS * 2)
+    {
+      g_slot = 0;
+      g_frames++;
+    }
+
+  /* The transfer of that row belongs to a thread, and not to this interrupt.
+   * A thread gives way to every interrupt, thus the UART keeps its bytes
+   * while a row goes out.
+   */
+
+  nxsem_post(&g_rowsem);
+
   return OK;
+}
+
+/* Send the bits of one row while the panel holds the row of the last latch.
+ *
+ * Note: this thread takes near a quarter of the CPU. It runs above the task
+ * of the protocol, because a late row shows as a dark line on the panel.
+ */
+
+static int display_shifter(int argc, char *argv[])
+{
+  for (; ; )
+    {
+      struct sm1626d_dev_s *dev;
+      int row;
+
+      nxsem_wait_uninterruptible(&g_rowsem);
+
+      dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
+      row = g_slot % SM1626D_ROWS;
+
+      if (!g_fbbusy)
+        {
+          sm1626d_shiftbits(dev, row, 0, sm1626d_rowbits(dev));
+        }
+    }
+
+  return 0;
 }
 
 static int display_scanner(int argc, char *argv[])
@@ -636,26 +640,23 @@ int hazk03_display_init(void)
   STM32_TIM_SETPERIOD(g_tim, ROW_US);
   STM32_TIM_SETISR(g_tim, display_ontimer, NULL, 0);
 
-  /* The update starts a row. The channels 2, 3 and 4 give the parts of the
-   * transfer inside that row, and the channel 1 ends the light.
-   */
+  /* The update starts a row, and the channel 1 ends the light of that row. */
 
-  STM32_TIM_SETCOMPARE(g_tim, 2, CHUNK_US);
-  STM32_TIM_SETCOMPARE(g_tim, 3, CHUNK_US * 2);
-  STM32_TIM_SETCOMPARE(g_tim, 4, CHUNK_US * 3);
-
-  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE | GTIM_DIER_CC2IE |
-                             GTIM_DIER_CC3IE | GTIM_DIER_CC4IE);
+  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE);
   /* The transfer of a row holds the CPU longer than one byte of the UART at
    * 460800 baud, which is 21.7 us. Thus this interrupt takes a priority below
    * the others, and the UART takes its bytes while a row goes out.
    */
 
-#ifdef CONFIG_ARCH_IRQPRIO
-  up_prioritize_irq(STM32_IRQ_TIM3, DISPLAY_IRQ_PRIORITY);
-#endif
-
   STM32_TIM_SETMODE(g_tim, STM32_TIM_MODE_UP);
+
+  ret = kthread_create("shift", SHIFT_PRIORITY, SHIFT_STACKSIZE,
+                       display_shifter, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: display shifter: %d\n", ret);
+      return ret;
+    }
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
                        display_scanner, NULL);
