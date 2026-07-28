@@ -1,17 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* Clock setup from the HSI oscillator only.
+/* Clock setup.
  *
- * Note: the standard connectivity-line code in arch/arm/src/stm32 always
- * drives the main PLL from PREDIV1. It also starts PLL2 and PLL3. All of
- * these use the HSE input.
+ * Note: the standard connectivity-line code in arch/arm/src/stm32 waits for
+ * each PLL without a limit. A clock that never comes up thus stops the boot
+ * with no sign of the cause. Every wait here has an end, and the failure
+ * keeps the internal oscillator at 8 MHz.
  *
- * Note: the HSE crystal makes this part stop. Thus this file builds the full
- * clock tree from the internal oscillator.
+ * Note: CONFIG_HAZK03_CLOCK_HSE selects the source. The crystal gives 72 MHz
+ * and a clock for the USB host. The internal oscillator gives 36 MHz.
  */
 
 #include <nuttx/config.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "arm_internal.h"
@@ -30,7 +32,80 @@
  */
 
 #define HSIRDY_TIMEOUT (1000 * 1000)
+#define HSERDY_TIMEOUT (1000 * 1000)
 #define PLLRDY_TIMEOUT (1000 * 1000)
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+/* Wait for a ready bit in the clock control register. Give true when the bit
+ * arrives before the end of the wait.
+ */
+
+static bool clock_ready(uint32_t bit)
+{
+  int32_t timeout;
+
+  for (timeout = PLLRDY_TIMEOUT; timeout > 0; timeout--)
+    {
+      if ((getreg32(STM32_RCC_CR) & bit) != 0)
+        {
+          return true;
+        }
+    }
+
+  return false;
+}
+
+#ifdef CONFIG_HAZK03_CLOCK_HSE
+
+/* Start the crystal, then condition it with PLL2 into the 8 MHz input that
+ * the main PLL needs. Give false when the crystal or PLL2 does not come up.
+ */
+
+static bool clock_hse_input(void)
+{
+  uint32_t regval;
+  int32_t timeout;
+
+  regval  = getreg32(STM32_RCC_CR);
+  regval &= ~RCC_CR_HSEBYP;
+  regval |= RCC_CR_HSEON;
+  putreg32(regval, STM32_RCC_CR);
+
+  for (timeout = HSERDY_TIMEOUT; timeout > 0; timeout--)
+    {
+      if ((getreg32(STM32_RCC_CR) & RCC_CR_HSERDY) != 0)
+        {
+          break;
+        }
+    }
+
+  if (timeout <= 0)
+    {
+      return false;
+    }
+
+  /* The crystal goes to PREDIV2, then PLL2, then PREDIV1. The output of
+   * PREDIV1 is the input of the main PLL.
+   */
+
+  regval  = getreg32(STM32_RCC_CFGR2);
+  regval &= ~(RCC_CFGR2_PREDIV2_MASK | RCC_CFGR2_PLL2MUL_MASK |
+              RCC_CFGR2_PREDIV1SRC_MASK | RCC_CFGR2_PREDIV1_MASK);
+  regval |= (STM32_PLL_PREDIV2 | STM32_PLL_PLL2MUL |
+             RCC_CFGR2_PREDIV1SRC_PLL2 | STM32_PLL_PREDIV1);
+  putreg32(regval, STM32_RCC_CFGR2);
+
+  regval  = getreg32(STM32_RCC_CR);
+  regval |= RCC_CR_PLL2ON;
+  putreg32(regval, STM32_RCC_CR);
+
+  return clock_ready(RCC_CR_PLL2RDY);
+}
+
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -40,10 +115,10 @@
  * Name: stm32_board_clockconfig
  *
  * Description:
- *   Set SYSCLK to 36 MHz from the HSI oscillator.
+ *   Build the clock tree from the source that the configuration selects.
  *
  *   Note: the boot sequence calls this function early. At that time the chip
- *   uses the default HSI clock. This function does not enable the HSE.
+ *   runs on the internal oscillator without the PLL.
  *
  ****************************************************************************/
 
@@ -101,21 +176,29 @@ void stm32_board_clockconfig(void)
              STM32_RCC_CFGR_PPRE2);
   putreg32(regval, STM32_RCC_CFGR);
 
-  /* Set one flash wait state. This value applies from 24 MHz to 48 MHz. */
+  /* Set the flash wait states for the frequency that follows. */
 
   regval  = getreg32(STM32_FLASH_ACR);
   regval &= ~FLASH_ACR_LATENCY_MASK;
-  regval |= (FLASH_ACR_LATENCY_1 | FLASH_ACR_PRTFBE);
+  regval |= (STM32_BOARD_FLASH_ACR_LATENCY | FLASH_ACR_PRTFBE);
   putreg32(regval, STM32_FLASH_ACR);
 
-  /* Select the PLL source and the multiplier x9. The result is 36 MHz.
-   *
-   * Note: a clear PLLSRC bit selects HSI/2. A set bit selects the PREDIV1
-   * path, which uses the HSE.
+  /* Select the input of the main PLL. A clear PLLSRC bit selects HSI/2, and
+   * a set bit selects the PREDIV1 path from the crystal.
    */
+
+#ifdef CONFIG_HAZK03_CLOCK_HSE
+  if (!clock_hse_input())
+    {
+      return;
+    }
+#endif
 
   regval  = getreg32(STM32_RCC_CFGR);
   regval &= ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE | RCC_CFGR_PLLMUL_MASK);
+#ifdef CONFIG_HAZK03_CLOCK_HSE
+  regval |= RCC_CFGR_PLLSRC;
+#endif
   regval |= STM32_PLL_PLLMUL;
   putreg32(regval, STM32_RCC_CFGR);
 
@@ -123,15 +206,7 @@ void stm32_board_clockconfig(void)
   regval |= RCC_CR_PLLON;
   putreg32(regval, STM32_RCC_CR);
 
-  for (timeout = PLLRDY_TIMEOUT; timeout > 0; timeout--)
-    {
-      if ((getreg32(STM32_RCC_CR) & RCC_CR_PLLRDY) != 0)
-        {
-          break;
-        }
-    }
-
-  if (timeout <= 0)
+  if (!clock_ready(RCC_CR_PLLRDY))
     {
       /* If the PLL does not lock, keep the HSI at 8 MHz as the system
        * clock.

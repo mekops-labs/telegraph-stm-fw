@@ -2,3 +2,25 @@
 # For a description of the syntax of this configuration file,
 # see the file kconfig-language.txt in the NuttX tools repository.
 #
+
+if ARCH_BOARD_CUSTOM
+
+config HAZK03_CLOCK_HSE
+	bool "Take the system clock from the crystal"
+	default n
+	---help---
+		The board carries a crystal of 25 MHz. This option builds the
+		clock tree from it and gives a SYSCLK of 72 MHz, and a clock
+		of 48 MHz for the USB host.
+
+		Without this option the clock comes from the internal
+		oscillator and SYSCLK is 36 MHz. The internal oscillator
+		reaches no higher, because the PLL takes a fixed 8 MHz divided
+		by two and its largest multiplier on this part is nine. USB
+		needs 48 MHz, thus USB needs this option.
+
+		The clock setup keeps the internal oscillator when a PLL does
+		not lock. Thus a board without the crystal starts at a lower
+		speed instead of stopping.
+
+endif

@@ -26,10 +26,24 @@ The list below gives properties of the board. Each one is verified on the
 hardware. An error in one of them makes the board stop, or gives a corrupt
 display.
 
-- **The system clock is 36 MHz. It must use the HSI oscillator.** The external
-  crystal makes the STM32F105 on this board stop. Thus the clock path is
-  `HSI/2 -> PLL x9 -> 36 MHz`. A divider of 2 keeps APB1 below its maximum of
-  36 MHz. Do not enable the HSE.
+- **The board carries a crystal of 25 MHz, and the clock comes from it.** The
+  path is `HSE 25 MHz -> PREDIV2 /5 -> PLL2 x8 -> PREDIV1 /5 -> PLL x9`, thus
+  a SYSCLK of 72 MHz. A divider of 2 keeps APB1 at its maximum of 36 MHz, and
+  the flash takes two wait states.
+
+  The USB host needs this path. That peripheral takes a clock of exactly
+  48 MHz, and a PLL on the crystal is its only source. The internal oscillator
+  reaches 36 MHz and no higher, because its divider before the PLL is fixed at
+  two and the largest multiplier on this part is nine.
+
+  The option `HAZK03_CLOCK_HSE` selects the source. Without it the clock comes
+  from the internal oscillator at 36 MHz, and the USB host has no clock. A
+  build for that path also needs `BOARD_LOOPSPERMSEC` at half its present
+  value, because the short waits of the drivers count instructions.
+
+  Note: a build with the wrong crystal frequency drives the PLL far outside
+  its range and the part stops. The value of 25 MHz is measured on the
+  hardware and not read from a marking.
 - **PA13 needs a release from the debug port.** This pin carries the serial
   data of the sub-screen. Thus the firmware writes `AFIO->MAPR` to disable JTAG
   and SWD before it configures the pin as a GPIO.
