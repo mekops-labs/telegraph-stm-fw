@@ -10,6 +10,10 @@ include $(TOPDIR)/Make.defs
 CSRCS  = stm32_boot.c stm32_bringup.c stm32_clockconfig.c
 CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c
 
+# Every configuration shows the version on the main panel at start.
+
+CSRCS += font5x7.c sm1626d_text.c
+
 # The library of the protocol is outside the board directory. Both MCUs use
 # the same source.
 
@@ -23,7 +27,7 @@ CFLAGS += ${INCDIR_PREFIX}"$(IPCDIR)$(DELIM)include"
 ifeq ($(CONFIG_NO_SERIAL_CONSOLE),y)
 VPATH   += :$(IPCDIR)$(DELIM)src
 DEPPATH += --dep-path $(IPCDIR)$(DELIM)src
-CSRCS   += stm32_ipc.c font5x7.c sm1626d_text.c
+CSRCS   += stm32_ipc.c
 CSRCS   += ipc_crc16.c ipc_encode.c ipc_parser.c
 endif
 
