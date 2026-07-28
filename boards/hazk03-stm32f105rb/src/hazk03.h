@@ -285,6 +285,38 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
                           const uint8_t *bits);
 
 /****************************************************************************
+ * Name: hazk03_display_animate
+ *
+ * Description:
+ *   Move a window over a source, inside one rectangle of a panel. A step of
+ *   one pixel gives a scroll, and a step of the width of the rectangle gives
+ *   the frames of a sprite.
+ *
+ *   The source is a bitmap when text is false, and a text in UTF-8 when it is
+ *   true. A text becomes a bitmap here, thus the edge MCU sends it one time.
+ *
+ *   Note: the function gives a negative value when the source does not fit
+ *   the space of that panel.
+ *
+ ****************************************************************************/
+
+int hazk03_display_animate(int panel, int x, int y, int w, int h,
+                           bool vertical, uint16_t period_ms, uint8_t step,
+                           bool text, int srcw, int srch,
+                           const uint8_t *src, size_t srclen);
+
+/****************************************************************************
+ * Name: hazk03_display_animstop
+ *
+ * Description:
+ *   Stop the animation of one panel. The rectangle keeps the pixels of its
+ *   last step.
+ *
+ ****************************************************************************/
+
+void hazk03_display_animstop(int panel);
+
+/****************************************************************************
  * Name: hazk03_display_temperature
  *
  * Description:
