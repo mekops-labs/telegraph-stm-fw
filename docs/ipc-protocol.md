@@ -110,15 +110,15 @@ one caller shares the UART, and the callers need no lock between them.
 | Opcode | Direction | Description |
 | :--- | :--- | :--- |
 | `0x01` | edge to STM32 | Set the RTC |
-| `0x02` | edge to STM32 | Set the text of the main panel |
-| `0x03` | edge to STM32 | Set the text of the sub panel |
+| `0x02` | edge to STM32 | Set the text of a panel |
 | `0x04` | edge to STM32 | Set the brightness |
-| `0x05` | edge to STM32 | Animate a rectangle, main panel |
-| `0x06` | edge to STM32 | Animate a rectangle, sub panel |
+| `0x05` | edge to STM32 | Animate a rectangle |
 | `0x07` | edge to STM32 | Stop the animations |
-| `0x08` | edge to STM32 | Set the pixels of a rectangle, main panel |
-| `0x09` | edge to STM32 | Set the pixels of a rectangle, sub panel |
+| `0x08` | edge to STM32 | Set the pixels of a rectangle |
 | `0x0A` | edge to STM32 | Correct the temperature |
+| `0x0D` | edge to STM32 | Clear a panel, or both |
+| `0x0F` | edge to STM32 | Change the rate of an animation |
+| `0x13` | edge to STM32 | Take a font from the flash |
 | `0x0B` | edge to STM32 | Set the period without light |
 | `0x10` | edge to STM32 | Request the state |
 | `0x11` | STM32 to edge | The state |
@@ -148,14 +148,21 @@ and not after each reset of the board.
 
 The reply is an ACK.
 
-### `0x02` and `0x03` Set the text of a panel
+## The panel is an argument, not an opcode
+
+Every operation that names a panel takes it as the **first byte of its
+payload**: `00` for the main panel and `01` for the sub panel. Thus one opcode
+serves both, and an operation needs no opcode of its own for each of them.
+
+### `0x02` Set the text of a panel
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
-| 0 | 1 | The attributes |
-| 1 | n | The text in UTF-8, without a terminator |
+| 0 | 1 | The panel |
+| 1 | 1 | The attributes |
+| 2 | n | The text in UTF-8, without a terminator |
 
-An empty payload clears the panel.
+A payload of the panel alone clears that panel.
 
 The bits 0 and 1 of the attributes give the place of the text across the
 panel:
@@ -165,6 +172,19 @@ panel:
 | 0 | The middle |
 | 1 | The left |
 | 2 | The right |
+
+The bits 2 and 3 give the place of the text down the panel:
+
+| Value | Place |
+| :--- | :--- |
+| 0 | The middle |
+| 1 | The top |
+| 2 | The bottom |
+
+**A text in the middle clears the whole panel first. A text at the top or the
+bottom clears its own rows alone**, thus two of them give two lines. The font
+of 5 by 7 takes 10 rows of a panel of 14, so two lines of it do not fit; a
+compact font from the flash does.
 
 The other bits are 0. Any other value gets a NACK with the code `0x03`.
 
@@ -196,11 +216,12 @@ Note: a value above 8 gets a NACK with the code `0x03`.
 
 The reply is an ACK.
 
-### `0x05` and `0x06` Animate a rectangle
+### `0x05` Animate a rectangle
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
-| 0 | 1 | The column of the left edge |
+| 0 | 1 | The panel |
+| 1 | 1 | The column of the left edge |
 | 1 | 1 | The row of the top edge |
 | 2 | 1 | The width |
 | 3 | 1 | The height |
@@ -247,21 +268,34 @@ Note: a width, a height, a period or a step of 0 gets a NACK with the code
 
 The reply is an ACK.
 
-### `0x07` Stop the animations
+### `0x13` Take a font from the flash
 
-The payload is empty. Each rectangle keeps the pixels of its last step.
+The payload is the path of a font, such as `/assets/fonts/compact.tgf`.
+
+A font carries its own cell. The font of the firmware takes 7 rows for a
+letter, thus one line fills a panel of 14 rows. The compact font takes 5 rows
+in a cell of 7, thus **two lines fit**.
+
+A file that is absent or not a font gets a NACK with the code `0x05`.
 
 The reply is an ACK.
 
-### `0x08` and `0x09` Set the pixels of a rectangle
+### `0x07` Stop the animations
+
+The payload names a panel, or it is empty for both. Each rectangle keeps the pixels of its last step.
+
+The reply is an ACK.
+
+### `0x08` Set the pixels of a rectangle
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
-| 0 | 1 | The column of the left edge |
-| 1 | 1 | The row of the top edge |
-| 2 | 1 | The width |
-| 3 | 1 | The height |
-| 4 | n | The pixels |
+| 0 | 1 | The panel |
+| 1 | 1 | The column of the left edge |
+| 2 | 1 | The row of the top edge |
+| 3 | 1 | The width |
+| 4 | 1 | The height |
+| 5 | n | The pixels |
 
 The pixels go row by row, and each row starts at a byte. Bit 7 of a byte is the
 pixel at the left. Thus one row takes `(width + 7) / 8` bytes, and the payload
@@ -277,6 +311,39 @@ shows one part of a change.
 
 Note: a width or a height of 0 gets a NACK with the code `0x03`, and a payload
 that does not match the rectangle gets one with the code `0x02`.
+
+The reply is an ACK.
+
+### `0x0D` Clear a panel
+
+| Payload | Effect |
+| :--- | :--- |
+| empty | Both panels |
+| `00` | The main panel alone |
+| `01` | The sub panel alone |
+
+The panel loses every pixel.
+
+**The animation of that panel stops as well.** An animation that kept its steps
+would draw over the panel again at its next one, thus the panel would not stay
+empty.
+
+The reply is an ACK.
+
+### `0x0F` Change the rate of an animation
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The panel, 0 for the main one and 1 for the sub one |
+| 1 | 2 | The period of one step, in milliseconds |
+| 3 | 1 | The step in pixels, or 0 to keep the one in use |
+
+The animation keeps its source and its place. **Thus the rate changes without
+the cost of sending that source again**, which matters for a text that the
+board drew into a source of its own.
+
+Note: a panel without an animation, or a period of 0, gets a NACK with the code
+`0x03`.
 
 The reply is an ACK.
 

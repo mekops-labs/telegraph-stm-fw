@@ -22,6 +22,12 @@
  */
 
 #define FONTEXT_MAGIC     0x31464754u  /* "TGF1", little-endian */
+
+/* The largest cell that a font in the flash may use. The file gives the cell
+ * that it actually uses, thus one build carries a font of 5x7 for one line and
+ * a smaller font for two lines.
+ */
+
 #define FONTEXT_WIDTH     5
 #define FONTEXT_ROWS      10
 #define FONTEXT_ASCENT    2
@@ -39,7 +45,7 @@
 
 /* The largest font that the board reads into memory. */
 
-#define FONTEXT_MAX_GLYPHS  96
+#define FONTEXT_MAX_GLYPHS  128
 
 /****************************************************************************
  * Name: fontext_load
@@ -71,5 +77,32 @@ int fontext_load(const char *path);
  ****************************************************************************/
 
 size_t fontext_next(const char *s, size_t len, const uint16_t **cols);
+
+/****************************************************************************
+ * Name: fontext_width, fontext_rows, fontext_ascent, fontext_advance
+ *
+ * Description:
+ *   Give the cell of the font in use. A font from the flash carries its own
+ *   cell, thus a compact font gives two lines on a panel of 14 rows.
+ *
+ *   Note: without such a font these give the cell of the font of the
+ *   firmware.
+ *
+ ****************************************************************************/
+
+int fontext_width(void);
+int fontext_rows(void);
+int fontext_ascent(void);
+int fontext_advance(void);
+
+/****************************************************************************
+ * Name: fontext_lineheight
+ *
+ * Description:
+ *   Give the rows that one line of text needs.
+ *
+ ****************************************************************************/
+
+int fontext_lineheight(void);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_FONTEXT_H */

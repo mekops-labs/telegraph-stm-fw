@@ -30,7 +30,8 @@ FLASHER_IMAGE := hazk-pio
 FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
-        savedefconfig test version font flasher flasher-image flasher-ota
+        savedefconfig test version font compactfont sprites \
+        flasher flasher-image flasher-ota
 
 help:
 	@echo "Targets:"
@@ -43,6 +44,8 @@ help:
 	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
 	@echo "  font          build the extended font for the flash"
+	@echo "  compactfont   build the compact font, for two lines"
+	@echo "  sprites       build the sprites of the animation"
 	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
@@ -97,6 +100,28 @@ font:
 	@python3 tools/mkfont.py -o $(FONT_FILE)
 	@echo "Send it with: curl -s --get --data-urlencode \"cmd=putfile \
 $(FONT_PATH) $$(xxd -p -c 100000 $(FONT_FILE))\" http://<address>/ipc"
+
+COMPACT_FILE := $(BUILD)/compact.tgf
+COMPACT_PATH := /assets/fonts/compact.tgf
+
+compactfont:
+	@mkdir -p $(BUILD)
+	@python3 tools/mkcompactfont.py -o $(COMPACT_FILE)
+	@echo "Send it with: curl -s --get --data-urlencode \"cmd=putfile \
+$(COMPACT_PATH) $$(xxd -p -c 100000 $(COMPACT_FILE))\" http://<address>/ipc"
+
+# The sprites of the animation. The board reads them from its own flash, thus
+# no pixels go over the link while one plays.
+SPRITES := heart sun
+
+sprites:
+	@mkdir -p $(BUILD)
+	@for s in $(SPRITES); do python3 tools/mksprite.py $$s \
+	  -o $(BUILD)/$$s.tgs; done
+	@echo "Send each with:"
+	@for s in $(SPRITES); do echo "  curl -s --get --data-urlencode \
+'cmd=putfile /assets/animations/$$s.tgs '\"\$$(xxd -p -c 100000 \
+$(BUILD)/$$s.tgs)\" http://<address>/ipc"; done
 
 # The flasher has its own toolchain, thus it has its own image. Both of these
 # targets start a container, thus they run on the host only.

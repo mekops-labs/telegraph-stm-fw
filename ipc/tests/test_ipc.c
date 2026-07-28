@@ -93,13 +93,13 @@ static void test_encode_layout(void)
   uint16_t crc;
   int n;
 
-  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_LARGE, 0xbeef, payload, 3);
+  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_TEXT, 0xbeef, payload, 3);
 
   TEST_ASSERT_EQUAL_INT(3 + IPC_FRAME_OVERHEAD, n);
   TEST_ASSERT_EQUAL_HEX8(IPC_SOF, buf[0]);
   TEST_ASSERT_EQUAL_HEX8(0x03, buf[1]);            /* LEN, low byte      */
   TEST_ASSERT_EQUAL_HEX8(0x00, buf[2]);            /* LEN, high byte     */
-  TEST_ASSERT_EQUAL_HEX8(IPC_OP_SET_LARGE, buf[3]);
+  TEST_ASSERT_EQUAL_HEX8(IPC_OP_SET_TEXT, buf[3]);
   TEST_ASSERT_EQUAL_HEX8(0xef, buf[4]);            /* CORR_ID, low byte  */
   TEST_ASSERT_EQUAL_HEX8(0xbe, buf[5]);            /* CORR_ID, high byte */
   TEST_ASSERT_EQUAL_HEX8_ARRAY(payload, &buf[6], 3);
@@ -162,11 +162,11 @@ static void test_parse_round_trip(void)
   uint8_t buf[32];
   int n;
 
-  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_SMALL, 0x0042, payload, 5);
+  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_TEXT, 0x0042, payload, 5);
 
   TEST_ASSERT_EQUAL_UINT(1, feed(buf, (size_t)n));
   TEST_ASSERT_EQUAL_UINT(1, g_cap.count);
-  TEST_ASSERT_EQUAL_HEX8(IPC_OP_SET_SMALL, g_cap.opcode[0]);
+  TEST_ASSERT_EQUAL_HEX8(IPC_OP_SET_TEXT, g_cap.opcode[0]);
   TEST_ASSERT_EQUAL_HEX16(0x0042, g_cap.corr_id[0]);
   TEST_ASSERT_EQUAL_UINT16(5, g_cap.payload_len[0]);
   TEST_ASSERT_EQUAL_HEX8_ARRAY(payload, g_cap.payload[0], 5);
@@ -216,7 +216,7 @@ static void test_parse_rejects_bad_crc(void)
   uint8_t buf[32];
   int n;
 
-  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_LARGE, 0x0003, "ab", 2);
+  n = ipc_encode(buf, sizeof(buf), IPC_OP_SET_TEXT, 0x0003, "ab", 2);
   buf[n - 1] ^= 0xff;
 
   TEST_ASSERT_EQUAL_UINT(0, feed(buf, (size_t)n));
@@ -249,7 +249,7 @@ static void test_parse_recovers_after_false_sof(void)
   int bad;
   int good;
 
-  bad = ipc_encode(buf, sizeof(buf), IPC_OP_SET_LARGE, 0x0011, payload, 3);
+  bad = ipc_encode(buf, sizeof(buf), IPC_OP_SET_TEXT, 0x0011, payload, 3);
   buf[bad - 1] ^= 0x01;                      /* make the CRC incorrect */
 
   good = ipc_encode(&buf[bad], sizeof(buf) - bad, IPC_OP_STATE, 0x0012,

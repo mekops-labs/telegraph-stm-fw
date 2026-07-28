@@ -255,6 +255,12 @@ void stm32_spidev_initialize(void);
 #define HAZK03_ALIGN_LEFT   1
 #define HAZK03_ALIGN_RIGHT  2
 
+/* The place of a text down a panel. */
+
+#define HAZK03_VALIGN_MIDDLE 0
+#define HAZK03_VALIGN_TOP    1
+#define HAZK03_VALIGN_BOTTOM 2
+
 /****************************************************************************
  * Name: hazk03_display_text
  *
@@ -267,7 +273,8 @@ void stm32_spidev_initialize(void);
  *
  ****************************************************************************/
 
-int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align);
+int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
+                        uint8_t valign);
 
 /****************************************************************************
  * Name: hazk03_display_pixels
@@ -306,7 +313,7 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
 
 int hazk03_display_animate(int panel, int x, int y, int w, int h,
                            bool vertical, uint16_t period_ms, uint8_t step,
-                           bool text, int srcw, int srch,
+                           bool text, bool file, int srcw, int srch,
                            const uint8_t *src, size_t srclen);
 
 /****************************************************************************
@@ -319,6 +326,36 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
  ****************************************************************************/
 
 void hazk03_display_animstop(int panel);
+
+/****************************************************************************
+ * Name: hazk03_display_clear
+ *
+ * Description:
+ *   Take every pixel from one panel.
+ *
+ *   Note: the animation of that panel stops as well. An animation that kept
+ *   its steps would draw over the panel again at its next one.
+ *
+ ****************************************************************************/
+
+void hazk03_display_clear(int panel);
+
+/****************************************************************************
+ * Name: hazk03_display_animspeed
+ *
+ * Description:
+ *   Change the rate of the animation of one panel. A step of 0 keeps the step
+ *   that the animation already has.
+ *
+ *   Note: the animation keeps its source and its place, thus the rate changes
+ *   without the cost of sending that source again.
+ *
+ *   Note: the function gives a negative value when that panel has no
+ *   animation.
+ *
+ ****************************************************************************/
+
+int hazk03_display_animspeed(int panel, uint16_t period_ms, uint8_t step);
 
 /****************************************************************************
  * Name: hazk03_display_temperature

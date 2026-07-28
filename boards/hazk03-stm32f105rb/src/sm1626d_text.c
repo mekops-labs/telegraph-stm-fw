@@ -38,7 +38,7 @@ int sm1626d_textwidth(const char *s, size_t len)
    * last.
    */
 
-  return (count * FONTEXT_ADVANCE) - (FONTEXT_ADVANCE - FONTEXT_WIDTH);
+  return (count * fontext_advance()) - 1;
 }
 
 void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
@@ -50,7 +50,7 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
    * the top of the letter, and a mark such as an acute has its own rows.
    */
 
-  y -= FONTEXT_ASCENT;
+  y -= fontext_ascent();
 
   while (i < len)
     {
@@ -59,11 +59,11 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
 
       i += fontext_next(&s[i], len - i, &cols);
 
-      for (col = 0; col < FONTEXT_WIDTH; col++)
+      for (col = 0; col < fontext_width(); col++)
         {
           int row;
 
-          for (row = 0; row < FONTEXT_ROWS; row++)
+          for (row = 0; row < fontext_rows(); row++)
             {
               if (cols[col] & (1u << row))
                 {
@@ -72,7 +72,7 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
             }
         }
 
-      x += FONTEXT_ADVANCE;
+      x += fontext_advance();
 
       if (x >= dev->width)
         {
@@ -97,7 +97,7 @@ void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
 
       i += fontext_next(&s[i], len - i, &cols);
 
-      for (col = 0; col < FONTEXT_WIDTH; col++)
+      for (col = 0; col < fontext_width(); col++)
         {
           int row;
 
@@ -106,13 +106,13 @@ void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
               break;
             }
 
-          for (row = 0; row < FONTEXT_ROWS; row++)
+          for (row = 0; row < fontext_rows(); row++)
             {
               /* The cell is taller than the letter. The row 0 of the cell
                * belongs above the letter, thus it moves down here.
                */
 
-              int y = row - FONTEXT_ASCENT + ((h - FONT5X7_HEIGHT) / 2);
+              int y = row - fontext_ascent() + ((h - (fontext_rows() - fontext_ascent() - 1)) / 2);
 
               if (y < 0 || y >= h)
                 {
@@ -127,6 +127,6 @@ void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
             }
         }
 
-      x += FONTEXT_ADVANCE;
+      x += fontext_advance();
     }
 }

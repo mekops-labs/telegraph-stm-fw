@@ -22,6 +22,11 @@
 
 #include "stm32_tim.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <telegraph/ipc.h>
+
 #include <nuttx/i2c/i2c_master.h>
 
 #include "font5x7.h"
@@ -344,15 +349,49 @@ static int text_column(struct sm1626d_dev_s *dev, const char *s, size_t len,
 
 /* Put a text on one panel, and take the lock of the framebuffer. */
 
+/* Give the top row of a line of text on one panel. */
+
+static int text_row(struct sm1626d_dev_s *dev, uint8_t valign)
+{
+  int line = fontext_lineheight();
+
+  switch (valign)
+    {
+      case HAZK03_VALIGN_TOP:
+        return fontext_ascent();
+
+      case HAZK03_VALIGN_BOTTOM:
+        return dev->height - line + fontext_ascent();
+
+      default:
+        return ((dev->height - line) / 2) + fontext_ascent();
+    }
+}
+
 static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
-                      uint8_t align)
+                      uint8_t align, uint8_t valign)
 {
   int x = text_column(dev, s, len, align);
-  int y = (dev->height - FONT5X7_HEIGHT) / 2;
+  int y = text_row(dev, valign);
+  int line = fontext_lineheight();
+  int row;
+  int col;
 
   nxmutex_lock(&g_fblock);
   sm1626d_begin(dev);
-  sm1626d_clear(dev);
+
+  /* Take the rows of this line alone. Thus a text on the top leaves a text on
+   * the bottom where it is.
+   */
+
+  for (row = y - fontext_ascent(); row < y - fontext_ascent() + line; row++)
+    {
+      for (col = 0; col < dev->width; col++)
+        {
+          sm1626d_drawpixel(dev, col, row, false);
+        }
+    }
+
   sm1626d_drawtext(dev, x, y, s, len);
   sm1626d_commit(dev);
   nxmutex_unlock(&g_fblock);
@@ -454,7 +493,7 @@ static void anim_tick(void)
 
 static void draw_default(struct sm1626d_dev_s *dev, const char *s)
 {
-  draw_text(dev, s, strlen(s), HAZK03_ALIGN_CENTRE);
+  draw_text(dev, s, strlen(s), HAZK03_ALIGN_CENTRE, HAZK03_VALIGN_MIDDLE);
 }
 
 /* Put the content of the board on the panels that the edge MCU has not
@@ -666,7 +705,8 @@ static int display_scanner(int argc, char *argv[])
  * Public Functions
  ****************************************************************************/
 
-int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align)
+int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
+                        uint8_t valign)
 {
   struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
 
@@ -683,7 +723,20 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align)
       g_main_default = false;
     }
 
-  draw_text(dev, s, len, align);
+  /* A second line must not erase the first, thus a text that takes the top or
+   * the bottom clears its own rows alone.
+   */
+
+  if (valign == HAZK03_VALIGN_MIDDLE)
+    {
+      nxmutex_lock(&g_fblock);
+      sm1626d_begin(dev);
+      sm1626d_clear(dev);
+      sm1626d_commit(dev);
+      nxmutex_unlock(&g_fblock);
+    }
+
+  draw_text(dev, s, len, align, valign);
 
   return OK;
 }
@@ -715,7 +768,7 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
 
 int hazk03_display_animate(int panel, int x, int y, int w, int h,
                            bool vertical, uint16_t period_ms, uint8_t step,
-                           bool text, int srcw, int srch,
+                           bool text, bool file, int srcw, int srch,
                            const uint8_t *src, size_t srclen)
 {
   struct display_anim_s *a = &g_anim[(panel == HAZK03_PANEL_SUB) ? 1 : 0];
@@ -724,7 +777,9 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
   size_t cap = (panel == HAZK03_PANEL_SUB) ? ANIM_SRC_SUB : ANIM_SRC_MAIN;
   size_t need;
 
-  if (w == 0 || h == 0 || period_ms == 0 || step == 0)
+  /* A sprite in the flash carries its own step, thus the caller sends none. */
+
+  if (w == 0 || h == 0 || period_ms == 0 || (step == 0 && !file))
     {
       return -EINVAL;
     }
@@ -740,7 +795,68 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
       g_main_default = false;
     }
 
-  if (text)
+  if (file)
+    {
+      /* The source is a sprite in the flash of the board. Thus the edge MCU
+       * names it, and it sends no pixels at all.
+       */
+
+      char path[64];
+      uint8_t head[IPC_SPRITE_HEADER];
+      int fd;
+      size_t want;
+      int ret = OK;
+
+      if (srclen >= sizeof(path))
+        {
+          return -EINVAL;
+        }
+
+      memcpy(path, src, srclen);
+      path[srclen] = '\0';
+
+      fd = open(path, O_RDONLY);
+      if (fd < 0)
+        {
+          return -ENOENT;
+        }
+
+      if (read(fd, head, sizeof(head)) != (ssize_t)sizeof(head) ||
+          ipc_get_u32(head) != IPC_SPRITE_MAGIC)
+        {
+          close(fd);
+          return -EINVAL;
+        }
+
+      srcw = ipc_get_u16(&head[4]);
+      srch = ipc_get_u16(&head[6]);
+      step = head[8];
+      vertical = (head[9] & IPC_ANIM_VERTICAL) != 0;
+
+      want = (size_t)(((srcw + 7) / 8) * srch);
+
+      if (srcw <= 0 || srch <= 0 || step == 0 || want > cap)
+        {
+          close(fd);
+          return -E2BIG;
+        }
+
+      nxmutex_lock(&g_fblock);
+
+      if (read(fd, buf, want) != (ssize_t)want)
+        {
+          ret = -EIO;
+        }
+
+      nxmutex_unlock(&g_fblock);
+      close(fd);
+
+      if (ret < 0)
+        {
+          return ret;
+        }
+    }
+  else if (text)
     {
       /* The board draws the text itself. Thus a message that scrolls costs
        * one frame of the protocol, and not one frame for each step.
@@ -773,7 +889,7 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
     {
       sm1626d_rendertext(buf, srcw, srch, (const char *)src, srclen);
     }
-  else
+  else if (!file)
     {
       memcpy(buf, src, (srclen < need) ? srclen : need);
     }
@@ -801,6 +917,59 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
 void hazk03_display_animstop(int panel)
 {
   g_anim[(panel == HAZK03_PANEL_SUB) ? 1 : 0].active = false;
+}
+
+int hazk03_display_animspeed(int panel, uint16_t period_ms, uint8_t step)
+{
+  struct display_anim_s *a = &g_anim[(panel == HAZK03_PANEL_SUB) ? 1 : 0];
+
+  if (!a->active || period_ms == 0)
+    {
+      return -EINVAL;
+    }
+
+  a->period_ms = period_ms;
+
+  if (step > 0)
+    {
+      a->step = step;
+    }
+
+  /* The elapsed time goes back, thus a slower rate takes effect at once and
+   * does not wait for the period that was already running.
+   */
+
+  a->elapsed_ms = 0;
+
+  return OK;
+}
+
+void hazk03_display_clear(int panel)
+{
+  struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
+
+  /* An animation would draw over the panel again at its next step. */
+
+  hazk03_display_animstop(panel);
+
+  /* The edge MCU owns this panel from now on, thus the greeting and the day
+   * of the week do not return over an empty panel.
+   */
+
+  if (panel == HAZK03_PANEL_SUB)
+    {
+      g_sub_default = false;
+    }
+  else
+    {
+      g_main_default = false;
+    }
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_begin(dev);
+  sm1626d_clear(dev);
+  sm1626d_commit(dev);
+  nxmutex_unlock(&g_fblock);
 }
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels)
