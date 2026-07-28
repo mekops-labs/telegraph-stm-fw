@@ -43,11 +43,16 @@
 
 #define BRIGHTNESS 4
 
-/* The time of one row. The two panels take their rows in turn, thus one full
- * image takes 32 of these.
+/* The time of one row. Both panels take the same row in one pass, thus one
+ * full image takes 16 of these.
+ *
+ * Note: the rate of the row events is the limit of this board, and not the
+ * work in each one. Above near 1250 events each second the UART loses bytes
+ * at 460800 baud, because an interrupt and a change of thread each hold the
+ * other interrupts for a time.
  */
 
-#define ROW_US            200
+#define ROW_US            800
 
 /* The transfer of one row goes into this many parts, and the timer gives one
  * interrupt for each part. A part must be shorter than one byte of the UART,
@@ -370,7 +375,6 @@ static void show_time(const struct tm *t, int16_t temp)
 
 static int display_ontimer(int irq, void *context, void *arg)
 {
-  struct sm1626d_dev_s *dev;
   int on_us;
 
   if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC1IF))
@@ -389,14 +393,15 @@ static int display_ontimer(int irq, void *context, void *arg)
 
   STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
 
-  /* Every bit of the row is in the register now. The latch gives them to the
-   * panel, and the light of this row starts.
+  /* Every bit of the row is in the register of both panels now. The latch
+   * gives them to the panels, and the light of this row starts.
    */
 
-  dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
   sm1626d_latch();
 
-  on_us = sm1626d_ontime(dev, ROW_US);
+  /* Both panels take the same level, thus one window of light serves both. */
+
+  on_us = sm1626d_ontime(&g_main, ROW_US);
   if (on_us > 0)
     {
       sm1626d_output(true);
@@ -408,9 +413,7 @@ static int display_ontimer(int irq, void *context, void *arg)
         }
     }
 
-  /* The next row belongs to the other panel. */
-
-  if (++g_slot >= SM1626D_ROWS * 2)
+  if (++g_slot >= SM1626D_ROWS)
     {
       g_slot = 0;
       g_frames++;
@@ -436,17 +439,11 @@ static int display_shifter(int argc, char *argv[])
 {
   for (; ; )
     {
-      struct sm1626d_dev_s *dev;
-      int row;
-
       nxsem_wait_uninterruptible(&g_rowsem);
-
-      dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
-      row = g_slot % SM1626D_ROWS;
 
       if (!g_fbbusy)
         {
-          sm1626d_shiftbits(dev, row, 0, sm1626d_rowbits(dev));
+          sm1626d_shiftcombined(&g_main, &g_sub, g_slot);
         }
     }
 

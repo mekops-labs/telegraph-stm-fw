@@ -201,6 +201,66 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
  * others.
  */
 
+/* Send one bit to both panels. They share the clock, thus one pass fills the
+ * register of each panel.
+ */
+
+static inline void sm_shiftbit2(const struct sm1626d_dev_s *a, bool aval,
+                                const struct sm1626d_dev_s *b, bool bval)
+{
+  putreg32(SM_BSRR_CLR(SM_CLK_PIN), STM32_GPIOB_BSRR);
+  putreg32(aval ? a->din_set : a->din_clr, a->din_bsrr);
+  putreg32(bval ? b->din_set : b->din_clr, b->din_bsrr);
+  putreg32(SM_BSRR_SET(SM_CLK_PIN), STM32_GPIOB_BSRR);
+}
+
+void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
+                           struct sm1626d_dev_s *sub, int row)
+{
+  int mcols = SM_COLBITS(main->width);
+  int scols = SM_COLBITS(sub->width);
+  int total = mcols + SM_ROW_SELECT_BITS;
+  int subfirst = total - (scols + SM_ROW_SELECT_BITS);
+  int i;
+
+  /* The register of the sub panel is shorter than the pass. Thus its bits go
+   * at the end, and the bits before them leave that register again.
+   */
+
+  for (i = 0; i < total; i++)
+    {
+      bool mval;
+      bool sval = false;
+
+      if (i < mcols)
+        {
+          int col = mcols - 1 - i;
+
+          mval = (main->fb[row][col / 8] & (1 << (col % 8))) != 0;
+        }
+      else
+        {
+          mval = ((total - 1 - i) == row);
+        }
+
+      if (i >= subfirst)
+        {
+          if (i < mcols)
+            {
+              int col = mcols - 1 - i;
+
+              sval = (sub->fb[row][col / 8] & (1 << (col % 8))) != 0;
+            }
+          else
+            {
+              sval = ((total - 1 - i) == row);
+            }
+        }
+
+      sm_shiftbit2(main, mval, sub, sval);
+    }
+}
+
 int sm1626d_rowbits(const struct sm1626d_dev_s *dev)
 {
   return SM_COLBITS(dev->width) + SM_ROW_SELECT_BITS;
