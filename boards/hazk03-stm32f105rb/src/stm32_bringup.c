@@ -68,6 +68,10 @@ int stm32_bringup(void)
 
   hazk03_display_init();
 
+#ifdef CONFIG_MTD_W25
+  hazk03_flash_initialize();
+#endif
+
 #ifdef CONFIG_NO_SERIAL_CONSOLE
   /* This build has no console. Thus the UART carries the protocol of the
    * edge MCU.

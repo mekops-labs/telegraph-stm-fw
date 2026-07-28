@@ -99,4 +99,18 @@
 #define GPIO_USART1_TX          GPIO_USART1_TX_0
 #define GPIO_USART1_RX          GPIO_USART1_RX_0
 
+/* SPI1 uses PA5 for SCK, PA6 for MISO and PA7 for MOSI. The bus carries the
+ * W25Q32 flash.
+ *
+ * Note: the chip-select line is PA4, and the board drives it as a GPIO. Thus
+ * the NSS signal of the peripheral stays unused.
+ *
+ * Note: SPI2 is not available for this function. Its pins PB13 and PB15 carry
+ * the output-enable and the data of the main panel.
+ */
+
+#define GPIO_SPI1_SCK           GPIO_SPI1_SCK_0
+#define GPIO_SPI1_MISO          GPIO_SPI1_MISO_0
+#define GPIO_SPI1_MOSI          GPIO_SPI1_MOSI_0
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_INCLUDE_BOARD_H */
