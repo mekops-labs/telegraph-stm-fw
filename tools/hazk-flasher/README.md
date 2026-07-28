@@ -62,16 +62,17 @@ build_flags =
 ```
 
 ### 3. Build and upload
-Open the project in VS Code with PlatformIO, then select **Upload**. As an alternative, build in a container and use `esptool`:
+Open the project in VS Code with PlatformIO, then select **Upload**. As an alternative, the Makefile of the firmware repository builds and sends this project:
 
 ```sh
-podman build -t hazk-pio -f Containerfile .
-podman run --rm --userns=keep-id --security-opt label=disable \
-    -v "$PWD:/project" -v "$HOME/.cache/hazk-pio:/pio" \
-    hazk-pio pio run -e xiao_esp32s3
+make flasher-image          # the PlatformIO container image, one time
+make flasher                # build
+make flasher-ota            # send it over the air
 ```
 
-Note: the same image builds the STM32 target firmware. For that, mount the other project at `/project`.
+Note: the mount is the whole repository, not this directory. The project reads the shared IPC sources through a relative path, and its version comes from the git tags.
+
+Note: a network without mDNS needs the address, thus `make flasher-ota UPLOAD_PORT=<address>`.
 
 ## Serial console
 

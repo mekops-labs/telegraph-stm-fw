@@ -20,14 +20,24 @@ BUILD       := build
 # repository does not hold it.
 VERSION_H   := $(BOARD_DIR)/src/version.h
 
-.PHONY: help image shell configure build clean distclean menuconfig \
-        savedefconfig test version
+# The flasher is the firmware of the edge MCU. It builds with PlatformIO in
+# its own container image.
+FLASHER_DIR   := tools/hazk-flasher
+FLASHER_IMAGE := hazk-pio
+FLASHER_ENV   := xiao_esp32s3
+
+.PHONY: help image shell configure build all clean distclean menuconfig \
+        savedefconfig test version flasher flasher-image flasher-ota
 
 help:
 	@echo "Targets:"
 	@echo "  image         build the container image with the toolchain"
 	@echo "  configure     configure NuttX for $(BOARD):$(CONFIG)"
-	@echo "  build         build the firmware, and configure it if necessary"
+	@echo "  build         build the STM32 firmware, and configure it if necessary"
+	@echo "  flasher       build the edge MCU firmware in $(FLASHER_DIR)"
+	@echo "  flasher-ota   send the edge MCU firmware over the air"
+	@echo "                (UPLOAD_PORT=<address> when mDNS does not resolve)"
+	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
 	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  menuconfig    start the NuttX configuration program"
@@ -73,6 +83,37 @@ build: configure version
 	$(RUN) $(MAKE) -C $(NUTTX) -j$(shell nproc)
 	@echo
 	@$(RUN) sh -c 'size $(NUTTX)/nuttx' || true
+
+# The flasher has its own toolchain, thus it has its own image. Both of these
+# targets start a container, thus they run on the host only.
+flasher-image:
+	$(CONTAINER) build -t $(FLASHER_IMAGE) -f $(FLASHER_DIR)/Containerfile \
+	  $(FLASHER_DIR)
+
+# The whole repository is the mount, because the flasher compiles the shared
+# IPC sources through a relative path, and its version comes from git.
+flasher:
+	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
+	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
+	  -w /src $(FLASHER_IMAGE) pio run -d $(FLASHER_DIR) -e $(FLASHER_ENV)
+
+# Send the flasher to the edge MCU over the air. The default address is the
+# mDNS name. A network without mDNS needs UPLOAD_PORT=<address>.
+#
+# Note: this path updates the device that carries the link. A bad image thus
+# costs the link, and the recovery needs a USB cable.
+ifdef UPLOAD_PORT
+OTA_ADDR := -e PLATFORMIO_UPLOAD_PORT=$(UPLOAD_PORT)
+endif
+
+flasher-ota:
+	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
+	  --network host $(OTA_ADDR) \
+	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
+	  -w /src $(FLASHER_IMAGE) \
+	  pio run -d $(FLASHER_DIR) -e $(FLASHER_ENV)_ota -t upload
+
+all: build flasher
 
 # The IPC library is portable C99. Thus the host compiler builds it, and the
 # tests run without the hardware.
