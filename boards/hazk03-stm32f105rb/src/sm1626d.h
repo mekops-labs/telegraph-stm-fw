@@ -92,6 +92,21 @@ void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
 int sm1626d_rowbits(const struct sm1626d_dev_s *dev);
 
 /****************************************************************************
+ * Name: sm1626d_shiftcombined
+ *
+ * Description:
+ *   Send one row to both panels in one pass. The panels share the clock, thus
+ *   a pass for one panel alone leaves the other panel dark for that time.
+ *
+ *   Note: one image then takes 16 rows and not 32. Thus the rate of the image
+ *   doubles, and each panel keeps its light through the whole row.
+ *
+ ****************************************************************************/
+
+void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
+                           struct sm1626d_dev_s *sub, int row);
+
+/****************************************************************************
  * Name: sm1626d_latch
  *
  * Description:
