@@ -65,6 +65,82 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);
 void sm1626d_refresh(struct sm1626d_dev_s *dev);
 
 /****************************************************************************
+ * Name: sm1626d_shiftrow
+ *
+ * Description:
+ *   Send part of the bits of one row. The bits of a row are the columns of
+ *   the panel and then the selection of that row.
+ *
+ *   Note: the transfer changes no light. Thus the caller sends the next row
+ *   in parts while the panel holds the row of the last latch, and no part
+ *   holds the CPU for long.
+ *
+ ****************************************************************************/
+
+void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
+                       int count);
+
+/****************************************************************************
+ * Name: sm1626d_rowbits
+ *
+ * Description:
+ *   Give the count of the bits that one row takes: the columns of the panel
+ *   and then the selection of the row.
+ *
+ ****************************************************************************/
+
+int sm1626d_rowbits(const struct sm1626d_dev_s *dev);
+
+/****************************************************************************
+ * Name: sm1626d_shiftcombined
+ *
+ * Description:
+ *   Send one row to both panels in one pass. The panels share the clock, thus
+ *   a pass for one panel alone leaves the other panel dark for that time.
+ *
+ *   Note: one image then takes 16 rows and not 32. Thus the rate of the image
+ *   doubles, and each panel keeps its light through the whole row.
+ *
+ ****************************************************************************/
+
+void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
+                           struct sm1626d_dev_s *sub, int row);
+
+/****************************************************************************
+ * Name: sm1626d_latch
+ *
+ * Description:
+ *   Move the bits of the shift register to the output of the panel.
+ *
+ *   Note: the shift register and that output are separate. Thus a transfer
+ *   changes no light, and the panel keeps the row of the last latch.
+ *
+ ****************************************************************************/
+
+void sm1626d_latch(void);
+
+/****************************************************************************
+ * Name: sm1626d_output
+ *
+ * Description:
+ *   Give light to the panels, or take it away. Both panels share this line.
+ *
+ ****************************************************************************/
+
+void sm1626d_output(bool enable);
+
+/****************************************************************************
+ * Name: sm1626d_ontime
+ *
+ * Description:
+ *   Give the time with light for one row, in microseconds, at the brightness
+ *   of this panel. A panel that is off gives zero.
+ *
+ ****************************************************************************/
+
+int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us);
+
+/****************************************************************************
  * Name: sm1626d_drawtext
  *
  * Description:
