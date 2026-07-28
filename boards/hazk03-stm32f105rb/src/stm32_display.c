@@ -807,13 +807,11 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
       size_t want;
       int ret = OK;
 
-      if (srclen >= sizeof(path))
+      if (hazk03_asset_path(path, sizeof(path), HAZK03_ANIM_DIR,
+                            (const char *)src, srclen, HAZK03_ANIM_EXT) < 0)
         {
           return -EINVAL;
         }
-
-      memcpy(path, src, srclen);
-      path[srclen] = '\0';
 
       fd = open(path, O_RDONLY);
       if (fd < 0)

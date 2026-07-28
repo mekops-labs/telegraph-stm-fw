@@ -294,11 +294,25 @@ extern "C" {
  * rectangle keeps the pixels of its last step.
  */
 
-/* The payload of IPC_OP_SET_FONT is the path of a font in the flash.
+/* The payload of IPC_OP_SET_FONT is the name of a font, without a directory
+ * and without an ending. The board keeps its fonts in one place and it takes
+ * one format, thus a caller needs neither.
+ *
+ * An empty payload asks for the names that the board holds. The reply carries
+ * the same opcode and the same correlation ID, and its payload is those names
+ * with a newline after each one.
  *
  * A font carries its own cell. The font of 5 by 7 gives one line on a panel of
  * 14 rows, and a compact font gives two.
  */
+
+/* The same rule holds for a sprite: IPC_OP_SET_ANIM with the flag
+ * IPC_ANIM_FILE takes the name of that sprite, and an empty payload asks for
+ * the names that the board holds.
+ */
+
+#define IPC_LIST_MAX         192u
+
 
 /* The payload of IPC_OP_ANIM_SPEED.
  *

@@ -141,6 +141,31 @@ static void ipcReport(void *arg, const struct ipc_frame_s *frame) {
             break;
         }
 
+        case IPC_OP_SET_FONT:
+        case IPC_OP_SET_ANIM: {
+            // The board answers a request without a payload with the names of
+            // the assets of that kind, one name on each line.
+            const char *kind =
+                (frame->opcode == IPC_OP_SET_FONT) ? "fonts" : "animations";
+
+            if (frame->payload_len == 0) {
+                ipcOut("%s: none\n", kind);
+                break;
+            }
+
+            ipcOut("%s:\n", kind);
+
+            const char *p = (const char *)frame->payload;
+            uint16_t start = 0;
+
+            for (uint16_t i = 0; i < frame->payload_len; i++) {
+                if (p[i] != '\n') continue;
+                ipcOut("  %.*s\n", (int)(i - start), &p[start]);
+                start = i + 1;
+            }
+            break;
+        }
+
         default:
             ipcOut("RX   op=0x%02X id=%u len=%u\n", frame->opcode,
                           frame->corr_id, frame->payload_len);
@@ -435,12 +460,13 @@ void ipcPoll() {
 void ipcHelp() {
     ipcOut("INFO ipc: on [baud] | off | state | stats | reset\n");
     ipcOut("INFO   time <epoch> [offset] | bright <d> [p] | tempoff <t>\n");
-    ipcOut("INFO   sleep <start> <end>|off | font <path> | putfile <path> <hex>\n");
+    ipcOut("INFO   sleep <start> <end>|off | putfile <path> <hex>\n");
+    ipcOut("INFO   font [name] | play [...] list without an argument\n");
     ipcOut("INFO   a panel below is l or s:\n");
     ipcOut("INFO   text <l|s> [-l|-c|-r] [-t|-b] <text>\n");
     ipcOut("INFO   pix <l|s> <x> <y> <w> <h> <hex>\n");
     ipcOut("INFO   scroll <l|s> [-v] <x> <y> <w> <h> <period> <step> <text>\n");
-    ipcOut("INFO   play <l|s> <x> <y> <w> <h> <period> <path>\n");
+    ipcOut("INFO   play <l|s> <x> <y> <w> <h> <period> <name>\n");
     ipcOut("INFO   speed <l|s> <period> [step] | animoff [l|s] | clear [l|s]\n");
     ipcOut("INFO   bad | badlen | noise | burst <n> | flood <n>\n");
 }
@@ -581,10 +607,16 @@ void ipcCommand(const char *args) {
 
         ipcRequest(IPC_OP_SET_ANIM, payload,
                    (uint16_t)(IPC_ANIM_BODY + tlen));
+    } else if (strcmp(args, "play") == 0) {
+        // Without arguments the board gives the names of its animations.
+        ipcRequest(IPC_OP_SET_ANIM, NULL, 0);
+    } else if (strcmp(args, "font") == 0) {
+        // Without a name the board gives the names of its fonts.
+        ipcRequest(IPC_OP_SET_FONT, NULL, 0);
     } else if (strncmp(args, "play ", 5) == 0) {
-        // The form is "play <l|s> <x> <y> <w> <h> <period> <path>". The board
-        // reads the sprite from its own flash, thus no pixels go over the
-        // link.
+        // The form is "play <l|s> <x> <y> <w> <h> <period> <name>". The
+        // board reads the sprite from its own flash, thus no pixels go over
+        // the link.
         const char *p = args + 5;
         int panel = ipcPanelArg(&p);
         char *end = NULL;

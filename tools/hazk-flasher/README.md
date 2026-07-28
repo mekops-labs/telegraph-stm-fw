@@ -118,7 +118,7 @@ A flash operation stops the peer.
 | `ipc tempoff <tenths>` | Correct the temperature, in tenths of a degree |
 | `ipc sleep <start> <end>` | Stop the light between two times, each HH or HH:MM |
 | `ipc sleep off` | Keep the light through the day |
-| `ipc font <path>` | Take a font from the flash, such as the compact one |
+| `ipc font [name]` | Take a font from the flash, such as `compact`. Without a name it gives the names of the fonts |
 | `ipc putfile <path> <hex>` | Write a file into the assets |
 
 **A panel below is `l` for the main one or `s` for the sub one.** One opcode of
@@ -130,7 +130,7 @@ rather than each having a name of its own.
 | `ipc text <l\|s> [-l\|-c\|-r] [-t\|-b] <text>` | Put a text on a panel. `-t` and `-b` give the top and the bottom line |
 | `ipc pix <l\|s> <x> <y> <w> <h> <hex>` | Set a rectangle of pixels |
 | `ipc scroll <l\|s> [-v] <x> <y> <w> <h> <period> <step> <text>` | Move a text through a rectangle. Give it 11 rows or more for the font of 5x7, or a letter loses its accent |
-| `ipc play <l\|s> <x> <y> <w> <h> <period> <path>` | Play a sprite from the flash |
+| `ipc play <l\|s> <x> <y> <w> <h> <period> <name>` | Play a sprite from the flash, such as `heart`. Without arguments it gives the names of the sprites |
 | `ipc speed <l\|s> <period> [step]` | Change the rate of a running animation |
 | `ipc animoff [l\|s]` | Stop the animations |
 | `ipc clear [l\|s]` | Clear a panel, or both |

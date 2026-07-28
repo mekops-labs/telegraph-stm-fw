@@ -112,13 +112,13 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x01` | edge to STM32 | Set the RTC |
 | `0x02` | edge to STM32 | Set the text of a panel |
 | `0x04` | edge to STM32 | Set the brightness |
-| `0x05` | edge to STM32 | Animate a rectangle |
+| `0x05` | edge to STM32 | Animate a rectangle, or give the names of the sprites |
 | `0x07` | edge to STM32 | Stop the animations |
 | `0x08` | edge to STM32 | Set the pixels of a rectangle |
 | `0x0A` | edge to STM32 | Correct the temperature |
 | `0x0D` | edge to STM32 | Clear a panel, or both |
 | `0x0F` | edge to STM32 | Change the rate of an animation |
-| `0x13` | edge to STM32 | Take a font from the flash |
+| `0x13` | edge to STM32 | Take a font from the flash, or give the names of the fonts |
 | `0x0B` | edge to STM32 | Set the period without light |
 | `0x10` | edge to STM32 | Request the state |
 | `0x11` | STM32 to edge | The state |
@@ -245,6 +245,7 @@ each step.
 | :--- | :--- | :--- |
 | `IPC_ANIM_VERTICAL` | `0x01` | The window moves down instead of across |
 | `IPC_ANIM_TEXT` | `0x02` | The source is a text in UTF-8, not pixels |
+| `IPC_ANIM_FILE` | `0x04` | The source is a sprite in the flash of the board |
 
 **Give a text at least 11 rows of height.** A letter takes 7 rows, and the cell
 of the font takes 10: two rows above the letter carry a mark such as an acute,
@@ -266,11 +267,19 @@ larger source gets a NACK with the code `0x02`.
 Note: a width, a height, a period or a step of 0 gets a NACK with the code
 `0x03`.
 
+With `IPC_ANIM_FILE` the source is a sprite in the flash. The body is then the
+name of that sprite, such as `heart`. The file carries the size of the source,
+the step and the direction, thus the payload gives none of them. **A payload
+without a body gives the names of the sprites**, refer to
+[The names of the assets](#the-names-of-the-assets).
+
 The reply is an ACK.
 
 ### `0x13` Take a font from the flash
 
-The payload is the path of a font, such as `/assets/fonts/compact.tgf`.
+The payload is the name of a font, such as `compact`. **An empty payload gives
+the names of the fonts**, refer to
+[The names of the assets](#the-names-of-the-assets).
 
 A font carries its own cell. The font of the firmware takes 7 rows for a
 letter, thus one line fills a panel of 14 rows. The compact font takes 5 rows
@@ -279,6 +288,28 @@ in a cell of 7, thus **two lines fit**.
 A file that is absent or not a font gets a NACK with the code `0x05`.
 
 The reply is an ACK.
+
+### The names of the assets
+
+The board keeps each kind of asset in one place, and it takes one format for
+each kind. Thus a request names an asset alone, without a directory and without
+an ending.
+
+| Kind | Place | Ending | Opcode |
+| :--- | :--- | :--- | :--- |
+| Font | `/assets/fonts` | `.tgf` | `0x13` |
+| Sprite | `/assets/animations` | `.tgs` | `0x05` with `IPC_ANIM_FILE` |
+
+A request without a name asks for the names that the board holds. The reply
+carries the opcode of that request and its correlation ID, and its payload is
+those names with a newline after each one. An empty payload thus means that the
+board holds no asset of that kind.
+
+Note: a name that holds `/` gets a NACK with the code `0x03`. Thus a request
+reaches no file outside the place of its kind.
+
+Note: `0x0C` writes a file, and its payload stays a full path. That opcode
+carries every kind of file, thus it needs one.
 
 ### `0x07` Stop the animations
 
