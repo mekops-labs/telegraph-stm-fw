@@ -120,6 +120,8 @@ A flash operation stops the peer.
 | `ipc sleep off` | Keep the light through the day |
 | `ipc large [-l\|-c\|-r] <text>` | Put a text on the main panel |
 | `ipc small [-l\|-c\|-r] <text>` | Put a text on the sub panel |
+| `ipc pix <x> <y> <w> <h> <hex>` | Set a rectangle of pixels on the main panel |
+| `ipc pixs <x> <y> <w> <h> <hex>` | The same on the sub panel |
 | `ipc putfile <path> <hex>` | Write a file into the assets, such as a font |
 | `ipc clear` | Clear both panels |
 | `ipc bad` | Transmit an unknown opcode, thus the target sends a NACK |

@@ -78,6 +78,8 @@ extern "C" {
 #define IPC_OP_SET_LARGE    0x02u  /* edge -> STM32: text on the main panel */
 #define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
 #define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
+#define IPC_OP_SET_PIX_LARGE 0x08u /* edge -> STM32: pixels on the main panel */
+#define IPC_OP_SET_PIX_SMALL 0x09u /* edge -> STM32: pixels on the sub panel  */
 #define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
 #define IPC_OP_SET_SLEEP    0x0bu  /* edge -> STM32: the period without light */
 #define IPC_OP_WRITE_ASSET  0x0cu  /* edge -> STM32: a part of a file       */
@@ -177,6 +179,27 @@ extern "C" {
 #define IPC_BRIGHT_MAX       8u
 #define IPC_SET_BRIGHT_LEN   1u
 #define IPC_SET_BRIGHT2_LEN  2u
+
+/* The payload of IPC_OP_SET_PIX_LARGE and IPC_OP_SET_PIX_SMALL.
+ *
+ *   [x u8] [y u8] [width u8] [height u8] [the pixels]
+ *
+ * The pixels go row by row, and each row starts at a byte. Bit 7 of a byte is
+ * the pixel at the left. Thus one row takes (width + 7) / 8 bytes.
+ *
+ * The rectangle changes those pixels alone, thus the rest of the panel keeps
+ * its content. A rectangle that goes past an edge loses the part outside.
+ *
+ * Note: the main panel is 70 by 14 and the sub panel is 21 by 14. A whole
+ * main panel thus takes 126 bytes of pixels, far inside one frame.
+ */
+
+#define IPC_PIX_X            0u
+#define IPC_PIX_Y            1u
+#define IPC_PIX_W            2u
+#define IPC_PIX_H            3u
+#define IPC_PIX_BITS         4u
+#define IPC_PIX_HEADER       4u
 
 /* The payload of IPC_OP_SET_TEMPOFF. The value is a correction in tenths of a
  * degree Celsius, with a sign. The board adds it to each reading.

@@ -270,6 +270,21 @@ void stm32_spidev_initialize(void);
 int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align);
 
 /****************************************************************************
+ * Name: hazk03_display_pixels
+ *
+ * Description:
+ *   Put a rectangle of pixels on one panel. The rest of that panel keeps its
+ *   content, thus two parts of one panel carry two different things.
+ *
+ *   Note: the bits go row by row, and each row starts at a byte. Bit 7 of a
+ *   byte is the pixel at the left.
+ *
+ ****************************************************************************/
+
+int hazk03_display_pixels(int panel, int x, int y, int w, int h,
+                          const uint8_t *bits);
+
+/****************************************************************************
  * Name: hazk03_display_temperature
  *
  * Description:

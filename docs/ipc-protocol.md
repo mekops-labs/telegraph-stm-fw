@@ -113,6 +113,8 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x02` | edge to STM32 | Set the text of the main panel |
 | `0x03` | edge to STM32 | Set the text of the sub panel |
 | `0x04` | edge to STM32 | Set the brightness |
+| `0x08` | edge to STM32 | Set the pixels of a rectangle, main panel |
+| `0x09` | edge to STM32 | Set the pixels of a rectangle, sub panel |
 | `0x0A` | edge to STM32 | Correct the temperature |
 | `0x0B` | edge to STM32 | Set the period without light |
 | `0x10` | edge to STM32 | Request the state |
@@ -188,6 +190,33 @@ control, thus the driver makes the on-time of each row shorter. The level 8 is
 the full on-time.
 
 Note: a value above 8 gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x08` and `0x09` Set the pixels of a rectangle
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The column of the left edge |
+| 1 | 1 | The row of the top edge |
+| 2 | 1 | The width |
+| 3 | 1 | The height |
+| 4 | n | The pixels |
+
+The pixels go row by row, and each row starts at a byte. Bit 7 of a byte is the
+pixel at the left. Thus one row takes `(width + 7) / 8` bytes, and the payload
+takes that many bytes for each row.
+
+**The rectangle changes those pixels alone.** The rest of the panel keeps its
+content, thus one part of a panel carries a clock while another part carries a
+notification. A rectangle that goes past an edge loses the part outside.
+
+Note: the panel holds two images. A write changes the image that the scan does
+not read, and the scan takes the new one between two images. Thus no image ever
+shows one part of a change.
+
+Note: a width or a height of 0 gets a NACK with the code `0x03`, and a payload
+that does not match the rectangle gets one with the code `0x02`.
 
 The reply is an ACK.
 

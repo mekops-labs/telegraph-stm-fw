@@ -298,6 +298,44 @@ static void ipc_set_bright(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
+static void ipc_set_pixels(struct ipc_ctx_s *ctx,
+                           const struct ipc_frame_s *frame, int panel)
+{
+  uint8_t x;
+  uint8_t y;
+  uint8_t w;
+  uint8_t h;
+  uint16_t need;
+
+  if (frame->payload_len < IPC_PIX_HEADER)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  x = frame->payload[IPC_PIX_X];
+  y = frame->payload[IPC_PIX_Y];
+  w = frame->payload[IPC_PIX_W];
+  h = frame->payload[IPC_PIX_H];
+
+  if (w == 0 || h == 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  need = (uint16_t)IPC_PIX_HEADER + (uint16_t)(((w + 7) / 8) * h);
+
+  if (frame->payload_len != need)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  hazk03_display_pixels(panel, x, y, w, h, &frame->payload[IPC_PIX_BITS]);
+  ipc_ack(ctx, frame->corr_id);
+}
+
 static void ipc_set_tempoff(struct ipc_ctx_s *ctx,
                             const struct ipc_frame_s *frame)
 {
@@ -453,6 +491,14 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
         ipc_write_asset(ctx, frame);
         break;
 #endif
+
+      case IPC_OP_SET_PIX_LARGE:
+        ipc_set_pixels(ctx, frame, HAZK03_PANEL_MAIN);
+        break;
+
+      case IPC_OP_SET_PIX_SMALL:
+        ipc_set_pixels(ctx, frame, HAZK03_PANEL_SUB);
+        break;
 
       case IPC_OP_SET_TEMPOFF:
         ipc_set_tempoff(ctx, frame);
