@@ -20,7 +20,12 @@
 #include <stddef.h>
 #include <string.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <nuttx/fs/fs.h>
+#include <nuttx/fs/ioctl.h>
+#include <nuttx/fs/smart.h>
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/spi/spi.h>
 
@@ -49,41 +54,43 @@
 
 #define CONFIG_RECORDS    2
 
-/* The value carries the layout of the record. A change of the fields takes a
- * new value, thus the board rejects a record of an older firmware and it
- * starts from the default settings.
- */
+/* This value marks a record of the settings. It never changes. */
 
-#define CONFIG_MAGIC      0x484b3032u   /* "HK02" */
+#define CONFIG_MAGIC      0x484b4746u   /* "FGKH", little-endian "HKGF" */
 #define CONFIG_BLOCKSIZE  256
 
 /* The first block of each erase sector holds one record. */
 
 #define CONFIG_BLOCK(n)   ((n) * W25_BLOCKS_PER_SECTOR)
 
-/****************************************************************************
- * Private Types
- ****************************************************************************/
-
-/* One record of the settings. The check value covers every byte before it. */
-
-struct config_record_s
-{
-  uint32_t magic;
-  uint32_t seq;
-  struct hazk03_config_s cfg;
-  uint16_t crc;
-};
-
-/* The check value covers the bytes before it, thus the count comes from the
- * position of that field.
+/* The version of the layout. A new field takes the next value.
  *
- * Note: the size of the structure is larger, because the compiler puts space
- * after the check value. A count from the size would give a value that covers
- * the check value itself.
+ * Note: the fields of the settings only join the end of the structure. Thus
+ * the settings of an older record are the first bytes of the newer structure,
+ * and the board reads that record without a loss.
  */
 
-#define CONFIG_CRC_BYTES  offsetof(struct config_record_s, crc)
+#define CONFIG_VERSION    1u
+
+/* The header of a record:
+ *
+ *   [magic u32] [sequence u32] [version u16] [length u16] [the settings]
+ *
+ * The check value comes after the settings, thus its place depends on that
+ * length. It covers every byte before it.
+ */
+
+#define CONFIG_OFF_MAGIC    0u
+#define CONFIG_OFF_SEQ      4u
+#define CONFIG_OFF_VERSION  8u
+#define CONFIG_OFF_LENGTH   10u
+#define CONFIG_OFF_SETTINGS 12u
+
+/* The largest set of settings that one record carries. The value gives room
+ * for the fields of the versions that come later.
+ */
+
+#define CONFIG_SETTINGS_MAX 64u
 
 /****************************************************************************
  * Private Data
@@ -109,31 +116,127 @@ static bool                   g_config_valid;
  * Private Functions
  ****************************************************************************/
 
-/* Read one record, and give its validity. */
+/* Read one record. Give its sequence number and its settings.
+ *
+ * Note: a record of an older version carries fewer bytes than the structure
+ * of this firmware. The settings that it does carry go over the defaults, and
+ * the fields that it lacks keep those defaults. Thus a step of the firmware
+ * loses no setting.
+ */
 
-static bool config_read_slot(int slot, struct config_record_s *rec)
+static bool config_read_slot(int slot, uint32_t *seq,
+                             struct hazk03_config_s *cfg)
 {
+  const struct hazk03_config_s defaults = HAZK03_CONFIG_DEFAULTS;
   uint8_t block[CONFIG_BLOCKSIZE];
+  uint16_t len;
   uint16_t crc;
-  ssize_t nread;
+  uint16_t stored;
 
-  nread = MTD_BREAD(g_config_mtd, CONFIG_BLOCK(slot), 1, block);
-  if (nread != 1)
+  if (MTD_BREAD(g_config_mtd, CONFIG_BLOCK(slot), 1, block) != 1)
     {
       return false;
     }
 
-  memcpy(rec, block, sizeof(*rec));
-
-  if (rec->magic != CONFIG_MAGIC)
+  if (ipc_get_u32(&block[CONFIG_OFF_MAGIC]) != CONFIG_MAGIC)
     {
       return false;
     }
 
-  crc = ipc_crc16((const uint8_t *)rec, CONFIG_CRC_BYTES);
+  len = ipc_get_u16(&block[CONFIG_OFF_LENGTH]);
 
-  return crc == rec->crc;
+  /* The length comes from the record, thus a check of it must come before
+   * its use. The check value covers it, but only a later step reads that.
+   */
+
+  if (len > CONFIG_SETTINGS_MAX ||
+      (uint32_t)CONFIG_OFF_SETTINGS + len + sizeof(crc) > CONFIG_BLOCKSIZE)
+    {
+      return false;
+    }
+
+  crc    = ipc_crc16(block, CONFIG_OFF_SETTINGS + len);
+  stored = ipc_get_u16(&block[CONFIG_OFF_SETTINGS + len]);
+
+  if (crc != stored)
+    {
+      return false;
+    }
+
+  if (len > sizeof(*cfg))
+    {
+      /* The record comes from a later firmware. The fields that this build
+       * knows are the first ones, thus it takes those and it drops the rest.
+       */
+
+      len = (uint16_t)sizeof(*cfg);
+    }
+
+  *cfg = defaults;
+  memcpy(cfg, &block[CONFIG_OFF_SETTINGS], len);
+  *seq = ipc_get_u32(&block[CONFIG_OFF_SEQ]);
+
+  return true;
 }
+
+#ifdef CONFIG_FS_SMARTFS
+/* Make an empty file system on the partition of the assets.
+ *
+ * Note: the utility mksmartfs does this work, and it is an application. The
+ * configuration for the protocol carries no application, thus this function
+ * gives the same steps through the driver alone.
+ *
+ * Note: a new board reaches this path one time. The partition then holds a
+ * file system, and the mount at each start after that one finds it.
+ */
+
+static int config_format_assets(void)
+{
+  struct smart_format_s fmt;
+  struct smart_read_write_s request;
+  uint8_t type = SMARTFS_SECTOR_TYPE_DIR;
+  int fd;
+  int ret;
+
+  fd = open(W25_SMART_PATH, O_RDWR);
+  if (fd < 0)
+    {
+      return -ENODEV;
+    }
+
+  ret = ioctl(fd, BIOC_LLFORMAT, CONFIG_MTD_SMART_SECTOR_SIZE << 16);
+  if (ret < 0)
+    {
+      goto done;
+    }
+
+  ret = ioctl(fd, BIOC_GETFORMAT, (unsigned long)&fmt);
+  if (ret < 0)
+    {
+      goto done;
+    }
+
+  /* The root directory takes the first sector of the file system. */
+
+  ret = ioctl(fd, BIOC_ALLOCSECT, SMARTFS_ROOT_DIR_SECTOR);
+  if (ret != SMARTFS_ROOT_DIR_SECTOR)
+    {
+      ret = -EIO;
+      goto done;
+    }
+
+  request.logsector = SMARTFS_ROOT_DIR_SECTOR;
+  request.offset    = 0;
+  request.count     = 1;
+  request.buffer    = &type;
+
+  ret = ioctl(fd, BIOC_WRITESECT, (unsigned long)&request);
+
+done:
+  close(fd);
+  return ret;
+}
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -145,7 +248,8 @@ static bool config_read_slot(int slot, struct config_record_s *rec)
 
 int hazk03_config_load(struct hazk03_config_s *cfg)
 {
-  struct config_record_s rec;
+  struct hazk03_config_s found_cfg;
+  uint32_t seq;
   int slot;
   bool found = false;
 
@@ -160,16 +264,16 @@ int hazk03_config_load(struct hazk03_config_s *cfg)
 
   for (slot = 0; slot < CONFIG_RECORDS; slot++)
     {
-      if (!config_read_slot(slot, &rec))
+      if (!config_read_slot(slot, &seq, &found_cfg))
         {
           continue;
         }
 
-      if (!found || rec.seq > g_config_seq)
+      if (!found || seq > g_config_seq)
         {
-          g_config_seq  = rec.seq;
+          g_config_seq  = seq;
           g_config_slot = slot;
-          *cfg          = rec.cfg;
+          *cfg          = found_cfg;
           found         = true;
         }
     }
@@ -190,7 +294,7 @@ int hazk03_config_load(struct hazk03_config_s *cfg)
 int hazk03_config_save(const struct hazk03_config_s *cfg)
 {
   uint8_t block[CONFIG_BLOCKSIZE];
-  struct config_record_s rec;
+  uint16_t len = (uint16_t)sizeof(*cfg);
   int slot;
   int ret;
 
@@ -214,13 +318,16 @@ int hazk03_config_save(const struct hazk03_config_s *cfg)
 
   slot = (g_config_slot == 0) ? 1 : 0;
 
-  rec.magic = CONFIG_MAGIC;
-  rec.seq   = g_config_seq + 1;
-  rec.cfg   = *cfg;
-  rec.crc   = ipc_crc16((const uint8_t *)&rec, CONFIG_CRC_BYTES);
-
   memset(block, 0xff, sizeof(block));
-  memcpy(block, &rec, sizeof(rec));
+
+  ipc_put_u32(&block[CONFIG_OFF_MAGIC], CONFIG_MAGIC);
+  ipc_put_u32(&block[CONFIG_OFF_SEQ], g_config_seq + 1);
+  ipc_put_u16(&block[CONFIG_OFF_VERSION], CONFIG_VERSION);
+  ipc_put_u16(&block[CONFIG_OFF_LENGTH], len);
+  memcpy(&block[CONFIG_OFF_SETTINGS], cfg, len);
+
+  ipc_put_u16(&block[CONFIG_OFF_SETTINGS + len],
+              ipc_crc16(block, CONFIG_OFF_SETTINGS + len));
 
   ret = MTD_ERASE(g_config_mtd, slot, 1);
   if (ret < 0)
@@ -237,7 +344,7 @@ int hazk03_config_save(const struct hazk03_config_s *cfg)
     }
 
   g_config_slot  = slot;
-  g_config_seq   = rec.seq;
+  g_config_seq   = g_config_seq + 1;
   g_config_cur   = *cfg;
   g_config_valid = true;
 
@@ -333,17 +440,25 @@ int hazk03_flash_initialize(void)
   ret = mount(W25_SMART_PATH, W25_ASSETS_MOUNT, "smartfs", 0, NULL);
   if (ret < 0)
     {
-      /* An unformatted partition gives this result. The command mksmartfs
-       * makes the file system.
+      /* A new board carries no file system, thus the mount fails. Make one,
+       * and mount it again.
        */
 
-      syslog(LOG_ERR, "ERROR: mount %s: %d\n", W25_ASSETS_MOUNT, ret);
-    }
-#else
-  ret = register_mtddriver(W25_ASSETS_PATH, part, 0666, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: register %s: %d\n", W25_ASSETS_PATH, ret);
+      syslog(LOG_INFO, "assets: no file system, making one\n");
+
+      ret = config_format_assets();
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "ERROR: format assets: %d\n", ret);
+        }
+      else
+        {
+          ret = mount(W25_SMART_PATH, W25_ASSETS_MOUNT, "smartfs", 0, NULL);
+          if (ret < 0)
+            {
+              syslog(LOG_ERR, "ERROR: mount %s: %d\n", W25_ASSETS_MOUNT, ret);
+            }
+        }
     }
 #endif
 
