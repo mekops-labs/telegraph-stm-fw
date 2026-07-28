@@ -120,6 +120,10 @@ A flash operation stops the peer.
 | `ipc sleep off` | Keep the light through the day |
 | `ipc large [-l\|-c\|-r] <text>` | Put a text on the main panel |
 | `ipc small [-l\|-c\|-r] <text>` | Put a text on the sub panel |
+| `ipc scroll <x> <y> <w> <h> <period> <step> <text>` | Scroll a text across a rectangle |
+| `ipc scrollv ...` | The same, moving down |
+| `ipc sprite <x> <y> <w> <h> <period> <srcw> <srch> <hex>` | Cycle the frames of a sprite |
+| `ipc animoff` | Stop the animations |
 | `ipc pix <x> <y> <w> <h> <hex>` | Set a rectangle of pixels on the main panel |
 | `ipc pixs <x> <y> <w> <h> <hex>` | The same on the sub panel |
 | `ipc putfile <path> <hex>` | Write a file into the assets, such as a font |

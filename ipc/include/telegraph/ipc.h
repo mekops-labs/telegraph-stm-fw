@@ -78,6 +78,9 @@ extern "C" {
 #define IPC_OP_SET_LARGE    0x02u  /* edge -> STM32: text on the main panel */
 #define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
 #define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
+#define IPC_OP_ANIM_LARGE   0x05u  /* edge -> STM32: animate a rectangle    */
+#define IPC_OP_ANIM_SMALL   0x06u  /* edge -> STM32: the same, sub panel    */
+#define IPC_OP_ANIM_STOP    0x07u  /* edge -> STM32: stop an animation      */
 #define IPC_OP_SET_PIX_LARGE 0x08u /* edge -> STM32: pixels on the main panel */
 #define IPC_OP_SET_PIX_SMALL 0x09u /* edge -> STM32: pixels on the sub panel  */
 #define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
@@ -200,6 +203,53 @@ extern "C" {
 #define IPC_PIX_H            3u
 #define IPC_PIX_BITS         4u
 #define IPC_PIX_HEADER       4u
+
+/* The payload of IPC_OP_ANIM_LARGE and IPC_OP_ANIM_SMALL.
+ *
+ *   [x u8] [y u8] [w u8] [h u8]
+ *   [flags u8] [period u16] [step u8]
+ *   [source width u8] [source height u8]
+ *   [the source]
+ *
+ * The board keeps a source larger than the rectangle, and it moves a window
+ * over that source. The window moves by "step" pixels every "period"
+ * milliseconds, and it returns to the start at the end of the source.
+ *
+ * A step of one pixel gives a scroll. A step of the width of the rectangle
+ * gives the frames of a sprite, because the window then jumps from one frame
+ * to the next. Thus one mechanism carries both.
+ *
+ * The flag IPC_ANIM_VERTICAL moves the window down instead of across.
+ *
+ * The flag IPC_ANIM_TEXT makes the source a text in UTF-8 instead of pixels.
+ * The board then draws that text into the source itself, thus a scrolling
+ * message costs one frame and not one frame for each step. The width and the
+ * height of the source are 0 in that case, because the board computes them.
+ *
+ * Note: the source of the main panel holds IPC_ANIM_SRC_MAX bytes, and the
+ * sub panel holds half of that. A larger source gets a NACK.
+ */
+
+#define IPC_ANIM_X           0u
+#define IPC_ANIM_Y           1u
+#define IPC_ANIM_W           2u
+#define IPC_ANIM_H           3u
+#define IPC_ANIM_FLAGS       4u
+#define IPC_ANIM_PERIOD      5u
+#define IPC_ANIM_STEP        7u
+#define IPC_ANIM_SRCW        8u
+#define IPC_ANIM_SRCH        9u
+#define IPC_ANIM_BODY        10u
+
+#define IPC_ANIM_VERTICAL    0x01u
+#define IPC_ANIM_TEXT        0x02u
+#define IPC_ANIM_FLAG_MASK   0x03u
+
+#define IPC_ANIM_SRC_MAX     512u
+
+/* The payload of IPC_OP_ANIM_STOP is empty. The rectangle keeps the pixels of
+ * its last step.
+ */
 
 /* The payload of IPC_OP_SET_TEMPOFF. The value is a correction in tenths of a
  * degree Celsius, with a sign. The board adds it to each reading.

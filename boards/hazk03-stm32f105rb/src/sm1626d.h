@@ -222,4 +222,20 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
 
 int sm1626d_textwidth(const char *s, size_t len);
 
+/****************************************************************************
+ * Name: sm1626d_rendertext
+ *
+ * Description:
+ *   Draw a text into a bitmap that belongs to the caller. The rows follow
+ *   each other, each row starts at a byte, and bit 7 of a byte is the pixel
+ *   at the left.
+ *
+ *   Note: the animation uses this to hold a message wider than the panel.
+ *   Thus a scrolling message costs one frame and not one for each step.
+ *
+ ****************************************************************************/
+
+void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
+                        size_t len);
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_SM1626D_H */

@@ -487,6 +487,77 @@ void ipcCommand(const char *args) {
         ipc_put_u16(&payload[IPC_SLEEP_START], start);
         ipc_put_u16(&payload[IPC_SLEEP_END], end);
         ipcRequest(IPC_OP_SET_SLEEP, payload, IPC_SET_SLEEP_LEN);
+    } else if (strncmp(args, "scroll ", 7) == 0 ||
+               strncmp(args, "scrollv ", 8) == 0) {
+        // The form is "scroll <x> <y> <w> <h> <period> <step> <text>".
+        // The board draws the text, thus the message goes out one time.
+        bool vert = (args[6] == 'v');
+        const char *p = args + (vert ? 8 : 7);
+        char *end = NULL;
+        long x = strtol(p, &end, 10);
+        long y = strtol(end, &end, 10);
+        long w = strtol(end, &end, 10);
+        long h = strtol(end, &end, 10);
+        long period = strtol(end, &end, 10);
+        long step = strtol(end, &end, 10);
+
+        while (end != NULL && *end == ' ') end++;
+
+        size_t tlen = (end != NULL) ? strlen(end) : 0;
+        static uint8_t payload[IPC_MAX_PAYLOAD];
+
+        payload[IPC_ANIM_X] = (uint8_t)x;
+        payload[IPC_ANIM_Y] = (uint8_t)y;
+        payload[IPC_ANIM_W] = (uint8_t)w;
+        payload[IPC_ANIM_H] = (uint8_t)h;
+        payload[IPC_ANIM_FLAGS] = IPC_ANIM_TEXT |
+                                  (vert ? IPC_ANIM_VERTICAL : 0);
+        ipc_put_u16(&payload[IPC_ANIM_PERIOD], (uint16_t)period);
+        payload[IPC_ANIM_STEP] = (uint8_t)step;
+        payload[IPC_ANIM_SRCW] = 0;
+        payload[IPC_ANIM_SRCH] = 0;
+        memcpy(&payload[IPC_ANIM_BODY], end, tlen);
+
+        ipcRequest(IPC_OP_ANIM_LARGE, payload,
+                   (uint16_t)(IPC_ANIM_BODY + tlen));
+    } else if (strcmp(args, "animoff") == 0) {
+        ipcRequest(IPC_OP_ANIM_STOP, NULL, 0);
+    } else if (strncmp(args, "sprite ", 7) == 0) {
+        // The form is "sprite <x> <y> <w> <h> <period> <srcw> <srch> <hex>".
+        // A step of the width of the rectangle gives the frames.
+        const char *p = args + 7;
+        char *end = NULL;
+        long x = strtol(p, &end, 10);
+        long y = strtol(end, &end, 10);
+        long w = strtol(end, &end, 10);
+        long h = strtol(end, &end, 10);
+        long period = strtol(end, &end, 10);
+        long sw = strtol(end, &end, 10);
+        long sh = strtol(end, &end, 10);
+
+        while (end != NULL && *end == ' ') end++;
+
+        size_t hexlen = (end != NULL) ? strlen(end) : 0;
+        size_t datalen = hexlen / 2;
+        static uint8_t payload[IPC_MAX_PAYLOAD];
+
+        payload[IPC_ANIM_X] = (uint8_t)x;
+        payload[IPC_ANIM_Y] = (uint8_t)y;
+        payload[IPC_ANIM_W] = (uint8_t)w;
+        payload[IPC_ANIM_H] = (uint8_t)h;
+        payload[IPC_ANIM_FLAGS] = 0;
+        ipc_put_u16(&payload[IPC_ANIM_PERIOD], (uint16_t)period);
+        payload[IPC_ANIM_STEP] = (uint8_t)w;
+        payload[IPC_ANIM_SRCW] = (uint8_t)sw;
+        payload[IPC_ANIM_SRCH] = (uint8_t)sh;
+
+        for (size_t i = 0; i < datalen; i++) {
+            char byte[3] = { end[i * 2], end[i * 2 + 1], '\0' };
+            payload[IPC_ANIM_BODY + i] = (uint8_t)strtoul(byte, NULL, 16);
+        }
+
+        ipcRequest(IPC_OP_ANIM_LARGE, payload,
+                   (uint16_t)(IPC_ANIM_BODY + datalen));
     } else if (strncmp(args, "pix ", 4) == 0 ||
                strncmp(args, "pixs ", 5) == 0) {
         // The form is "pix <x> <y> <w> <h> <hex>" for the main panel, and

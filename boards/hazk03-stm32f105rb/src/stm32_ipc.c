@@ -298,6 +298,68 @@ static void ipc_set_bright(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
+static void ipc_animate(struct ipc_ctx_s *ctx,
+                        const struct ipc_frame_s *frame, int panel)
+{
+  uint8_t flags;
+  bool text;
+  int srcw;
+  int srch;
+  size_t srclen;
+  int ret;
+
+  if (frame->payload_len <= IPC_ANIM_BODY)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  flags = frame->payload[IPC_ANIM_FLAGS];
+
+  if ((flags & ~IPC_ANIM_FLAG_MASK) != 0)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  text   = (flags & IPC_ANIM_TEXT) != 0;
+  srcw   = frame->payload[IPC_ANIM_SRCW];
+  srch   = frame->payload[IPC_ANIM_SRCH];
+  srclen = frame->payload_len - IPC_ANIM_BODY;
+
+  if (!text)
+    {
+      /* The pixels must match the size of the source. */
+
+      if (srcw == 0 || srch == 0 ||
+          srclen != (size_t)(((srcw + 7) / 8) * srch))
+        {
+          ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+          return;
+        }
+    }
+
+  ret = hazk03_display_animate(panel,
+                               frame->payload[IPC_ANIM_X],
+                               frame->payload[IPC_ANIM_Y],
+                               frame->payload[IPC_ANIM_W],
+                               frame->payload[IPC_ANIM_H],
+                               (flags & IPC_ANIM_VERTICAL) != 0,
+                               ipc_get_u16(&frame->payload[IPC_ANIM_PERIOD]),
+                               frame->payload[IPC_ANIM_STEP],
+                               text, srcw, srch,
+                               &frame->payload[IPC_ANIM_BODY], srclen);
+
+  if (ret < 0)
+    {
+      ipc_nack(ctx, frame->corr_id,
+               (ret == -E2BIG) ? IPC_ERR_BAD_LENGTH : IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  ipc_ack(ctx, frame->corr_id);
+}
+
 static void ipc_set_pixels(struct ipc_ctx_s *ctx,
                            const struct ipc_frame_s *frame, int panel)
 {
@@ -491,6 +553,20 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
         ipc_write_asset(ctx, frame);
         break;
 #endif
+
+      case IPC_OP_ANIM_LARGE:
+        ipc_animate(ctx, frame, HAZK03_PANEL_MAIN);
+        break;
+
+      case IPC_OP_ANIM_SMALL:
+        ipc_animate(ctx, frame, HAZK03_PANEL_SUB);
+        break;
+
+      case IPC_OP_ANIM_STOP:
+        hazk03_display_animstop(HAZK03_PANEL_MAIN);
+        hazk03_display_animstop(HAZK03_PANEL_SUB);
+        ipc_ack(ctx, frame->corr_id);
+        break;
 
       case IPC_OP_SET_PIX_LARGE:
         ipc_set_pixels(ctx, frame, HAZK03_PANEL_MAIN);

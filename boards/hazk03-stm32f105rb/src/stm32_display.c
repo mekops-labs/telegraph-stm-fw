@@ -78,11 +78,20 @@
 
 #define DISPLAY_TIMER     3
 
-/* The thread of the board keeps the time and the temperature. It runs at this
- * period, and the timer drives the panels without it.
+/* The thread of the board runs at this period. It moves the animations, and
+ * every TICKS_PER_SEC of them it keeps the time and the temperature.
  */
 
-#define TICK_US           1000000
+#define TICK_MS           20
+#define TICK_US           (TICK_MS * 1000)
+#define TICKS_PER_SEC     (1000 / TICK_MS)
+
+/* The source of an animation. The main panel holds a message wider than
+ * itself, and the sub panel holds less.
+ */
+
+#define ANIM_SRC_MAIN     512
+#define ANIM_SRC_SUB      128
 
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
@@ -192,6 +201,32 @@ static const char *g_weekday[] =
 {
   "Nie", "Pon", "Wto", "Śro", "Czw", "Pią", "Sob"
 };
+
+/* One animation for each panel. The window moves over the source, thus a step
+ * of one pixel scrolls and a step of the width gives the frames of a sprite.
+ */
+
+struct display_anim_s
+{
+  bool     active;
+  bool     vertical;
+  uint8_t  x;
+  uint8_t  y;
+  uint8_t  w;
+  uint8_t  h;
+  uint16_t period_ms;
+  uint8_t  step;
+  uint16_t srcw;
+  uint16_t srch;
+  uint16_t offset;
+  uint16_t elapsed_ms;
+  uint8_t *src;
+};
+
+static uint8_t g_anim_src_main[ANIM_SRC_MAIN];
+static uint8_t g_anim_src_sub[ANIM_SRC_SUB];
+
+static struct display_anim_s g_anim[2];
 
 /* Put the settings into the flash. The store makes no write if the values are
  * the same as the values that it holds.
@@ -319,6 +354,98 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
   sm1626d_drawtext(dev, x, y, s, len);
   sm1626d_commit(dev);
   nxmutex_unlock(&g_fblock);
+}
+
+/* Put one step of an animation on its rectangle.
+ *
+ * Note: the window takes its pixels from the source and returns to the start
+ * at the end of that source. Thus the message repeats without a gap in the
+ * code that moves it.
+ */
+
+static void anim_draw(struct sm1626d_dev_s *dev, struct display_anim_s *a)
+{
+  int stride = (a->srcw + 7) / 8;
+  int row;
+  int col;
+
+  sm1626d_begin(dev);
+
+  for (row = 0; row < a->h; row++)
+    {
+      for (col = 0; col < a->w; col++)
+        {
+          int sx = col;
+          int sy = row;
+          bool on;
+
+          if (a->vertical)
+            {
+              sy = (row + a->offset) % a->srch;
+            }
+          else
+            {
+              sx = (col + a->offset) % a->srcw;
+            }
+
+          if (sx >= a->srcw || sy >= a->srch)
+            {
+              on = false;
+            }
+          else
+            {
+              on = (a->src[(sy * stride) + (sx / 8)] &
+                    (0x80 >> (sx % 8))) != 0;
+            }
+
+          sm1626d_drawpixel(dev, a->x + col, a->y + row, on);
+        }
+    }
+
+  sm1626d_commit(dev);
+}
+
+/* Move every animation that is due. */
+
+static void anim_tick(void)
+{
+  int panel;
+
+  for (panel = 0; panel < 2; panel++)
+    {
+      struct display_anim_s *a = &g_anim[panel];
+      struct sm1626d_dev_s *dev;
+
+      if (!a->active)
+        {
+          continue;
+        }
+
+      a->elapsed_ms += TICK_MS;
+
+      if (a->elapsed_ms < a->period_ms)
+        {
+          continue;
+        }
+
+      a->elapsed_ms = 0;
+      a->offset += a->step;
+
+      if (a->vertical)
+        {
+          a->offset %= (a->srch > 0) ? a->srch : 1;
+        }
+      else
+        {
+          a->offset %= (a->srcw > 0) ? a->srcw : 1;
+        }
+
+      dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
+
+      nxmutex_lock(&g_fblock);
+      anim_draw(dev, a);
+      nxmutex_unlock(&g_fblock);
+    }
 }
 
 /* Put a text of the board on one panel. These texts go in the middle. */
@@ -459,6 +586,7 @@ static int display_scanner(int argc, char *argv[])
 {
   unsigned int ticks = TEMP_EVERY_TICKS;
   unsigned int version_left = VERSION_TICKS;
+  unsigned int subtick = 0;
 
   for (; ; )
     {
@@ -467,6 +595,15 @@ static int display_scanner(int argc, char *argv[])
        */
 
       nxsig_usleep(TICK_US);
+
+      anim_tick();
+
+      if (++subtick < TICKS_PER_SEC)
+        {
+          continue;
+        }
+
+      subtick = 0;
 
         {
           struct tm tm;
@@ -566,6 +703,96 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
   nxmutex_unlock(&g_fblock);
 
   return OK;
+}
+
+int hazk03_display_animate(int panel, int x, int y, int w, int h,
+                           bool vertical, uint16_t period_ms, uint8_t step,
+                           bool text, int srcw, int srch,
+                           const uint8_t *src, size_t srclen)
+{
+  struct display_anim_s *a = &g_anim[(panel == HAZK03_PANEL_SUB) ? 1 : 0];
+  uint8_t *buf = (panel == HAZK03_PANEL_SUB) ? g_anim_src_sub
+                                             : g_anim_src_main;
+  size_t cap = (panel == HAZK03_PANEL_SUB) ? ANIM_SRC_SUB : ANIM_SRC_MAIN;
+  size_t need;
+
+  if (w == 0 || h == 0 || period_ms == 0 || step == 0)
+    {
+      return -EINVAL;
+    }
+
+  /* The edge MCU owns this panel from now on. */
+
+  if (panel == HAZK03_PANEL_SUB)
+    {
+      g_sub_default = false;
+    }
+  else
+    {
+      g_main_default = false;
+    }
+
+  if (text)
+    {
+      /* The board draws the text itself. Thus a message that scrolls costs
+       * one frame of the protocol, and not one frame for each step.
+       */
+
+      srcw = sm1626d_textwidth((const char *)src, srclen);
+      srch = h;
+
+      if (srcw < w)
+        {
+          srcw = w;
+        }
+    }
+
+  if (srcw <= 0 || srch <= 0)
+    {
+      return -EINVAL;
+    }
+
+  need = (size_t)(((srcw + 7) / 8) * srch);
+
+  if (need > cap)
+    {
+      return -E2BIG;
+    }
+
+  nxmutex_lock(&g_fblock);
+
+  if (text)
+    {
+      sm1626d_rendertext(buf, srcw, srch, (const char *)src, srclen);
+    }
+  else
+    {
+      memcpy(buf, src, (srclen < need) ? srclen : need);
+    }
+
+  a->vertical   = vertical;
+  a->x          = (uint8_t)x;
+  a->y          = (uint8_t)y;
+  a->w          = (uint8_t)w;
+  a->h          = (uint8_t)h;
+  a->period_ms  = period_ms;
+  a->step       = step;
+  a->srcw       = (uint16_t)srcw;
+  a->srch       = (uint16_t)srch;
+  a->offset     = 0;
+  a->elapsed_ms = 0;
+  a->src        = buf;
+  a->active     = true;
+
+  anim_draw((panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main, a);
+  nxmutex_unlock(&g_fblock);
+
+  return OK;
+}
+
+void hazk03_display_animstop(int panel)
+{
+  g_anim[(panel == HAZK03_PANEL_SUB) ? 1 : 0].active = false;
 }
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels)

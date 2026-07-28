@@ -113,6 +113,9 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x02` | edge to STM32 | Set the text of the main panel |
 | `0x03` | edge to STM32 | Set the text of the sub panel |
 | `0x04` | edge to STM32 | Set the brightness |
+| `0x05` | edge to STM32 | Animate a rectangle, main panel |
+| `0x06` | edge to STM32 | Animate a rectangle, sub panel |
+| `0x07` | edge to STM32 | Stop the animations |
 | `0x08` | edge to STM32 | Set the pixels of a rectangle, main panel |
 | `0x09` | edge to STM32 | Set the pixels of a rectangle, sub panel |
 | `0x0A` | edge to STM32 | Correct the temperature |
@@ -190,6 +193,57 @@ control, thus the driver makes the on-time of each row shorter. The level 8 is
 the full on-time.
 
 Note: a value above 8 gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x05` and `0x06` Animate a rectangle
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The column of the left edge |
+| 1 | 1 | The row of the top edge |
+| 2 | 1 | The width |
+| 3 | 1 | The height |
+| 4 | 1 | The flags |
+| 5 | 2 | The period of one step, in milliseconds |
+| 7 | 1 | The step, in pixels |
+| 8 | 1 | The width of the source |
+| 9 | 1 | The height of the source |
+| 10 | n | The source |
+
+The board keeps a source larger than the rectangle, and it moves a window over
+that source. The window moves by the step every period, and it returns to the
+start at the end of the source.
+
+**A step of one pixel gives a scroll. A step of the width of the rectangle
+gives the frames of a sprite**, because the window then jumps from one frame to
+the next. Thus one mechanism carries both, and the edge MCU sends no frame for
+each step.
+
+| Flag | Value | Meaning |
+| :--- | :--- | :--- |
+| `IPC_ANIM_VERTICAL` | `0x01` | The window moves down instead of across |
+| `IPC_ANIM_TEXT` | `0x02` | The source is a text in UTF-8, not pixels |
+
+With `IPC_ANIM_TEXT` the board draws the text into the source itself, and the
+width and the height of the source are 0. **A message that scrolls thus costs
+one frame of the protocol, and not one frame for each step.**
+
+Without that flag the source is a bitmap. The pixels go row by row, each row
+starts at a byte, and bit 7 of a byte is the pixel at the left. The payload
+must hold exactly `((source width + 7) / 8) * source height` bytes.
+
+The source of the main panel holds 512 bytes and the sub panel holds 128. A
+larger source gets a NACK with the code `0x02`.
+
+Note: a width, a height, a period or a step of 0 gets a NACK with the code
+`0x03`.
+
+The reply is an ACK.
+
+### `0x07` Stop the animations
+
+The payload is empty. Each rectangle keeps the pixels of its last step.
 
 The reply is an ACK.
 

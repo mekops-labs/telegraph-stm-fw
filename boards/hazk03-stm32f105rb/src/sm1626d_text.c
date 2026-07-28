@@ -11,6 +11,9 @@
 
 #include <nuttx/config.h>
 
+#include <string.h>
+
+#include "font5x7.h"
 #include "fontext.h"
 #include "sm1626d.h"
 
@@ -75,5 +78,55 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
         {
           break;
         }
+    }
+}
+
+void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
+                        size_t len)
+{
+  int stride = (w + 7) / 8;
+  size_t i = 0;
+  int x = 0;
+
+  memset(bits, 0, (size_t)(stride * h));
+
+  while (i < len && x < w)
+    {
+      const uint16_t *cols;
+      int col;
+
+      i += fontext_next(&s[i], len - i, &cols);
+
+      for (col = 0; col < FONTEXT_WIDTH; col++)
+        {
+          int row;
+
+          if (x + col >= w)
+            {
+              break;
+            }
+
+          for (row = 0; row < FONTEXT_ROWS; row++)
+            {
+              /* The cell is taller than the letter. The row 0 of the cell
+               * belongs above the letter, thus it moves down here.
+               */
+
+              int y = row - FONTEXT_ASCENT + ((h - FONT5X7_HEIGHT) / 2);
+
+              if (y < 0 || y >= h)
+                {
+                  continue;
+                }
+
+              if (cols[col] & (1u << row))
+                {
+                  bits[(y * stride) + ((x + col) / 8)] |=
+                      (0x80 >> ((x + col) % 8));
+                }
+            }
+        }
+
+      x += FONTEXT_ADVANCE;
     }
 }
