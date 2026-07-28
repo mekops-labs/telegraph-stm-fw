@@ -10,6 +10,8 @@ stack. A binary protocol with frames connects the two MCUs over a UART.
 [Apache NuttX](https://nuttx.apache.org/). It also holds the shared IPC
 library for both sides.
 
+`CHANGELOG.md` gives the content of each release.
+
 ## Display hardware
 
 | Device | Role | Interface |
