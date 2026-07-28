@@ -155,6 +155,12 @@ make sprites                # build the sprites for the animation
 The board takes a font from the flash at any time, thus one panel shows a large
 line and later two small ones.
 
+A request names a font alone, such as `compact`, and a sprite alone, such as
+`heart`. The board keeps the fonts in `/assets/fonts` and the sprites in
+`/assets/animations`, and it takes one format for each kind. Thus the name
+needs neither a directory nor an ending. **A request without a name gives the
+names that the board holds.**
+
 ### Board configuration
 
 The board directory is `boards/hazk03-stm32f105rb/`. The build keeps it

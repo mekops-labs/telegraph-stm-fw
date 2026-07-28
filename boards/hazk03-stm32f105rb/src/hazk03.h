@@ -151,9 +151,20 @@ struct i2c_master_s *hazk03_rtc_initialize(void);
 
 int hazk03_flash_initialize(void);
 
-/* The extended font of the panels, on the partition of the assets. */
+/* The places of the assets, and the ending of each kind. A caller names an
+ * asset alone, thus it needs neither the place nor the ending.
+ */
 
-#define HAZK03_FONT_PATH  "/assets/fonts/default.tgf"
+#define HAZK03_FONT_DIR   "/assets/fonts"
+#define HAZK03_FONT_EXT   ".tgf"
+#define HAZK03_ANIM_DIR   "/assets/animations"
+#define HAZK03_ANIM_EXT   ".tgs"
+
+/* The longest name of an asset, without its ending. */
+
+#define HAZK03_ASSET_NAME_MAX  32
+
+#define HAZK03_FONT_PATH  HAZK03_FONT_DIR "/default" HAZK03_FONT_EXT
 
 /* The value that turns the sleep period off. */
 
@@ -310,6 +321,34 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
  *   the space of that panel.
  *
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: hazk03_asset_path
+ *
+ * Description:
+ *   Give the full path of an asset from its name alone.
+ *
+ *   Note: a name that holds a separator gives a negative value. Thus a caller
+ *   reaches no file outside the place of that kind.
+ *
+ ****************************************************************************/
+
+int hazk03_asset_path(char *buf, size_t len, const char *dir,
+                      const char *name, size_t namelen, const char *ext);
+
+/****************************************************************************
+ * Name: hazk03_asset_list
+ *
+ * Description:
+ *   Put the names of the assets of one kind into a buffer, with a newline
+ *   after each one. The ending of each name is removed.
+ *
+ *   Note: the function gives the bytes that it wrote.
+ *
+ ****************************************************************************/
+
+size_t hazk03_asset_list(char *buf, size_t len, const char *dir,
+                         const char *ext);
 
 int hazk03_display_animate(int panel, int x, int y, int w, int h,
                            bool vertical, uint16_t period_ms, uint8_t step,

@@ -11,6 +11,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The board makes an empty file system on the partition of the assets when the
   mount fails. Thus a new board needs no step by hand.
+- A request for a font or for a sprite without a name gives the names that the
+  board holds. Thus the edge MCU asks the board what it carries.
 
 ### Changed
 
@@ -20,6 +22,10 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lacks take their defaults. A step of the firmware thus loses no setting.
 - This layout replaces the one of 0.1.1, and it does so one time. A board that
   comes from 0.1.1 starts from the default settings.
+- **A request names a font or a sprite alone, and no longer by a path.** The
+  board keeps each kind in one place and it takes one format for each kind,
+  thus the name needs neither a directory nor an ending. A name that holds a
+  separator gets a NACK, thus a request reaches no other file.
 
 ## [0.1.1] - 2026-07-28
 

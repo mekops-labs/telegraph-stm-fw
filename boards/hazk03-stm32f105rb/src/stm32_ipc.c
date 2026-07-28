@@ -145,6 +145,22 @@ static void ipc_nack(struct ipc_ctx_s *ctx, uint16_t corr_id, uint8_t error)
   ipc_send(ctx, ipc_encode_nack(ctx->tx, sizeof(ctx->tx), corr_id, error));
 }
 
+/* Give the names of the assets of one kind. The reply carries the opcode of
+ * the request, thus the caller matches it as it matches any other reply.
+ */
+
+static void ipc_list(struct ipc_ctx_s *ctx, const struct ipc_frame_s *frame,
+                     const char *dir, const char *ext)
+{
+  char list[IPC_LIST_MAX];
+  size_t used;
+
+  used = hazk03_asset_list(list, sizeof(list), dir, ext);
+
+  ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), frame->opcode,
+                           frame->corr_id, list, (uint16_t)used));
+}
+
 /* Transmit a log line. The frame is a push, thus it carries no request. */
 
 static void ipc_log(struct ipc_ctx_s *ctx, const char *text)
@@ -591,7 +607,14 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 #endif
 
       case IPC_OP_SET_ANIM:
-        ipc_animate(ctx, frame);
+        if (frame->payload_len == 0)
+          {
+            ipc_list(ctx, frame, HAZK03_ANIM_DIR, HAZK03_ANIM_EXT);
+          }
+        else
+          {
+            ipc_animate(ctx, frame);
+          }
         break;
 
       case IPC_OP_ANIM_SPEED:
@@ -615,16 +638,20 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
       case IPC_OP_SET_FONT:
         {
           char path[64];
-          size_t plen = frame->payload_len;
 
-          if (plen == 0 || plen >= sizeof(path))
+          if (frame->payload_len == 0)
             {
-              ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+              ipc_list(ctx, frame, HAZK03_FONT_DIR, HAZK03_FONT_EXT);
               break;
             }
 
-          memcpy(path, frame->payload, plen);
-          path[plen] = '\0';
+          if (hazk03_asset_path(path, sizeof(path), HAZK03_FONT_DIR,
+                                (const char *)frame->payload,
+                                frame->payload_len, HAZK03_FONT_EXT) < 0)
+            {
+              ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+              break;
+            }
 
           if (fontext_load(path) < 0)
             {
