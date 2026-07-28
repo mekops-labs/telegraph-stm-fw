@@ -201,25 +201,52 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
  * others.
  */
 
-void sm1626d_shiftrow(struct sm1626d_dev_s *dev, int row)
+int sm1626d_rowbits(const struct sm1626d_dev_s *dev)
+{
+  return SM_COLBITS(dev->width) + SM_ROW_SELECT_BITS;
+}
+
+void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
+                       int count)
 {
   int colbits = SM_COLBITS(dev->width);
-  int col;
-  int rbit;
+  int total = colbits + SM_ROW_SELECT_BITS;
+  int i;
 
-  for (col = colbits - 1; col >= 0; col--)
+  if (from + count > total)
     {
-      bool on = (dev->fb[row][col / 8] & (1 << (col % 8))) != 0;
+      count = total - from;
+    }
+
+  for (i = from; i < from + count; i++)
+    {
+      bool on;
+
+      if (i < colbits)
+        {
+          /* The column of the highest number goes first. */
+
+          int col = colbits - 1 - i;
+
+          on = (dev->fb[row][col / 8] & (1 << (col % 8))) != 0;
+        }
+      else
+        {
+          /* The selection of the row comes after the columns, and its
+           * highest bit goes first.
+           */
+
+          int rbit = total - 1 - i;
+
+          on = (rbit == row);
+        }
+
       sm_shiftbit(dev, on);
     }
+}
 
-  /* Select one row. The most significant bit goes first. */
-
-  for (rbit = SM_ROW_SELECT_BITS - 1; rbit >= 0; rbit--)
-    {
-      sm_shiftbit(dev, rbit == row);
-    }
-
+void sm1626d_latch(void)
+{
   sm_latch();
 }
 
