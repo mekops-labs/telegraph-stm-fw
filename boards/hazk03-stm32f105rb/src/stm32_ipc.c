@@ -26,6 +26,7 @@
 #include <telegraph/ipc.h>
 
 #include "hazk03.h"
+#include "version.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -153,8 +154,9 @@ static void ipc_log(struct ipc_ctx_s *ctx, const char *text)
 
 static void ipc_send_state(struct ipc_ctx_s *ctx, uint16_t corr_id)
 {
-  uint8_t payload[IPC_STATE_LEN];
+  uint8_t payload[IPC_STATE_LEN + IPC_FWVER_MAX];
   const struct ipc_stats_s *st = &ctx->parser.stats;
+  size_t vlen = strlen(HAZK03_VERSION);
 
   ipc_put_u32(&payload[IPC_STATE_TIME], (uint32_t)time(NULL));
   ipc_put_u16(&payload[IPC_STATE_TEMP],
@@ -165,8 +167,15 @@ static void ipc_send_state(struct ipc_ctx_s *ctx, uint16_t corr_id)
   payload[IPC_STATE_RESYNC]  = (uint8_t)st->resyncs;
   payload[IPC_STATE_VERSION] = IPC_PROTO_VERSION;
 
+  if (vlen > IPC_FWVER_MAX)
+    {
+      vlen = IPC_FWVER_MAX;
+    }
+
+  memcpy(&payload[IPC_STATE_FWVER], HAZK03_VERSION, vlen);
+
   ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_STATE, corr_id,
-                           payload, IPC_STATE_LEN));
+                           payload, (uint16_t)(IPC_STATE_LEN + vlen)));
 }
 
 static void ipc_set_time(struct ipc_ctx_s *ctx,

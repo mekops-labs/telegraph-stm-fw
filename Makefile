@@ -16,14 +16,19 @@ BOARD_DIR   := boards/$(BOARD)
 UNITY       := third_party/unity
 BUILD       := build
 
+# The version comes from the git tags. The header is generated, thus the
+# repository does not hold it.
+VERSION_H   := $(BOARD_DIR)/src/version.h
+
 .PHONY: help image shell configure build clean distclean menuconfig \
-        savedefconfig test
+        savedefconfig test version
 
 help:
 	@echo "Targets:"
 	@echo "  image         build the container image with the toolchain"
 	@echo "  configure     configure NuttX for $(BOARD):$(CONFIG)"
 	@echo "  build         build the firmware, and configure it if necessary"
+	@echo "  version       write the version header from the git tags"
 	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
@@ -59,7 +64,12 @@ $(NUTTX)/.config:
 
 configure: $(NUTTX)/.config
 
-build: configure
+# The header changes with the git state, thus this target runs every time. The
+# script keeps the file untouched when the version is the same.
+version:
+	@sh tools/genversion.sh $(VERSION_H)
+
+build: configure version
 	$(RUN) $(MAKE) -C $(NUTTX) -j$(shell nproc)
 	@echo
 	@$(RUN) sh -c 'size $(NUTTX)/nuttx' || true

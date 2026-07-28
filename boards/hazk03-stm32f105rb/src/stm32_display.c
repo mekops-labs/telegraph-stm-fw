@@ -10,6 +10,7 @@
 
 #include <debug.h>
 #include <sched.h>
+#include <string.h>
 #include <time.h>
 
 #include <nuttx/arch.h>
@@ -23,6 +24,7 @@
 #include "ds3231.h"
 #include "sm1626d.h"
 #include "tm1629a.h"
+#include "version.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -46,6 +48,14 @@
  */
 
 #define TEMP_EVERY_TICKS  30
+
+/* The main panel holds the version for this many ticks after a reset.
+ *
+ * Note: the panel holds 11 characters. A version above that length loses its
+ * end.
+ */
+
+#define VERSION_TICKS     3
 
 #define DISPLAY_STACKSIZE 1024
 
@@ -177,6 +187,7 @@ static int display_scanner(int argc, char *argv[])
 {
   unsigned int passes = 0;
   unsigned int ticks = TEMP_EVERY_TICKS;
+  unsigned int version_left = VERSION_TICKS;
 
   for (; ; )
     {
@@ -191,6 +202,15 @@ static int display_scanner(int argc, char *argv[])
           time_t now;
 
           passes = 0;
+
+          /* The version leaves the panel after its time. */
+
+          if (version_left > 0 && --version_left == 0)
+            {
+              nxmutex_lock(&g_fblock);
+              draw_geometry_test(&g_main);
+              nxmutex_unlock(&g_fblock);
+            }
 
           /* Read the system clock. The DS3231 with the battery keeps that
            * clock. Thus this step uses no bus. Only the temperature uses the
@@ -271,7 +291,12 @@ int hazk03_display_init(void)
   sm1626d_init(&g_main, GPIO_SM1626D_DIN_MAIN, MAIN_W, MAIN_H);
   sm1626d_init(&g_sub, GPIO_SM1626D_DIN_SUB, SUB_W, SUB_H);
 
-  draw_geometry_test(&g_main);
+  /* The version identifies the running image on the panel itself. Thus a
+   * person at the bench needs no link to the edge MCU.
+   */
+
+  sm1626d_drawtext(&g_main, 0, (MAIN_H - FONT5X7_HEIGHT) / 2,
+                   HAZK03_VERSION, strlen(HAZK03_VERSION));
   draw_heart(&g_sub);
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
