@@ -36,6 +36,14 @@
 
 #define IPC_DEVPATH       "/dev/ttyS0"
 
+/* The edge MCU takes the rate of the link from the header of the protocol.
+ * This board takes it from its configuration, thus the two values must agree.
+ */
+
+#if CONFIG_USART1_BAUD != IPC_BAUD
+#  error "CONFIG_USART1_BAUD differs from IPC_BAUD"
+#endif
+
 #define IPC_STACKSIZE     2048
 
 /* This priority is above the scan loop of the display. The task waits on the

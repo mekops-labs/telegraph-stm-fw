@@ -482,9 +482,11 @@ String ipcRun(const char *args) {
 
 void ipcCommand(const char *args) {
     if (strncmp(args, "on", 2) == 0) {
+        // The default is the rate that the board takes. A different rate
+        // gives no reply at all, thus an argument is for a test alone.
         unsigned long baud = strtoul(args + 2, NULL, 10);
 
-        ipcBegin(baud ? baud : 115200);
+        ipcBegin(baud ? baud : IPC_BAUD);
     } else if (strcmp(args, "off") == 0) {
         ipcEnd();
     } else if (strcmp(args, "state") == 0) {
