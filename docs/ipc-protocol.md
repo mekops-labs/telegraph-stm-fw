@@ -47,6 +47,15 @@ Thus the firmware has two configurations:
 Note: the `ipc` configuration sends the messages of the system log as LOG
 frames. Thus a diagnostic message stays available without a console.
 
+## The protocol is experimental
+
+The two MCUs always come from the same source, thus a change that breaks the
+earlier layout needs no step of the version. **The version of the protocol
+stays 1 through this period.** A reader must not take that value as a mark of
+an unchanged layout.
+
+The changelog of the firmware gives each change of the layout.
+
 ## Frame
 
 All 16-bit fields are little-endian.
@@ -225,7 +234,7 @@ correlation ID. The first 12 bytes are always present:
 | 6 | 2 | The count of the accepted frames |
 | 8 | 2 | The count of the CRC errors |
 | 10 | 1 | The count of the resynchronization operations |
-| 11 | 1 | The version of the protocol, currently 2 |
+| 11 | 1 | The version of the protocol, currently 1 |
 | 12 | n | The version of the firmware, text without a terminator |
 
 The length of the version text is the length of the payload less 12. The

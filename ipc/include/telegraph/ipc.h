@@ -128,7 +128,11 @@ extern "C" {
  * Payloads
  ****************************************************************************/
 
-#define IPC_PROTO_VERSION   2u
+/* The protocol is experimental. Thus a change that breaks the earlier layout
+ * keeps this value, and the two MCUs always come from the same source.
+ */
+
+#define IPC_PROTO_VERSION   1u
 
 /* The payload of IPC_OP_SET_LARGE and IPC_OP_SET_SMALL.
  *

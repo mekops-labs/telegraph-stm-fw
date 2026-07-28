@@ -48,7 +48,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The texts of the panels now start with a byte of attributes.** The bits 0
   and 1 of that byte give the place of the text across the panel. A byte of 0
   puts the text in the middle, and earlier versions always put it at the left.
-  The version of the protocol is now 2.
+  This change breaks the earlier layout. The protocol is experimental and both
+  MCUs come from the same source, thus its version stays 1.
 - A text of the panels is in UTF-8. A character that neither font holds gives a
   space.
 
