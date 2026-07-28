@@ -7,6 +7,23 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The system clock comes from the board's 25 MHz crystal and runs at 72 MHz,
+  twice the previous rate. The USB host peripheral requires a 48 MHz clock
+  that only a PLL on the crystal produces, so this path is what makes USB
+  reachable at all. Under a 1000-frame burst the link now delivers 10 000
+  frames without an error, against roughly one loss per 700 frames before.
+  The option `HAZK03_CLOCK_HSE` returns the clock to the internal oscillator
+  at 36 MHz.
+
+### Fixed
+
+- A lost ACK no longer stops the link. The ACK carries the sender's whole
+  allowance, so losing one left that allowance at zero and no further frame
+  went out until an operator restarted the link. The sender now takes one
+  credit back after a wait that no ACK ends.
+
 ## [0.2.0] - 2026-07-28
 
 ### Added

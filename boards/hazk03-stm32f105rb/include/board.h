@@ -19,56 +19,92 @@
 
 /* Clocking *****************************************************************/
 
-/* This board uses the internal RC oscillator only.
- *
- * Note: the HSE crystal makes this part stop. Thus the firmware does not
- * start the crystal, and the PLL gets its input from HSI/2.
- *
- * Note: the clock path is HSI 8 MHz, then a divide by 2, then the PLL
- * multiplier x9. The result is a SYSCLK of 36 MHz.
+/* The board carries a crystal of 25 MHz. Two clock trees are available, and
+ * CONFIG_HAZK03_CLOCK_HSE selects between them.
  *
  * Note: the connectivity-line clock code in arch/arm/src/stm32 always drives
- * the PLL from PREDIV1. That path uses the HSE input. Thus this board supplies
- * a custom stm32_board_clockconfig() function.
- *
- * Note: PLL2 and PLL3 stay off. These two PLLs only condition the HSE input.
- *
- * Note: 36 MHz is the maximum SYSCLK for an HSI source. The multiplier acts on
- * HSI/2, and x9 is the largest permitted value.
+ * the PLL from PREDIV1, and it waits for each PLL without a limit. Thus this
+ * board supplies a custom stm32_board_clockconfig() function, which gives up
+ * and keeps the internal oscillator when a PLL does not lock.
  */
 
-#define STM32_BOARD_XTAL        8000000ul   /* Not used. The HSE stays off. */
+#define STM32_BOARD_XTAL        25000000ul
 
 #define STM32_HSI_FREQUENCY     8000000ul
 #define STM32_LSI_FREQUENCY     40000
 #define STM32_HSE_FREQUENCY     STM32_BOARD_XTAL
 #define STM32_LSE_FREQUENCY     32768
 
-/* PLL fed from HSI/2, multiplied to 36 MHz */
+#ifdef CONFIG_HAZK03_CLOCK_HSE
+
+/* The crystal path gives 72 MHz, and a clock of 48 MHz for the USB host.
+ *
+ * The crystal of 25 MHz goes to PREDIV2 with a divider of 5, thus 5 MHz.
+ * PLL2 multiplies that by 8, thus 40 MHz. PREDIV1 takes PLL2 with a divider
+ * of 5, thus 8 MHz. The main PLL multiplies that by 9, thus 72 MHz.
+ *
+ * Note: the USB host needs exactly 48 MHz, and the OTG prescaler takes the
+ * PLL oscillator at three times SYSCLK and divides it by 3. Thus 72 MHz is
+ * the only SYSCLK that serves both the core and USB.
+ */
+
+#define STM32_PLL_PREDIV2       RCC_CFGR2_PREDIV2d5
+#define STM32_PLL_PLL2MUL       RCC_CFGR2_PLL2MULx8
+#define STM32_PLL_PREDIV1       RCC_CFGR2_PREDIV1d5
+#define STM32_PLL_PLLMUL        RCC_CFGR_PLLMUL_CLKx9
+#define STM32_PLL_FREQUENCY     (72000000)
+
+#define STM32_CFGR_OTGFSPRE     RCC_CFGR_OTGFSPREd3
+
+/* Two flash wait states. This value applies above 48 MHz. */
+
+#define STM32_BOARD_FLASH_ACR_LATENCY FLASH_ACR_LATENCY_2
+
+/* The APB2 clock is equal to HCLK, thus 72 MHz. That value is the maximum. */
+
+#define STM32_RCC_CFGR_PPRE2    RCC_CFGR_PPRE2_HCLK
+
+#else
+
+/* The internal oscillator gives 36 MHz, and no clock for the USB host.
+ *
+ * The HSI of 8 MHz goes through a fixed divider of 2, thus 4 MHz. The main
+ * PLL multiplies that by 9, thus 36 MHz.
+ *
+ * Note: 36 MHz is the maximum SYSCLK from this source. The divider before the
+ * PLL is fixed, and x9 is the largest multiplier on this part.
+ *
+ * Note: PLL2 and PLL3 stay off. These two PLLs only condition the crystal.
+ */
 
 #define STM32_PLL_PLLMUL        RCC_CFGR_PLLMUL_CLKx9
 #define STM32_PLL_FREQUENCY     (36000000)
 
-/* SYSCLK and HCLK are the PLL frequency */
+/* One flash wait state. This value applies from 24 MHz to 48 MHz. */
 
-#define STM32_SYSCLK_FREQUENCY  STM32_PLL_FREQUENCY
-#define STM32_HCLK_FREQUENCY    STM32_PLL_FREQUENCY
+#define STM32_BOARD_FLASH_ACR_LATENCY FLASH_ACR_LATENCY_1
 
 /* The APB2 clock is equal to HCLK. The value of 36 MHz is less than the
  * maximum of 72 MHz.
  */
 
 #define STM32_RCC_CFGR_PPRE2    RCC_CFGR_PPRE2_HCLK
+
+#endif
+
+/* SYSCLK and HCLK are the PLL frequency */
+
+#define STM32_SYSCLK_FREQUENCY  STM32_PLL_FREQUENCY
+#define STM32_HCLK_FREQUENCY    STM32_PLL_FREQUENCY
+
 #define STM32_PCLK2_FREQUENCY   STM32_HCLK_FREQUENCY
 #define STM32_APB2_CLKIN        (STM32_PCLK2_FREQUENCY)
 
 #define STM32_APB2_TIM1_CLKIN   (STM32_PCLK2_FREQUENCY)
 #define STM32_APB2_TIM8_CLKIN   (STM32_PCLK2_FREQUENCY)
 
-/* The APB1 clock is HCLK/2, thus 18 MHz. The maximum APB1 value is 36 MHz.
- *
- * Note: this divider keeps a margin. It also agrees with the reverse
- * engineered firmware.
+/* The APB1 clock is HCLK/2. The maximum APB1 value is 36 MHz, thus this
+ * divider serves both clock trees.
  */
 
 #define STM32_RCC_CFGR_PPRE1    RCC_CFGR_PPRE1_HCLKd2
