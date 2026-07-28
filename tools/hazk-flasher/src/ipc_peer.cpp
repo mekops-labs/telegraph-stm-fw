@@ -98,14 +98,27 @@ static void ipcReport(void *arg, const struct ipc_frame_s *frame) {
                           frame->payload_len ? frame->payload[0] : 0);
             break;
 
-        case IPC_OP_STATE:
-            if (frame->payload_len != IPC_STATE_LEN) {
+        case IPC_OP_STATE: {
+            if (frame->payload_len < IPC_STATE_LEN) {
                 ipcOut("ERR state length %u\n", frame->payload_len);
                 break;
             }
+
+            // The bytes after the fixed fields are the firmware version, and
+            // they carry no terminator.
+            char fw[IPC_FWVER_MAX + 1];
+            uint16_t fwlen = frame->payload_len - IPC_STATE_LEN;
+
+            if (fwlen > IPC_FWVER_MAX) {
+                fwlen = IPC_FWVER_MAX;
+            }
+
+            memcpy(fw, &frame->payload[IPC_STATE_FWVER], fwlen);
+            fw[fwlen] = '\0';
+
             ipcOut(
                 "STATE id=%u time=%lu temp=%d.%dC frames=%u crcerr=%u "
-                "resync=%u ver=%u\n",
+                "resync=%u ver=%u fw=%s\n",
                 frame->corr_id,
                 (unsigned long)ipc_get_u32(&frame->payload[IPC_STATE_TIME]),
                 (int)((int16_t)ipc_get_u16(&frame->payload[IPC_STATE_TEMP])) / 10,
@@ -113,8 +126,10 @@ static void ipcReport(void *arg, const struct ipc_frame_s *frame) {
                 ipc_get_u16(&frame->payload[IPC_STATE_FRAMES]),
                 ipc_get_u16(&frame->payload[IPC_STATE_CRC_ERR]),
                 frame->payload[IPC_STATE_RESYNC],
-                frame->payload[IPC_STATE_VERSION]);
+                frame->payload[IPC_STATE_VERSION],
+                fw);
             break;
+        }
 
         default:
             ipcOut("RX   op=0x%02X id=%u len=%u\n", frame->opcode,

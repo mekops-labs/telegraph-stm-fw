@@ -60,6 +60,23 @@ The command `make help` gives the other targets. These are `menuconfig`,
 Note: every target runs in the container. The image holds the `arm-none-eabi`
 cross toolchain and the packages that NuttX needs. The build uses ccache.
 
+### Version
+
+The version of the firmware comes from the git tags. The script
+`tools/genversion.sh` writes it into a generated header at every build, thus
+the repository does not hold that header.
+
+A build from a tag gives that tag, such as `v0.1.0`. A build from a later
+commit adds the count of the commits and the short hash. A tree with local
+changes gets the suffix `-dirty`. A repository without a tag gives the short
+hash alone.
+
+The main panel shows the version for three seconds after a reset. A `0x11`
+state frame also carries it, thus the edge MCU reads the version of the
+running image. Refer to [IPC library](#ipc-library).
+
+Note: the panel holds 11 characters, thus a longer version loses its end.
+
 ### Board configuration
 
 The board directory is `boards/hazk03-stm32f105rb/`. The build keeps it

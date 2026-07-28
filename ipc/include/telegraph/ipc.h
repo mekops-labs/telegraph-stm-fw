@@ -156,6 +156,14 @@ extern "C" {
 
 /* The payload of IPC_OP_STATE. All the multiple-byte fields are
  * little-endian.
+ *
+ * The first IPC_STATE_LEN bytes are always present. The bytes that come after
+ * them are the version of the firmware, as text without a terminator. The
+ * length of that text is the length of the payload less IPC_STATE_LEN.
+ *
+ * Note: the version comes from the git tags of the firmware. The edge MCU
+ * compares it with the version of the image that it holds. Thus it flashes the
+ * board only when the two differ.
  */
 
 #define IPC_STATE_LEN       12u
@@ -166,6 +174,11 @@ extern "C" {
 #define IPC_STATE_CRC_ERR   8u   /* u16: the count of the CRC errors       */
 #define IPC_STATE_RESYNC    10u  /* u8:  the count of the resync operations */
 #define IPC_STATE_VERSION   11u  /* u8:  IPC_PROTO_VERSION                 */
+#define IPC_STATE_FWVER     12u  /* text: the version of the firmware      */
+
+/* The longest version text that a STATE frame carries. */
+
+#define IPC_FWVER_MAX       32u
 
 /****************************************************************************
  * Byte order

@@ -19,6 +19,9 @@ third_party/nuttx/Make.defs
 boards/*/scripts/ld.script.tmp
 boards/*/src/Make.dep
 
+# tools/genversion.sh writes this header at every build
+boards/*/src/version.h
+
 # The WiFi credentials of the tools stay out of the repository
 credentials.ini
 .pio/

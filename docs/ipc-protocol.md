@@ -159,14 +159,14 @@ The TM1629A has its own control for the digits. The panels have no such
 control, thus the driver makes the on-time of each row shorter. The level 8 is
 the full on-time.
 
-Note: a value above 7 gets a NACK with the code `0x03`.
+Note: a value above 8 gets a NACK with the code `0x03`.
 
 The reply is an ACK.
 
 ### `0x10` Request the state, `0x11` the state
 
 The request has an empty payload. The reply is a `0x11` frame with the same
-correlation ID. This frame holds 12 bytes:
+correlation ID. The first 12 bytes are always present:
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -176,6 +176,19 @@ correlation ID. This frame holds 12 bytes:
 | 8 | 2 | The count of the CRC errors |
 | 10 | 1 | The count of the resynchronization operations |
 | 11 | 1 | The version of the protocol, currently 1 |
+| 12 | n | The version of the firmware, text without a terminator |
+
+The length of the version text is the length of the payload less 12. The
+longest text is 32 bytes.
+
+The version comes from the git tags of the firmware. A build from a tag gives
+that tag, such as `v0.1.0`. A build from a later commit adds the count of the
+commits and the short hash. A build from a tree with local changes adds the
+suffix `-dirty`. A repository without a tag gives the short hash alone.
+
+Note: the edge MCU compares this text with the version of the image that it
+holds. Thus it writes the firmware only when the two differ. A `-dirty` text
+never matches a released image, thus such a build always gets written again.
 
 Note: a `0x11` frame gets no ACK. The frame is itself the reply.
 
