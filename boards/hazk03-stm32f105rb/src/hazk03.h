@@ -151,6 +151,10 @@ struct i2c_master_s *hazk03_rtc_initialize(void);
 
 int hazk03_flash_initialize(void);
 
+/* The extended font of the panels, on the partition of the assets. */
+
+#define HAZK03_FONT_PATH  "/assets/fonts/default.tgf"
+
 /* The value that turns the sleep period off. */
 
 #define HAZK03_SLEEP_OFF  0xffffu
@@ -222,18 +226,25 @@ void stm32_spidev_initialize(void);
 #define HAZK03_PANEL_MAIN  0
 #define HAZK03_PANEL_SUB   1
 
+/* The place of a text across a panel. */
+
+#define HAZK03_ALIGN_CENTRE 0
+#define HAZK03_ALIGN_LEFT   1
+#define HAZK03_ALIGN_RIGHT  2
+
 /****************************************************************************
  * Name: hazk03_display_text
  *
  * Description:
  *   Put a text on one panel. An empty text clears that panel.
+ *   The text goes in the middle of the panel, at its left or at its right.
  *
  *   Note: the function takes the lock of the framebuffer. Thus a scan pass
  *   never gives a partial image.
  *
  ****************************************************************************/
 
-int hazk03_display_text(int panel, const char *s, size_t len);
+int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align);
 
 /****************************************************************************
  * Name: hazk03_display_temperature

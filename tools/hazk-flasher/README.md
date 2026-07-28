@@ -118,8 +118,9 @@ A flash operation stops the peer.
 | `ipc tempoff <tenths>` | Correct the temperature, in tenths of a degree |
 | `ipc sleep <start> <end>` | Stop the light between two times, each HH or HH:MM |
 | `ipc sleep off` | Keep the light through the day |
-| `ipc large <text>` | Put a text on the main panel |
-| `ipc small <text>` | Put a text on the sub panel |
+| `ipc large [-l\|-c\|-r] <text>` | Put a text on the main panel |
+| `ipc small [-l\|-c\|-r] <text>` | Put a text on the sub panel |
+| `ipc putfile <path> <hex>` | Write a file into the assets, such as a font |
 | `ipc clear` | Clear both panels |
 | `ipc bad` | Transmit an unknown opcode, thus the target sends a NACK |
 | `ipc badlen` | Transmit an incorrect length, thus the target sends a NACK |

@@ -20,6 +20,9 @@ BUILD       := build
 # repository does not hold it.
 VERSION_H   := $(BOARD_DIR)/src/version.h
 
+# The path of the extended font on the board.
+FONT_PATH   := /assets/fonts/default.tgf
+
 # The flasher is the firmware of the edge MCU. It builds with PlatformIO in
 # its own container image.
 FLASHER_DIR   := tools/hazk-flasher
@@ -27,7 +30,7 @@ FLASHER_IMAGE := hazk-pio
 FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
-        savedefconfig test version flasher flasher-image flasher-ota
+        savedefconfig test version font flasher flasher-image flasher-ota
 
 help:
 	@echo "Targets:"
@@ -39,6 +42,7 @@ help:
 	@echo "                (UPLOAD_PORT=<address> when mDNS does not resolve)"
 	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
+	@echo "  font          build the extended font for the flash"
 	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
@@ -83,6 +87,16 @@ build: configure version
 	$(RUN) $(MAKE) -C $(NUTTX) -j$(shell nproc)
 	@echo
 	@$(RUN) sh -c 'size $(NUTTX)/nuttx' || true
+
+# The extended font of the panels. The board reads it from its flash, thus
+# this file is not part of the firmware image.
+FONT_FILE := $(BUILD)/default.tgf
+
+font:
+	@mkdir -p $(BUILD)
+	@python3 tools/mkfont.py -o $(FONT_FILE)
+	@echo "Send it with: curl -s --get --data-urlencode \"cmd=putfile \
+$(FONT_PATH) $$(xxd -p -c 100000 $(FONT_FILE))\" http://<address>/ipc"
 
 # The flasher has its own toolchain, thus it has its own image. Both of these
 # targets start a container, thus they run on the host only.

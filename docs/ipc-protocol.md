@@ -129,19 +129,36 @@ correct after a power interruption.
 **The RTC keeps UTC. The offset changes the panels only.** Thus a change of
 the season needs no change of the RTC, and the `0x11` frame always gives UTC.
 
-The board has no store for the offset. Send the offset again after each reset
-of the board.
+The board keeps the offset in its flash. Thus the edge MCU sends it one time,
+and not after each reset of the board.
 
 The reply is an ACK.
 
-### `0x02` and `0x03` Set the text
+### `0x02` and `0x03` Set the text of a panel
 
-The payload holds the characters. The text needs no terminator.
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The attributes |
+| 1 | n | The text in UTF-8, without a terminator |
 
 An empty payload clears the panel.
 
-The font is 5x7. The main panel holds 11 characters, and the sub panel holds
-3 characters. The driver removes the characters above the limit.
+The bits 0 and 1 of the attributes give the place of the text across the
+panel:
+
+| Value | Place |
+| :--- | :--- |
+| 0 | The middle |
+| 1 | The left |
+| 2 | The right |
+
+The other bits are 0. Any other value gets a NACK with the code `0x03`.
+
+The font of the firmware holds the ASCII table. The extended font in the flash
+holds the other letters. A character that neither font holds gives a space.
+
+The main panel holds 11 characters, and the sub panel holds 3. A longer text
+keeps its start, and it loses its end.
 
 The reply is an ACK.
 
@@ -208,7 +225,7 @@ correlation ID. The first 12 bytes are always present:
 | 6 | 2 | The count of the accepted frames |
 | 8 | 2 | The count of the CRC errors |
 | 10 | 1 | The count of the resynchronization operations |
-| 11 | 1 | The version of the protocol, currently 1 |
+| 11 | 1 | The version of the protocol, currently 2 |
 | 12 | n | The version of the firmware, text without a terminator |
 
 The length of the version text is the length of the payload less 12. The

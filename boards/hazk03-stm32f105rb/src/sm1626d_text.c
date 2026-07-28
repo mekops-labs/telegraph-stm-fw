@@ -4,37 +4,72 @@
  *
  * Note: this file is separate from the driver. Thus a build without text
  * pays no flash for the font.
+ *
+ * Note: the text is in UTF-8. The extended font gives the letters outside the
+ * ASCII table, and the font of the firmware gives the others.
  */
 
 #include <nuttx/config.h>
 
-#include "font5x7.h"
+#include "fontext.h"
 #include "sm1626d.h"
+
+int sm1626d_textwidth(const char *s, size_t len)
+{
+  const uint16_t *cols;
+  size_t i = 0;
+  int count = 0;
+
+  while (i < len)
+    {
+      i += fontext_next(&s[i], len - i, &cols);
+      count++;
+    }
+
+  if (count == 0)
+    {
+      return 0;
+    }
+
+  /* Each character takes its columns, and a gap follows each one except the
+   * last.
+   */
+
+  return (count * FONTEXT_ADVANCE) - (FONTEXT_ADVANCE - FONTEXT_WIDTH);
+}
 
 void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
                       const char *s, size_t len)
 {
-  size_t i;
+  size_t i = 0;
 
-  for (i = 0; i < len; i++)
+  /* The cell is taller than the letter. Thus the top of the cell goes above
+   * the top of the letter, and a mark such as an acute has its own rows.
+   */
+
+  y -= FONTEXT_ASCENT;
+
+  while (i < len)
     {
-      const uint8_t *glyph = font5x7_glyph(s[i]);
+      const uint16_t *cols;
       int col;
 
-      for (col = 0; col < FONT5X7_WIDTH; col++)
+      i += fontext_next(&s[i], len - i, &cols);
+
+      for (col = 0; col < FONTEXT_WIDTH; col++)
         {
           int row;
 
-          for (row = 0; row < FONT5X7_HEIGHT; row++)
+          for (row = 0; row < FONTEXT_ROWS; row++)
             {
-              if (glyph[col] & (1u << row))
+              if (cols[col] & (1u << row))
                 {
                   sm1626d_drawpixel(dev, x + col, y + row, true);
                 }
             }
         }
 
-      x += FONT5X7_ADVANCE;
+      x += FONTEXT_ADVANCE;
 
       if (x >= dev->width)
         {

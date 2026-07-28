@@ -86,6 +86,28 @@ running image. Refer to [IPC library](#ipc-library).
 
 Note: the panel holds 11 characters, thus a longer version loses its end.
 
+### Fonts
+
+The firmware holds a font of 5x7 for the ASCII table. That font is the
+fallback, thus a board with an empty flash keeps a legible display.
+
+The extended font holds the letters outside the ASCII table, and the board
+reads it from `/assets/fonts/default.tgf` in its flash. Its cell has 10 rows
+for a letter of 7 rows: two rows above the letter carry a mark such as an
+acute, and one row below carries a mark such as an ogonek. Thus a letter keeps
+its full height.
+
+```sh
+make font                   # build it, and print the command that sends it
+```
+
+The tool `tools/mkfont.py` takes the shapes of the ASCII table from the source
+of the firmware, and it puts a mark on some of them. Thus the two fonts keep
+one set of shapes.
+
+Note: a text of the protocol is in UTF-8. A character that neither font holds
+gives a space.
+
 ### Board configuration
 
 The board directory is `boards/hazk03-stm32f105rb/`. The build keeps it

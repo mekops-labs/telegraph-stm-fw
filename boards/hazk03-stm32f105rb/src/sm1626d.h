@@ -79,4 +79,17 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev);
 void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
                       const char *s, size_t len);
 
+/****************************************************************************
+ * Name: sm1626d_textwidth
+ *
+ * Description:
+ *   Give the width of a text in pixels.
+ *
+ *   Note: the text is in UTF-8, thus the count of the characters is not the
+ *   count of the bytes.
+ *
+ ****************************************************************************/
+
+int sm1626d_textwidth(const char *s, size_t len);
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_SM1626D_H */

@@ -20,6 +20,7 @@
 #include <nuttx/i2c/i2c_master.h>
 
 #include "font5x7.h"
+#include "fontext.h"
 #include "hazk03.h"
 #include "ds3231.h"
 #include "sm1626d.h"
@@ -113,73 +114,32 @@ static uint16_t g_wakemin  = HAZK03_SLEEP_OFF;
 
 static bool g_asleep;
 
-/* This is a 21x14 heart image. Bit 0 is the column at the left.
- *
- * Note: this image comes from the reverse engineered firmware. Thus a person
- * can compare the sub-screen output with that firmware.
+/* The panels carry their own content until the edge MCU sends a text. Thus a
+ * board with no link still gives a greeting and the day of the week.
  */
 
-static const uint32_t g_heart[SUB_H] =
+static bool g_main_default = true;
+static bool g_sub_default  = true;
+
+/* The day that the sub panel carries. The panel takes a new text when the day
+ * changes, and not at each tick.
+ */
+
+static int g_sub_wday = -1;
+
+/* The greeting of the main panel, in Polish. The text is in UTF-8, thus the
+ * extended font from the flash gives the letter with the acute. */
+
+#define GREETING  "Dzień dobry"
+
+/* The days of the week in Polish, from Sunday. The sub panel holds three
+ * characters.
+ */
+
+static const char *g_weekday[] =
 {
-  0x000000, 0x01e0f0, 0x03f1f8, 0x07fbfc, 0x07fffc, 0x07fffc, 0x03fff8,
-  0x01fff0, 0x00ffe0, 0x007fc0, 0x003f80, 0x001f00, 0x000e00, 0x000400
+  "Nie", "Pon", "Wto", "Śro", "Czw", "Pią", "Sob"
 };
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/* Draw a border and the two diagonals.
- *
- * Note: an error in the column calculation gives a broken diagonal. The
- * border shows that all five shift registers reach their outer columns.
- */
-
-static void draw_geometry_test(struct sm1626d_dev_s *dev)
-{
-  int x;
-  int y;
-
-  sm1626d_clear(dev);
-
-  for (x = 0; x < MAIN_W; x++)
-    {
-      sm1626d_drawpixel(dev, x, 0, true);
-      sm1626d_drawpixel(dev, x, MAIN_H - 1, true);
-    }
-
-  for (y = 0; y < MAIN_H; y++)
-    {
-      sm1626d_drawpixel(dev, 0, y, true);
-      sm1626d_drawpixel(dev, MAIN_W - 1, y, true);
-    }
-
-  for (x = 0; x < MAIN_W; x++)
-    {
-      y = (x * (MAIN_H - 1)) / (MAIN_W - 1);
-      sm1626d_drawpixel(dev, x, y, true);
-      sm1626d_drawpixel(dev, x, MAIN_H - 1 - y, true);
-    }
-}
-
-static void draw_heart(struct sm1626d_dev_s *dev)
-{
-  int x;
-  int y;
-
-  sm1626d_clear(dev);
-
-  for (y = 0; y < SUB_H; y++)
-    {
-      for (x = 0; x < SUB_W; x++)
-        {
-          if (g_heart[y] & (1ul << x))
-            {
-              sm1626d_drawpixel(dev, x, y, true);
-            }
-        }
-    }
-}
 
 /* Put the settings into the flash. The store makes no write if the values are
  * the same as the values that it holds.
@@ -264,6 +224,69 @@ static void display_update_sleep(const struct tm *t)
     }
 }
 
+/* Give the first column of a text on one panel.
+ *
+ * Note: a text that is wider than the panel starts at the left edge. Thus its
+ * end goes past that panel, and its start stays visible.
+ */
+
+static int text_column(struct sm1626d_dev_s *dev, const char *s, size_t len,
+                       uint8_t align)
+{
+  int space = dev->width - sm1626d_textwidth(s, len);
+
+  if (space <= 0)
+    {
+      return 0;
+    }
+
+  switch (align)
+    {
+      case HAZK03_ALIGN_LEFT:
+        return 0;
+
+      case HAZK03_ALIGN_RIGHT:
+        return space;
+
+      default:
+        return space / 2;
+    }
+}
+
+/* Put a text on one panel, and take the lock of the framebuffer. */
+
+static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
+                      uint8_t align)
+{
+  int x = text_column(dev, s, len, align);
+  int y = (dev->height - FONT5X7_HEIGHT) / 2;
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_clear(dev);
+  sm1626d_drawtext(dev, x, y, s, len);
+  nxmutex_unlock(&g_fblock);
+}
+
+/* Put a text of the board on one panel. These texts go in the middle. */
+
+static void draw_default(struct sm1626d_dev_s *dev, const char *s)
+{
+  draw_text(dev, s, strlen(s), HAZK03_ALIGN_CENTRE);
+}
+
+/* Put the content of the board on the panels that the edge MCU has not
+ * taken. The sub panel takes a new text when the day changes.
+ */
+
+static void display_defaults(const struct tm *t)
+{
+  if (g_sub_default && t->tm_wday != g_sub_wday)
+    {
+      g_sub_wday = t->tm_wday;
+      draw_default(&g_sub, g_weekday[t->tm_wday % 7]);
+    }
+}
+
 static void show_time(const struct tm *t, int16_t temp)
 {
   int mon = t->tm_mon + 1;
@@ -306,15 +329,6 @@ static int display_scanner(int argc, char *argv[])
 
           passes = 0;
 
-          /* The version leaves the panel after its time. */
-
-          if (version_left > 0 && --version_left == 0)
-            {
-              nxmutex_lock(&g_fblock);
-              draw_geometry_test(&g_main);
-              nxmutex_unlock(&g_fblock);
-            }
-
           /* Read the system clock. The DS3231 with the battery keeps that
            * clock. Thus this step uses no bus. Only the temperature uses the
            * bus.
@@ -322,6 +336,18 @@ static int display_scanner(int argc, char *argv[])
 
           now = time(NULL) + (time_t)g_utcoffset * 60;
           gmtime_r(&now, &tm);
+
+          /* The greeting takes the main panel after the version. */
+
+          if (version_left > 0 && --version_left == 0 && g_main_default)
+            {
+              draw_default(&g_main, GREETING);
+            }
+
+          if (version_left == 0)
+            {
+              display_defaults(&tm);
+            }
 
           if (g_i2c != NULL && ++ticks >= TEMP_EVERY_TICKS)
             {
@@ -352,18 +378,24 @@ static int display_scanner(int argc, char *argv[])
  * Public Functions
  ****************************************************************************/
 
-int hazk03_display_text(int panel, const char *s, size_t len)
+int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align)
 {
   struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
 
-  /* The panel has 14 rows, and the font has 7 rows. Thus this offset puts the
-   * text in the middle.
+  /* The edge MCU owns this panel from now on. Thus the content of the board
+   * does not return over its text.
    */
 
-  nxmutex_lock(&g_fblock);
-  sm1626d_clear(dev);
-  sm1626d_drawtext(dev, 0, (dev->height - FONT5X7_HEIGHT) / 2, s, len);
-  nxmutex_unlock(&g_fblock);
+  if (panel == HAZK03_PANEL_SUB)
+    {
+      g_sub_default = false;
+    }
+  else
+    {
+      g_main_default = false;
+    }
+
+  draw_text(dev, s, len, align);
 
   return OK;
 }
@@ -450,9 +482,7 @@ int hazk03_display_init(void)
    * person at the bench needs no link to the edge MCU.
    */
 
-  sm1626d_drawtext(&g_main, 0, (MAIN_H - FONT5X7_HEIGHT) / 2,
-                   HAZK03_VERSION, strlen(HAZK03_VERSION));
-  draw_heart(&g_sub);
+  draw_default(&g_main, HAZK03_VERSION);
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
                        display_scanner, NULL);
