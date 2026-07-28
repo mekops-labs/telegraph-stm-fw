@@ -17,8 +17,15 @@
 // The line is idle after this period without a byte.
 #define IPC_IDLE_MS 20
 
-// A request gets no more time than this before the peer reports a timeout.
+// A request gets no more time than this before the peer sends it again.
 #define IPC_REPLY_MS 500
+
+// The count of the attempts for one request, the first one included.
+//
+// Note: every operation of this protocol gives the same result when it runs
+// twice. Thus a request that lost its frame goes out again without harm, and
+// a write of a file carries both marks in one frame.
+#define IPC_ATTEMPTS 3
 
 static struct ipc_parser_s g_parser;
 static uint8_t g_tx[IPC_FRAME_MAX];
@@ -40,6 +47,9 @@ static bool g_replied = false;
 static uint8_t g_credits = 1;
 static uint8_t g_minCredits = 0xff;
 static uint32_t g_stalls = 0;
+
+// The count of the requests that went out again after a timeout.
+static uint32_t g_retries = 0;
 
 static unsigned long g_lastByteMs = 0;
 
@@ -138,17 +148,14 @@ static void ipcReport(void *arg, const struct ipc_frame_s *frame) {
     }
 }
 
-// Transmit a frame, then wait for the reply of that correlation ID.
+// Transmit a frame, then wait for the reply of that correlation ID. A request
+// without a reply goes out again.
+//
+// Note: every attempt carries the same correlation ID. Thus a late reply to an
+// earlier attempt still answers this request.
 static void ipcRequest(uint8_t opcode, const void *payload, uint16_t len) {
     if (!g_active) {
         ipcOut("ERR ipc is off\n");
-        return;
-    }
-
-    if (g_credits == 0) {
-        // The receiver has no space. Refer to the flow control of the
-        // protocol.
-        ipcOut("ERR no credits, wait for an ACK\n");
         return;
     }
 
@@ -160,16 +167,41 @@ static void ipcRequest(uint8_t opcode, const void *payload, uint16_t len) {
         return;
     }
 
-    g_waitCorrId = id;
-    g_replied = false;
-    Serial1.write(g_tx, (size_t)n);
+    for (int attempt = 1; attempt <= IPC_ATTEMPTS; attempt++) {
+        if (g_credits == 0) {
+            // The receiver has no space. Wait for an ACK to give some.
+            unsigned long until = millis() + IPC_REPLY_MS;
 
-    unsigned long deadline = millis() + IPC_REPLY_MS;
-    while (!g_replied && (long)(millis() - deadline) < 0) {
-        ipcPoll();
+            while (g_credits == 0 && (long)(millis() - until) < 0) {
+                ipcPoll();
+            }
+
+            if (g_credits == 0) {
+                ipcOut("ERR no credits, wait for an ACK\n");
+                return;
+            }
+        }
+
+        g_waitCorrId = id;
+        g_replied = false;
+        Serial1.write(g_tx, (size_t)n);
+
+        unsigned long deadline = millis() + IPC_REPLY_MS;
+        while (!g_replied && (long)(millis() - deadline) < 0) {
+            ipcPoll();
+        }
+
+        if (g_replied) {
+            if (attempt > 1) {
+                ipcOut("INFO id=%u answered on attempt %d\n", id, attempt);
+            }
+            return;
+        }
+
+        g_retries++;
     }
 
-    if (!g_replied) ipcOut("ERR no reply for id=%u\n", id);
+    ipcOut("ERR no reply for id=%u after %d attempts\n", id, IPC_ATTEMPTS);
 }
 
 // Transmit bytes that hold no valid frame, then transmit a good frame.
@@ -246,6 +278,7 @@ static void ipcBurst(unsigned int count) {
     g_quiet = false;
     ipcOut("INFO sent=%u in %lums min_credits=%u stalls=%lu\n", sent,
            millis() - t0, g_minCredits, (unsigned long)g_stalls);
+    ipcOut("INFO retries=%lu\n", (unsigned long)g_retries);
     ipcOut("INFO parser frames=%lu crcerr=%lu badlen=%lu resync=%lu\n",
            (unsigned long)g_parser.stats.frames,
            (unsigned long)g_parser.stats.crc_errors,
