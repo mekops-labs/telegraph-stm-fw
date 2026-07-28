@@ -86,6 +86,41 @@ running image. Refer to [IPC library](#ipc-library).
 
 Note: the panel holds 11 characters, thus a longer version loses its end.
 
+### The flash of the module
+
+A Winbond W25Q32 of 4 MB sits on SPI1. One erase sector is 4096 bytes, and the
+driver gives blocks of 256 bytes. Thus one erase sector is 16 blocks.
+
+| Partition | Sectors | Size | Content |
+| :--- | :--- | :--- | :--- |
+| settings | 0 to 1 | 8 KB | Two records, one for each sector |
+| assets | 2 to 1023 | 4088 KB | A SmartFS file system at `/assets` |
+
+**The settings partition is not a file system.** Each sector holds one record
+with a check value. A write goes to the sector that the board does not use,
+and the board then takes the record with the higher sequence number. Thus a
+loss of power during a write keeps the record from before that write.
+
+The cost of one write is one erase cycle on one sector. A write with the same
+values does nothing, thus a setting that does not change takes no cycle. The
+part gives at least 100 000 cycles for each sector, and the two sectors take
+the writes in turn. **The store thus accepts at least 200 000 changes.** A
+change comes from a person or from the edge MCU, thus that number is far above
+the life of the device.
+
+Note: a new field of the settings joins the end of the structure, and never
+the middle. The board reads a record of an older firmware as the first bytes
+of the new structure, and the fields that the record lacks take their
+defaults. Thus a step of the firmware loses no setting.
+
+**The assets partition carries a file system**, because the edge MCU sends its
+content and the number and the size of those files change. SmartFS gives the
+wear levelling. A new board has no file system there, thus the board makes an
+empty one at the first start.
+
+Note: the file system costs near 13 KB of RAM for this partition. That is the
+largest single user of memory on the board.
+
 ### Fonts
 
 The firmware holds a font of 5x7 for the ASCII table. That font is the

@@ -94,7 +94,7 @@
 #define W25_CONFIG_NBLOCKS    (W25_CONFIG_SECTORS * W25_BLOCKS_PER_SECTOR)
 #define W25_ASSETS_FIRSTBLOCK W25_CONFIG_NBLOCKS
 #define W25_ASSETS_NBLOCKS    ((W25_TOTAL_SECTORS * W25_BLOCKS_PER_SECTOR) - \
-                               W25_CONFIG_NBLOCKS)
+                               W25_ASSETS_FIRSTBLOCK)
 
 /****************************************************************************
  * Public Function Prototypes
@@ -159,7 +159,13 @@ int hazk03_flash_initialize(void);
 
 #define HAZK03_SLEEP_OFF  0xffffu
 
-/* The settings that the board keeps through a loss of power. */
+/* The settings that the board keeps through a loss of power.
+ *
+ * Note: a new field joins the end of this structure, and it never joins the
+ * middle of it. The store then reads a record of an older firmware as the
+ * first bytes of this structure, and the new field keeps its default. Thus a
+ * step of the firmware loses no setting.
+ */
 
 struct hazk03_config_s
 {
@@ -170,6 +176,23 @@ struct hazk03_config_s
   uint16_t sleepmin;      /* Minute of the day that stops the display    */
   uint16_t wakemin;       /* Minute of the day that starts it again      */
 };
+
+/* The settings of a board with an empty store. A record that lacks a field
+ * takes its value from here.
+ *
+ * Note: a default of zero is wrong for some fields. The minute that stops the
+ * display is one of them, because zero is midnight.
+ */
+
+#define HAZK03_CONFIG_DEFAULTS \
+  {                            \
+    0,                         /* utcoffset  */ \
+    5,                         /* digits     */ \
+    8,                         /* panels     */ \
+    0,                         /* tempoffset */ \
+    HAZK03_SLEEP_OFF,          /* sleepmin   */ \
+    HAZK03_SLEEP_OFF           /* wakemin    */ \
+  }
 
 /****************************************************************************
  * Name: hazk03_config_load
