@@ -313,6 +313,13 @@ extern "C" {
 
 #define IPC_LIST_MAX         192u
 
+/* The rate of the link. The STM32 takes its rate from CONFIG_USART1_BAUD, and
+ * its server refuses to build if that value differs from this one. Thus the
+ * two sides never take different rates.
+ */
+
+#define IPC_BAUD             460800u
+
 
 /* The payload of IPC_OP_ANIM_SPEED.
  *
