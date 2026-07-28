@@ -93,6 +93,11 @@ static mutex_t g_fblock = NXMUTEX_INITIALIZER;
 
 static int16_t g_utcoffset;
 
+/* The levels that the board keeps in the flash with the offset above. */
+
+static uint8_t g_bright_digits = BRIGHTNESS;
+static uint8_t g_bright_panels = BRIGHTNESS;
+
 /* This is a 21x14 heart image. Bit 0 is the column at the left.
  *
  * Note: this image comes from the reverse engineered firmware. Thus a person
@@ -159,6 +164,23 @@ static void draw_heart(struct sm1626d_dev_s *dev)
             }
         }
     }
+}
+
+/* Put the settings into the flash. The store makes no write if the values are
+ * the same as the values that it holds.
+ */
+
+static void display_persist(void)
+{
+#ifdef CONFIG_MTD_W25
+  struct hazk03_config_s cfg;
+
+  cfg.utcoffset = g_utcoffset;
+  cfg.digits    = g_bright_digits;
+  cfg.panels    = g_bright_panels;
+
+  hazk03_config_save(&cfg);
+#endif
 }
 
 static void show_time(const struct tm *t, int16_t temp)
@@ -267,13 +289,34 @@ int hazk03_display_brightness(uint8_t digits, uint8_t panels)
   sm1626d_setbrightness(&g_sub, panels_level, panels_on);
   nxmutex_unlock(&g_fblock);
 
+  g_bright_digits = digits;
+  g_bright_panels = panels;
+  display_persist();
+
   return OK;
 }
 
 void hazk03_display_utcoffset(int16_t minutes)
 {
   g_utcoffset = minutes;
+  display_persist();
 }
+
+#ifdef CONFIG_MTD_W25
+void hazk03_display_setconfig(const struct hazk03_config_s *cfg)
+{
+  /* These values come from the store, thus this function writes nothing back
+   * to it. A write for each of them would also give a record that holds one
+   * new value and one default value.
+   */
+
+  g_utcoffset     = cfg->utcoffset;
+  g_bright_digits = cfg->digits;
+  g_bright_panels = cfg->panels;
+
+  hazk03_display_brightness(cfg->digits, cfg->panels);
+}
+#endif
 
 int16_t hazk03_display_temperature(void)
 {
