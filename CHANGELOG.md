@@ -5,6 +5,22 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The board makes an empty file system on the partition of the assets when the
+  mount fails. Thus a new board needs no step by hand.
+
+### Changed
+
+- **The record of the settings carries a version and a length.** A field joins
+  the end of the structure alone, thus the board reads a record of an older
+  firmware as the first bytes of the new structure. The fields that the record
+  lacks take their defaults. A step of the firmware thus loses no setting.
+- This layout replaces the one of 0.1.1, and it does so one time. A board that
+  comes from 0.1.1 starts from the default settings.
+
 ## [0.1.1] - 2026-07-28
 
 ### Added
