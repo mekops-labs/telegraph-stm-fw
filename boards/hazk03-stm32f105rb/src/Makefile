@@ -7,7 +7,7 @@
 
 include $(TOPDIR)/Make.defs
 
-CSRCS  = stm32_boot.c stm32_bringup.c stm32_clockconfig.c
+CSRCS  = stm32_boot.c stm32_bringup.c stm32_clockconfig.c stm32_hse.c
 CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c
 
 # Every configuration shows the version on the main panel at start.

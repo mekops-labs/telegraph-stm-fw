@@ -739,8 +739,12 @@ static int ipc_server(int argc, char *argv[])
 {
   struct ipc_ctx_s *ctx = g_ipc;
   uint8_t buf[IPC_READ_CHUNK];
+  char hse[HAZK03_HSE_REPORT_MAX];
 
   ipc_log(ctx, "telegraph ipc ready");
+
+  hazk03_hse_probe(hse, sizeof(hse));
+  ipc_log(ctx, hse);
 
   for (; ; )
     {
