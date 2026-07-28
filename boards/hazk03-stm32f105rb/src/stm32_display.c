@@ -48,6 +48,20 @@
 
 #define ROW_US            200
 
+/* The transfer of one row goes into this many parts, and the timer gives one
+ * interrupt for each part. A part must be shorter than one byte of the UART,
+ * which is 21.7 us at 460800 baud. Thus the link keeps its bytes.
+ */
+
+#define SHIFT_CHUNKS      4
+
+/* The priority of the timer interrupt. A larger value is a lower priority on
+ * this core, and the default of the system is 0x80.
+ */
+
+#define DISPLAY_IRQ_PRIORITY 0xc0
+#define CHUNK_US          (ROW_US / SHIFT_CHUNKS)
+
 /* The timer that paces the rows. TIM3 has no other user on this board. */
 
 #define DISPLAY_TIMER     3
@@ -354,8 +368,7 @@ static void show_time(const struct tm *t, int16_t temp)
 static int display_ontimer(int irq, void *context, void *arg)
 {
   struct sm1626d_dev_s *dev;
-  int row;
-  int on_us;
+  int chunk = -1;
 
   if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC1IF))
     {
@@ -366,60 +379,71 @@ static int display_ontimer(int irq, void *context, void *arg)
       sm1626d_output(false);
     }
 
-  if (!STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
+  if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
     {
-      return OK;
-    }
+      int on_us;
 
-  STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
 
-  /* The panels share every line but the data. Thus one panel takes the whole
-   * row, and the two take their rows in turn.
-   */
-
-  sm1626d_output(false);
-
-  if (g_fbbusy)
-    {
-      /* A writer holds the framebuffer. This row keeps no light, and the next
-       * image carries the new content.
+      /* Every bit of the row is in the register now. The latch gives them to
+       * the panel, and the light of this row starts.
        */
 
-      return OK;
-    }
+      dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
+      sm1626d_latch();
 
-  dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
-  row = g_slot % SM1626D_ROWS;
-
-  if (++g_slot >= SM1626D_ROWS * 2)
-    {
-      g_slot = 0;
-      g_frames++;
-    }
-
-  sm1626d_shiftrow(dev, row);
-
-  /* The transfer took part of the row, thus the time with light comes from
-   * the counter now and not from the start of the row.
-   */
-
-  on_us = sm1626d_ontime(dev, ROW_US);
-
-  if (on_us > 0)
-    {
-      uint32_t now = STM32_TIM_GETCOUNTER(g_tim);
-
-      sm1626d_output(true);
-
-      if (now + on_us < ROW_US)
+      on_us = sm1626d_ontime(dev, ROW_US);
+      if (on_us > 0)
         {
-          STM32_TIM_SETCOMPARE(g_tim, 1, now + on_us);
-          STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
+          sm1626d_output(true);
+
+          if (on_us < ROW_US)
+            {
+              STM32_TIM_SETCOMPARE(g_tim, 1, on_us);
+              STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
+            }
         }
 
-      /* The row keeps its light to its end when the time does not fit. The
-       * update of the next row then takes that light away.
-       */
+      /* The next row belongs to the other panel. */
+
+      if (++g_slot >= SM1626D_ROWS * 2)
+        {
+          g_slot = 0;
+          g_frames++;
+        }
+
+      chunk = 0;
+    }
+  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC2IF))
+    {
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC2IF);
+      chunk = 1;
+    }
+  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC3IF))
+    {
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC3IF);
+      chunk = 2;
+    }
+  else if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC4IF))
+    {
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC4IF);
+      chunk = 3;
+    }
+
+  /* Send one part of the next row while the panel holds the row of the last
+   * latch. A part is short, thus the UART keeps its bytes.
+   */
+
+  if (chunk >= 0 && !g_fbbusy)
+    {
+      int total;
+      int per;
+
+      dev   = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
+      total = sm1626d_rowbits(dev);
+      per   = (total + SHIFT_CHUNKS - 1) / SHIFT_CHUNKS;
+
+      sm1626d_shiftbits(dev, g_slot % SM1626D_ROWS, chunk * per, per);
     }
 
   return OK;
@@ -611,7 +635,26 @@ int hazk03_display_init(void)
   STM32_TIM_SETCLOCK(g_tim, 1000000);
   STM32_TIM_SETPERIOD(g_tim, ROW_US);
   STM32_TIM_SETISR(g_tim, display_ontimer, NULL, 0);
-  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE);
+
+  /* The update starts a row. The channels 2, 3 and 4 give the parts of the
+   * transfer inside that row, and the channel 1 ends the light.
+   */
+
+  STM32_TIM_SETCOMPARE(g_tim, 2, CHUNK_US);
+  STM32_TIM_SETCOMPARE(g_tim, 3, CHUNK_US * 2);
+  STM32_TIM_SETCOMPARE(g_tim, 4, CHUNK_US * 3);
+
+  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE | GTIM_DIER_CC2IE |
+                             GTIM_DIER_CC3IE | GTIM_DIER_CC4IE);
+  /* The transfer of a row holds the CPU longer than one byte of the UART at
+   * 460800 baud, which is 21.7 us. Thus this interrupt takes a priority below
+   * the others, and the UART takes its bytes while a row goes out.
+   */
+
+#ifdef CONFIG_ARCH_IRQPRIO
+  up_prioritize_irq(STM32_IRQ_TIM3, DISPLAY_IRQ_PRIORITY);
+#endif
+
   STM32_TIM_SETMODE(g_tim, STM32_TIM_MODE_UP);
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
