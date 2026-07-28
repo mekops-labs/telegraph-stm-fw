@@ -225,6 +225,12 @@ each step.
 | `IPC_ANIM_VERTICAL` | `0x01` | The window moves down instead of across |
 | `IPC_ANIM_TEXT` | `0x02` | The source is a text in UTF-8, not pixels |
 
+**Give a text at least 11 rows of height.** A letter takes 7 rows, and the cell
+of the font takes 10: two rows above the letter carry a mark such as an acute,
+and one row below carries a mark such as an ogonek. A rectangle shorter than 11
+rows loses the top mark, thus a letter such as `ń` scrolls without its accent.
+The panel has 14 rows, so a full-height rectangle always fits.
+
 With `IPC_ANIM_TEXT` the board draws the text into the source itself, and the
 width and the height of the source are 0. **A message that scrolls thus costs
 one frame of the protocol, and not one frame for each step.**

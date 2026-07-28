@@ -295,6 +295,10 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
  *   The source is a bitmap when text is false, and a text in UTF-8 when it is
  *   true. A text becomes a bitmap here, thus the edge MCU sends it one time.
  *
+ *   Note: a text needs at least 11 rows of height. The cell of the font takes
+ *   10 rows for a letter of 7, because a mark such as an acute goes above the
+ *   letter. A shorter rectangle loses that mark.
+ *
  *   Note: the function gives a negative value when the source does not fit
  *   the space of that panel.
  *
