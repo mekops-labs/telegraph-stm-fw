@@ -34,6 +34,15 @@ EOF
 
 if cmp -s "$tmp" "$out"; then
     rm -f "$tmp"
-else
-    mv "$tmp" "$out"
+    exit 0
 fi
+
+mv "$tmp" "$out"
+
+# The dependency list of NuttX comes from a separate step, thus a plain build
+# does not learn that this header changed. It would keep the old version in the
+# image and report no error. Thus a new version drops the objects of this
+# directory, and the sources that hold the version compile again.
+
+dir=$(dirname "$out")
+rm -f "$dir"/*.o "$dir"/libboard.a
