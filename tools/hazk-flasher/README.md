@@ -120,7 +120,7 @@ A flash operation stops the peer.
 | `ipc sleep off` | Keep the light through the day |
 | `ipc large [-l\|-c\|-r] <text>` | Put a text on the main panel |
 | `ipc small [-l\|-c\|-r] <text>` | Put a text on the sub panel |
-| `ipc scroll <x> <y> <w> <h> <period> <step> <text>` | Scroll a text across a rectangle |
+| `ipc scroll <x> <y> <w> <h> <period> <step> <text>` | Scroll a text across a rectangle. Give it 11 rows or more, or a letter loses its accent |
 | `ipc scrollv ...` | The same, moving down |
 | `ipc sprite <x> <y> <w> <h> <period> <srcw> <srch> <hex>` | Cycle the frames of a sprite |
 | `ipc animoff` | Stop the animations |
