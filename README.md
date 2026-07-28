@@ -172,6 +172,12 @@ The file `stm32_clockconfig.c` replaces the standard clock setup. The
 connectivity-line code in the NuttX tree always drives the PLL from the HSE
 input. This board cannot use that input.
 
+**The board builds through `configure.sh` and make.** NuttX also carries a
+CMake build, and a board in its tree gives a file for each of the two. This
+board gives the make file alone, because `make build` is the only path that the
+repository uses. A second list of the sources goes stale without a build that
+reads it.
+
 ## IPC library
 
 The directory `ipc/` holds the protocol that connects the two MCUs. The code
