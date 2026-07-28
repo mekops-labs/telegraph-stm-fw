@@ -79,12 +79,14 @@
 #define DISPLAY_TIMER     3
 
 /* The thread of the board runs at this period. It moves the animations, and
- * every TICKS_PER_SEC of them it keeps the time and the temperature.
+ * it keeps the digits when the second of the clock changes.
+ *
+ * Note: the digits follow the clock and not a count of these waits. A wait
+ * takes at least its period and often more, thus a count of them drifts.
  */
 
 #define TICK_MS           20
 #define TICK_US           (TICK_MS * 1000)
-#define TICKS_PER_SEC     (1000 / TICK_MS)
 
 /* The source of an animation. The main panel holds a message wider than
  * itself, and the sub panel holds less.
@@ -586,7 +588,7 @@ static int display_scanner(int argc, char *argv[])
 {
   unsigned int ticks = TEMP_EVERY_TICKS;
   unsigned int version_left = VERSION_TICKS;
-  unsigned int subtick = 0;
+  time_t last = 0;
 
   for (; ; )
     {
@@ -598,13 +600,6 @@ static int display_scanner(int argc, char *argv[])
 
       anim_tick();
 
-      if (++subtick < TICKS_PER_SEC)
-        {
-          continue;
-        }
-
-      subtick = 0;
-
         {
           struct tm tm;
           time_t now;
@@ -612,9 +607,22 @@ static int display_scanner(int argc, char *argv[])
           /* Read the system clock. The DS3231 with the battery keeps that
            * clock. Thus this step uses no bus. Only the temperature uses the
            * bus.
+           *
+           * Note: the clock of the panel comes from this value and not from a
+           * count of the waits. A wait takes at least its time and often
+           * more, thus a count of them drifts and the digits then miss a
+           * second from time to time.
            */
 
-          now = time(NULL) + (time_t)g_utcoffset * 60;
+          now = time(NULL);
+
+          if (now == last)
+            {
+              continue;
+            }
+
+          last = now;
+          now += (time_t)g_utcoffset * 60;
           gmtime_r(&now, &tm);
 
           /* The greeting takes the main panel after the version. */
