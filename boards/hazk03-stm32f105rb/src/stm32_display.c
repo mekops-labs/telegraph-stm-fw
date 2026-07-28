@@ -9,6 +9,7 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <errno.h>
 #include <sched.h>
 #include <string.h>
 #include <time.h>
@@ -16,6 +17,9 @@
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
 #include <nuttx/mutex.h>
+#include <nuttx/signal.h>
+
+#include "stm32_tim.h"
 
 #include <nuttx/i2c/i2c_master.h>
 
@@ -38,11 +42,21 @@
 
 #define BRIGHTNESS 4
 
-/* One pass over both panels takes near 13 ms. Thus this count gives an update
- * of the digits near one time each second. A timer is not necessary.
+/* The time of one row. The two panels take their rows in turn, thus one full
+ * image takes 32 of these.
  */
 
-#define TICK_EVERY_PASSES 75
+#define ROW_US            200
+
+/* The timer that paces the rows. TIM3 has no other user on this board. */
+
+#define DISPLAY_TIMER     3
+
+/* The thread of the board keeps the time and the temperature. It runs at this
+ * period, and the timer drives the panels without it.
+ */
+
+#define TICK_US           1000000
 
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
@@ -84,6 +98,21 @@ static int16_t g_temp;
  */
 
 static mutex_t g_fblock = NXMUTEX_INITIALIZER;
+
+/* A writer of the framebuffer sets this flag. The interrupt then gives no
+ * light for that row, because a mutex has no place in an interrupt and a
+ * partial image would show.
+ */
+
+static volatile bool g_fbbusy;
+
+/* The timer that paces the rows, the row that comes next, and the count of
+ * the images. The interrupt owns these.
+ */
+
+static struct stm32_tim_dev_s *g_tim;
+static volatile int      g_slot;
+static volatile uint32_t g_frames;
 
 /* The minutes of the local time from UTC. The RTC keeps UTC, thus this value
  * changes the panels only.
@@ -262,8 +291,10 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
   int y = (dev->height - FONT5X7_HEIGHT) / 2;
 
   nxmutex_lock(&g_fblock);
+  g_fbbusy = true;
   sm1626d_clear(dev);
   sm1626d_drawtext(dev, x, y, s, len);
+  g_fbbusy = false;
   nxmutex_unlock(&g_fblock);
 }
 
@@ -309,25 +340,107 @@ static void show_time(const struct tm *t, int16_t temp)
   tm1629a_flush();
 }
 
+/* The scan of one row, from the timer.
+ *
+ * Note: this runs in an interrupt. The work is the transfer of one row, and
+ * the wait between the rows costs no CPU. Thus the tasks of the board keep
+ * the time that the earlier loop took for its wait.
+ *
+ * Note: the lock of the framebuffer is a mutex, and an interrupt takes no
+ * mutex. A writer of the framebuffer thus stops this timer around its change,
+ * and a scan pass never gives a partial image.
+ */
+
+static int display_ontimer(int irq, void *context, void *arg)
+{
+  struct sm1626d_dev_s *dev;
+  int row;
+  int on_us;
+
+  if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC1IF))
+    {
+      /* The time with light for this row is over. */
+
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC1IF);
+      STM32_TIM_DISABLEINT(g_tim, GTIM_DIER_CC1IE);
+      sm1626d_output(false);
+    }
+
+  if (!STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
+    {
+      return OK;
+    }
+
+  STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
+
+  /* The panels share every line but the data. Thus one panel takes the whole
+   * row, and the two take their rows in turn.
+   */
+
+  sm1626d_output(false);
+
+  if (g_fbbusy)
+    {
+      /* A writer holds the framebuffer. This row keeps no light, and the next
+       * image carries the new content.
+       */
+
+      return OK;
+    }
+
+  dev = (g_slot < SM1626D_ROWS) ? &g_main : &g_sub;
+  row = g_slot % SM1626D_ROWS;
+
+  if (++g_slot >= SM1626D_ROWS * 2)
+    {
+      g_slot = 0;
+      g_frames++;
+    }
+
+  sm1626d_shiftrow(dev, row);
+
+  /* The transfer took part of the row, thus the time with light comes from
+   * the counter now and not from the start of the row.
+   */
+
+  on_us = sm1626d_ontime(dev, ROW_US);
+
+  if (on_us > 0)
+    {
+      uint32_t now = STM32_TIM_GETCOUNTER(g_tim);
+
+      sm1626d_output(true);
+
+      if (now + on_us < ROW_US)
+        {
+          STM32_TIM_SETCOMPARE(g_tim, 1, now + on_us);
+          STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
+        }
+
+      /* The row keeps its light to its end when the time does not fit. The
+       * update of the next row then takes that light away.
+       */
+    }
+
+  return OK;
+}
+
 static int display_scanner(int argc, char *argv[])
 {
-  unsigned int passes = 0;
   unsigned int ticks = TEMP_EVERY_TICKS;
   unsigned int version_left = VERSION_TICKS;
 
   for (; ; )
     {
-      nxmutex_lock(&g_fblock);
-      sm1626d_refresh(&g_main);
-      sm1626d_refresh(&g_sub);
-      nxmutex_unlock(&g_fblock);
+      /* The timer drives the panels. This thread keeps the time and the
+       * temperature, thus it waits and it costs almost no CPU.
+       */
 
-      if (++passes >= TICK_EVERY_PASSES)
+      nxsig_usleep(TICK_US);
+
         {
           struct tm tm;
           time_t now;
-
-          passes = 0;
 
           /* Read the system clock. The DS3231 with the battery keeps that
            * clock. Thus this step uses no bus. Only the temperature uses the
@@ -483,6 +596,23 @@ int hazk03_display_init(void)
    */
 
   draw_default(&g_main, HAZK03_VERSION);
+
+  /* The timer paces the rows. Its tick is one microsecond, thus the period
+   * and the time with light are both in microseconds.
+   */
+
+  g_tim = stm32_tim_init(DISPLAY_TIMER);
+  if (g_tim == NULL)
+    {
+      syslog(LOG_ERR, "ERROR: TIM%d not available\n", DISPLAY_TIMER);
+      return -ENODEV;
+    }
+
+  STM32_TIM_SETCLOCK(g_tim, 1000000);
+  STM32_TIM_SETPERIOD(g_tim, ROW_US);
+  STM32_TIM_SETISR(g_tim, display_ontimer, NULL, 0);
+  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE);
+  STM32_TIM_SETMODE(g_tim, STM32_TIM_MODE_UP);
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
                        display_scanner, NULL);
