@@ -9,6 +9,7 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <errno.h>
 #include <sched.h>
 #include <string.h>
 #include <time.h>
@@ -16,6 +17,10 @@
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
 #include <nuttx/mutex.h>
+#include <nuttx/semaphore.h>
+#include <nuttx/signal.h>
+
+#include "stm32_tim.h"
 
 #include <nuttx/i2c/i2c_master.h>
 
@@ -38,11 +43,38 @@
 
 #define BRIGHTNESS 4
 
-/* One pass over both panels takes near 13 ms. Thus this count gives an update
- * of the digits near one time each second. A timer is not necessary.
+/* The time of one row. Both panels take the same row in one pass, thus one
+ * full image takes 16 of these.
+ *
+ * Note: the rate of the row events is the limit of this board, and not the
+ * work in each one. Above near 1250 events each second the UART loses bytes
+ * at 460800 baud, because an interrupt and a change of thread each hold the
+ * other interrupts for a time.
  */
 
-#define TICK_EVERY_PASSES 75
+#define ROW_US            800
+
+/* The transfer of one row goes into this many parts, and the timer gives one
+ * interrupt for each part. A part must be shorter than one byte of the UART,
+ * which is 21.7 us at 460800 baud. Thus the link keeps its bytes.
+ */
+
+/* The thread that sends the rows. It runs above the task of the protocol,
+ * because a row that comes late shows as a dark line.
+ */
+
+#define SHIFT_PRIORITY    200
+#define SHIFT_STACKSIZE   1024
+
+/* The timer that paces the rows. TIM3 has no other user on this board. */
+
+#define DISPLAY_TIMER     3
+
+/* The thread of the board keeps the time and the temperature. It runs at this
+ * period, and the timer drives the panels without it.
+ */
+
+#define TICK_US           1000000
 
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
@@ -84,6 +116,25 @@ static int16_t g_temp;
  */
 
 static mutex_t g_fblock = NXMUTEX_INITIALIZER;
+
+/* A writer of the framebuffer sets this flag. The interrupt then gives no
+ * light for that row, because a mutex has no place in an interrupt and a
+ * partial image would show.
+ */
+
+static volatile bool g_fbbusy;
+
+/* The timer that paces the rows, the row that comes next, and the count of
+ * the images. The interrupt owns these.
+ */
+
+static struct stm32_tim_dev_s *g_tim;
+static volatile int      g_slot;
+
+/* The interrupt of the row wakes the thread that sends the bits. */
+
+static sem_t g_rowsem = SEM_INITIALIZER(0);
+static volatile uint32_t g_frames;
 
 /* The minutes of the local time from UTC. The RTC keeps UTC, thus this value
  * changes the panels only.
@@ -262,8 +313,10 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
   int y = (dev->height - FONT5X7_HEIGHT) / 2;
 
   nxmutex_lock(&g_fblock);
+  g_fbbusy = true;
   sm1626d_clear(dev);
   sm1626d_drawtext(dev, x, y, s, len);
+  g_fbbusy = false;
   nxmutex_unlock(&g_fblock);
 }
 
@@ -309,25 +362,110 @@ static void show_time(const struct tm *t, int16_t temp)
   tm1629a_flush();
 }
 
+/* The scan of one row, from the timer.
+ *
+ * Note: this runs in an interrupt. The work is the transfer of one row, and
+ * the wait between the rows costs no CPU. Thus the tasks of the board keep
+ * the time that the earlier loop took for its wait.
+ *
+ * Note: the lock of the framebuffer is a mutex, and an interrupt takes no
+ * mutex. A writer of the framebuffer thus stops this timer around its change,
+ * and a scan pass never gives a partial image.
+ */
+
+static int display_ontimer(int irq, void *context, void *arg)
+{
+  int on_us;
+
+  if (STM32_TIM_CHECKINT(g_tim, GTIM_SR_CC1IF))
+    {
+      /* The time with light for this row is over. */
+
+      STM32_TIM_ACKINT(g_tim, GTIM_SR_CC1IF);
+      STM32_TIM_DISABLEINT(g_tim, GTIM_DIER_CC1IE);
+      sm1626d_output(false);
+    }
+
+  if (!STM32_TIM_CHECKINT(g_tim, GTIM_SR_UIF))
+    {
+      return OK;
+    }
+
+  STM32_TIM_ACKINT(g_tim, GTIM_SR_UIF);
+
+  /* Every bit of the row is in the register of both panels now. The latch
+   * gives them to the panels, and the light of this row starts.
+   */
+
+  sm1626d_latch();
+
+  /* Both panels take the same level, thus one window of light serves both. */
+
+  on_us = sm1626d_ontime(&g_main, ROW_US);
+  if (on_us > 0)
+    {
+      sm1626d_output(true);
+
+      if (on_us < ROW_US)
+        {
+          STM32_TIM_SETCOMPARE(g_tim, 1, on_us);
+          STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_CC1IE);
+        }
+    }
+
+  if (++g_slot >= SM1626D_ROWS)
+    {
+      g_slot = 0;
+      g_frames++;
+    }
+
+  /* The transfer of that row belongs to a thread, and not to this interrupt.
+   * A thread gives way to every interrupt, thus the UART keeps its bytes
+   * while a row goes out.
+   */
+
+  nxsem_post(&g_rowsem);
+
+  return OK;
+}
+
+/* Send the bits of one row while the panel holds the row of the last latch.
+ *
+ * Note: this thread takes near a quarter of the CPU. It runs above the task
+ * of the protocol, because a late row shows as a dark line on the panel.
+ */
+
+static int display_shifter(int argc, char *argv[])
+{
+  for (; ; )
+    {
+      nxsem_wait_uninterruptible(&g_rowsem);
+
+      if (!g_fbbusy)
+        {
+          sm1626d_shiftcombined(&g_main, &g_sub, g_slot);
+        }
+    }
+
+  return 0;
+}
+
 static int display_scanner(int argc, char *argv[])
 {
-  unsigned int passes = 0;
   unsigned int ticks = TEMP_EVERY_TICKS;
   unsigned int version_left = VERSION_TICKS;
 
   for (; ; )
     {
-      nxmutex_lock(&g_fblock);
-      sm1626d_refresh(&g_main);
-      sm1626d_refresh(&g_sub);
-      nxmutex_unlock(&g_fblock);
+      /* The timer drives the panels. This thread keeps the time and the
+       * temperature, thus it waits and it costs almost no CPU.
+       */
 
-      if (++passes >= TICK_EVERY_PASSES)
+      nxsig_usleep(TICK_US);
+
         {
           struct tm tm;
           time_t now;
-
-          passes = 0;
 
           /* Read the system clock. The DS3231 with the battery keeps that
            * clock. Thus this step uses no bus. Only the temperature uses the
@@ -483,6 +621,39 @@ int hazk03_display_init(void)
    */
 
   draw_default(&g_main, HAZK03_VERSION);
+
+  /* The timer paces the rows. Its tick is one microsecond, thus the period
+   * and the time with light are both in microseconds.
+   */
+
+  g_tim = stm32_tim_init(DISPLAY_TIMER);
+  if (g_tim == NULL)
+    {
+      syslog(LOG_ERR, "ERROR: TIM%d not available\n", DISPLAY_TIMER);
+      return -ENODEV;
+    }
+
+  STM32_TIM_SETCLOCK(g_tim, 1000000);
+  STM32_TIM_SETPERIOD(g_tim, ROW_US);
+  STM32_TIM_SETISR(g_tim, display_ontimer, NULL, 0);
+
+  /* The update starts a row, and the channel 1 ends the light of that row. */
+
+  STM32_TIM_ENABLEINT(g_tim, GTIM_DIER_UIE);
+  /* The transfer of a row holds the CPU longer than one byte of the UART at
+   * 460800 baud, which is 21.7 us. Thus this interrupt takes a priority below
+   * the others, and the UART takes its bytes while a row goes out.
+   */
+
+  STM32_TIM_SETMODE(g_tim, STM32_TIM_MODE_UP);
+
+  ret = kthread_create("shift", SHIFT_PRIORITY, SHIFT_STACKSIZE,
+                       display_shifter, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: display shifter: %d\n", ret);
+      return ret;
+    }
 
   ret = kthread_create("display", DISPLAY_PRIORITY, DISPLAY_STACKSIZE,
                        display_scanner, NULL);
