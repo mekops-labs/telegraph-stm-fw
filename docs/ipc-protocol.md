@@ -147,13 +147,16 @@ The reply is an ACK.
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
-| 0 | 1 | The brightness of the digits, 0 to 7 |
-| 1 | 1 | The brightness of the panels, 0 to 7, optional |
+| 0 | 1 | The brightness of the digits, 0 to 8 |
+| 1 | 1 | The brightness of the panels, 0 to 8, optional |
 
 A payload of 1 byte gives the same level to both devices.
 
+The value 0 turns the device off. The values 1 to 8 give eight levels of
+brightness, from the dimmest to the full level.
+
 The TM1629A has its own control for the digits. The panels have no such
-control, thus the driver makes the on-time of each row shorter. The level 7 is
+control, thus the driver makes the on-time of each row shorter. The level 8 is
 the full on-time.
 
 Note: a value above 7 gets a NACK with the code `0x03`.
