@@ -9,3 +9,6 @@
 [submodule "third_party/unity"]
 	path = third_party/unity
 	url = https://github.com/ThrowTheSwitch/Unity.git
+[submodule "tools/hazk-flasher"]
+	path = tools/hazk-flasher
+	url = git@github.com:mek-x/hazk-flasher.git
