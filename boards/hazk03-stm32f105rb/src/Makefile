@@ -14,6 +14,10 @@ CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c
 
 CSRCS += font5x7.c sm1626d_text.c
 
+ifeq ($(CONFIG_MTD_W25),y)
+CSRCS += stm32_spi.c stm32_flash.c
+endif
+
 # The library of the protocol is outside the board directory. Both MCUs use
 # the same source.
 

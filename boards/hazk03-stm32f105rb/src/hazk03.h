@@ -67,6 +67,35 @@
 #define GPIO_DS3231_SDA   (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | \
                            GPIO_OUTPUT_SET | GPIO_PORTC | GPIO_PIN7)
 
+/* Winbond W25Q32 serial flash, 4 MB, on SPI1. The peripheral drives PA5, PA6
+ * and PA7. The chip-select line is a GPIO, because the driver of the bus
+ * controls it for each transfer.
+ *
+ * Note: the idle level of the chip-select line is high.
+ */
+
+#define GPIO_W25_CS       (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
+                           GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN4)
+
+/* The layout of the flash. One erase sector is 4096 bytes.
+ *
+ * The first two sectors keep the settings of the board. The sectors that come
+ * after them keep the fonts, the icons and the animations.
+ *
+ * Note: the driver of the flash gives blocks of 256 bytes, thus one erase
+ * sector is 16 blocks. The partitions use the block as their unit.
+ */
+
+#define W25_BLOCKS_PER_SECTOR 16
+#define W25_CONFIG_SECTORS    2
+#define W25_TOTAL_SECTORS     1024
+
+#define W25_CONFIG_FIRSTBLOCK 0
+#define W25_CONFIG_NBLOCKS    (W25_CONFIG_SECTORS * W25_BLOCKS_PER_SECTOR)
+#define W25_ASSETS_FIRSTBLOCK W25_CONFIG_NBLOCKS
+#define W25_ASSETS_NBLOCKS    ((W25_TOTAL_SECTORS * W25_BLOCKS_PER_SECTOR) - \
+                               W25_CONFIG_NBLOCKS)
+
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
@@ -106,6 +135,31 @@ int hazk03_display_init(void);
  ****************************************************************************/
 
 struct i2c_master_s *hazk03_rtc_initialize(void);
+
+/****************************************************************************
+ * Name: hazk03_flash_initialize
+ *
+ * Description:
+ *   Start SPI1, and attach the W25Q32 flash to that bus.
+ *   Divide the flash into the partition for the settings and the partition
+ *   for the assets.
+ *
+ *   Note: a board without the flash gives an error. The other functions of
+ *   the board continue.
+ *
+ ****************************************************************************/
+
+int hazk03_flash_initialize(void);
+
+/****************************************************************************
+ * Name: stm32_spidev_initialize
+ *
+ * Description:
+ *   Set the chip-select line of the flash to its idle level.
+ *
+ ****************************************************************************/
+
+void stm32_spidev_initialize(void);
 
 /* The two panels. */
 
