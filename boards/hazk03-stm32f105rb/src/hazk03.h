@@ -151,13 +151,20 @@ struct i2c_master_s *hazk03_rtc_initialize(void);
 
 int hazk03_flash_initialize(void);
 
+/* The value that turns the sleep period off. */
+
+#define HAZK03_SLEEP_OFF  0xffffu
+
 /* The settings that the board keeps through a loss of power. */
 
 struct hazk03_config_s
 {
-  int16_t utcoffset;      /* Minutes of the local time from UTC          */
-  uint8_t digits;         /* Brightness of the digits, 0 is off          */
-  uint8_t panels;         /* Brightness of the panels, 0 is off          */
+  int16_t  utcoffset;     /* Minutes of the local time from UTC          */
+  uint8_t  digits;        /* Brightness of the digits, 0 is off          */
+  uint8_t  panels;        /* Brightness of the panels, 0 is off          */
+  int16_t  tempoffset;    /* Correction of the temperature, in tenths    */
+  uint16_t sleepmin;      /* Minute of the day that stops the display    */
+  uint16_t wakemin;       /* Minute of the day that starts it again      */
 };
 
 /****************************************************************************
@@ -251,6 +258,34 @@ int16_t hazk03_display_temperature(void);
  ****************************************************************************/
 
 void hazk03_display_utcoffset(int16_t minutes);
+
+/****************************************************************************
+ * Name: hazk03_display_tempoffset
+ *
+ * Description:
+ *   Set the correction of the temperature, in tenths of a degree Celsius.
+ *   The board adds this value to each reading of the DS3231.
+ *
+ ****************************************************************************/
+
+void hazk03_display_tempoffset(int16_t tenths);
+
+/****************************************************************************
+ * Name: hazk03_display_sleep
+ *
+ * Description:
+ *   Set the period that stops the display. Each value is a minute of the
+ *   local day. A period that starts after it ends goes through midnight.
+ *
+ *   Note: the value HAZK03_SLEEP_OFF for the start stops this function. The
+ *   display then keeps its brightness through the day.
+ *
+ *   Note: the period does not change the brightness of the settings. Thus the
+ *   display takes its previous levels again at the end of the period.
+ *
+ ****************************************************************************/
+
+void hazk03_display_sleep(uint16_t sleepmin, uint16_t wakemin);
 
 /****************************************************************************
  * Name: hazk03_display_brightness

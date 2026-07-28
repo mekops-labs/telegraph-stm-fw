@@ -391,6 +391,35 @@ void ipcCommand(const char *args) {
         }
 
         ipcRequest(IPC_OP_SET_BRIGHT, payload, len);
+    } else if (strncmp(args, "tempoff ", 8) == 0) {
+        // The form is "tempoff <tenths>". The value carries a sign.
+        uint8_t payload[IPC_SET_TEMPOFF_LEN];
+        int16_t tenths = (int16_t)strtol(args + 8, NULL, 10);
+
+        ipc_put_u16(payload, (uint16_t)tenths);
+        ipcRequest(IPC_OP_SET_TEMPOFF, payload, IPC_SET_TEMPOFF_LEN);
+    } else if (strncmp(args, "sleep ", 6) == 0) {
+        // The form is "sleep <start> <end>", and each time is HH or HH:MM.
+        // The word "off" stops this function.
+        uint8_t payload[IPC_SET_SLEEP_LEN];
+        uint16_t start = IPC_SLEEP_OFF;
+        uint16_t end = IPC_SLEEP_OFF;
+        const char *p = args + 6;
+
+        if (strncmp(p, "off", 3) != 0) {
+            char *tail = NULL;
+            long h = strtol(p, &tail, 10);
+            long m = (tail != NULL && *tail == ':') ? strtol(tail + 1, &tail, 10) : 0;
+            start = (uint16_t)(h * 60 + m);
+
+            h = strtol(tail, &tail, 10);
+            m = (tail != NULL && *tail == ':') ? strtol(tail + 1, &tail, 10) : 0;
+            end = (uint16_t)(h * 60 + m);
+        }
+
+        ipc_put_u16(&payload[IPC_SLEEP_START], start);
+        ipc_put_u16(&payload[IPC_SLEEP_END], end);
+        ipcRequest(IPC_OP_SET_SLEEP, payload, IPC_SET_SLEEP_LEN);
     } else if (strcmp(args, "clear") == 0) {
         ipcRequest(IPC_OP_SET_LARGE, NULL, 0);
         ipcRequest(IPC_OP_SET_SMALL, NULL, 0);

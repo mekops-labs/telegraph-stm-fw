@@ -98,6 +98,21 @@ static int16_t g_utcoffset;
 static uint8_t g_bright_digits = BRIGHTNESS;
 static uint8_t g_bright_panels = BRIGHTNESS;
 
+/* The correction of the temperature, in tenths of a degree Celsius. */
+
+static int16_t g_tempoffset;
+
+/* The period that stops the display, in minutes of the local day. */
+
+static uint16_t g_sleepmin = HAZK03_SLEEP_OFF;
+static uint16_t g_wakemin  = HAZK03_SLEEP_OFF;
+
+/* The display is in the period above. The levels of the settings stay, thus
+ * the display takes them again at the end of the period.
+ */
+
+static bool g_asleep;
+
 /* This is a 21x14 heart image. Bit 0 is the column at the left.
  *
  * Note: this image comes from the reverse engineered firmware. Thus a person
@@ -175,12 +190,78 @@ static void display_persist(void)
 #ifdef CONFIG_MTD_W25
   struct hazk03_config_s cfg;
 
-  cfg.utcoffset = g_utcoffset;
-  cfg.digits    = g_bright_digits;
-  cfg.panels    = g_bright_panels;
+  cfg.utcoffset  = g_utcoffset;
+  cfg.digits     = g_bright_digits;
+  cfg.panels     = g_bright_panels;
+  cfg.tempoffset = g_tempoffset;
+  cfg.sleepmin   = g_sleepmin;
+  cfg.wakemin    = g_wakemin;
 
   hazk03_config_save(&cfg);
 #endif
+}
+
+/* Put the levels on the hardware. This function changes no setting, thus the
+ * sleep period uses it to stop the display without a loss of the levels.
+ */
+
+static void display_apply_brightness(uint8_t digits, uint8_t panels)
+{
+  bool digits_on = digits != 0;
+  bool panels_on = panels != 0;
+  uint8_t digits_level = digits_on ? digits - 1 : 0;
+  uint8_t panels_level = panels_on ? panels - 1 : 0;
+
+  tm1629a_setbrightness(digits_level, digits_on);
+
+  nxmutex_lock(&g_fblock);
+  sm1626d_setbrightness(&g_main, panels_level, panels_on);
+  sm1626d_setbrightness(&g_sub, panels_level, panels_on);
+  nxmutex_unlock(&g_fblock);
+}
+
+/* Give the state of the sleep period for one minute of the local day. */
+
+static bool display_in_sleep(uint16_t minute)
+{
+  if (g_sleepmin == HAZK03_SLEEP_OFF || g_wakemin == HAZK03_SLEEP_OFF ||
+      g_sleepmin == g_wakemin)
+    {
+      return false;
+    }
+
+  /* A period that starts after it ends goes through midnight. */
+
+  if (g_sleepmin < g_wakemin)
+    {
+      return minute >= g_sleepmin && minute < g_wakemin;
+    }
+
+  return minute >= g_sleepmin || minute < g_wakemin;
+}
+
+/* Stop or start the display at the edges of the sleep period. */
+
+static void display_update_sleep(const struct tm *t)
+{
+  uint16_t minute = (uint16_t)(t->tm_hour * 60 + t->tm_min);
+  bool sleeping = display_in_sleep(minute);
+
+  if (sleeping == g_asleep)
+    {
+      return;
+    }
+
+  g_asleep = sleeping;
+
+  if (sleeping)
+    {
+      display_apply_brightness(0, 0);
+    }
+  else
+    {
+      display_apply_brightness(g_bright_digits, g_bright_panels);
+    }
 }
 
 static void show_time(const struct tm *t, int16_t temp)
@@ -244,9 +325,21 @@ static int display_scanner(int argc, char *argv[])
 
           if (g_i2c != NULL && ++ticks >= TEMP_EVERY_TICKS)
             {
+              int16_t raw;
+
               ticks = 0;
-              ds3231_temperature(g_i2c, &g_temp);
+
+              /* The correction goes on the reading. Thus the panels and the
+               * state frame give the same value.
+               */
+
+              if (ds3231_temperature(g_i2c, &raw) == OK)
+                {
+                  g_temp = raw + g_tempoffset;
+                }
             }
+
+          display_update_sleep(&tm);
 
           show_time(&tm, g_temp);
         }
@@ -277,23 +370,39 @@ int hazk03_display_text(int panel, const char *s, size_t len)
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels)
 {
-  bool digits_on = digits != 0;
-  bool panels_on = panels != 0;
-  uint8_t digits_level = digits_on ? digits - 1 : 0;
-  uint8_t panels_level = panels_on ? panels - 1 : 0;
-
-  tm1629a_setbrightness(digits_level, digits_on);
-
-  nxmutex_lock(&g_fblock);
-  sm1626d_setbrightness(&g_main, panels_level, panels_on);
-  sm1626d_setbrightness(&g_sub, panels_level, panels_on);
-  nxmutex_unlock(&g_fblock);
-
   g_bright_digits = digits;
   g_bright_panels = panels;
+
+  /* The display stays off during the sleep period. The levels above are in
+   * the settings, thus the display takes them at the end of that period.
+   */
+
+  if (!g_asleep)
+    {
+      display_apply_brightness(digits, panels);
+    }
+
   display_persist();
 
   return OK;
+}
+
+void hazk03_display_tempoffset(int16_t tenths)
+{
+  g_tempoffset = tenths;
+  display_persist();
+}
+
+void hazk03_display_sleep(uint16_t sleepmin, uint16_t wakemin)
+{
+  g_sleepmin = sleepmin;
+  g_wakemin  = wakemin;
+
+  /* A new period takes effect at the next tick of the scan loop. An end of
+   * the period gives the levels of the settings again.
+   */
+
+  display_persist();
 }
 
 void hazk03_display_utcoffset(int16_t minutes)
@@ -313,8 +422,11 @@ void hazk03_display_setconfig(const struct hazk03_config_s *cfg)
   g_utcoffset     = cfg->utcoffset;
   g_bright_digits = cfg->digits;
   g_bright_panels = cfg->panels;
+  g_tempoffset    = cfg->tempoffset;
+  g_sleepmin      = cfg->sleepmin;
+  g_wakemin       = cfg->wakemin;
 
-  hazk03_display_brightness(cfg->digits, cfg->panels);
+  display_apply_brightness(cfg->digits, cfg->panels);
 }
 #endif
 
