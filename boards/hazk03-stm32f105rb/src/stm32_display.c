@@ -59,11 +59,19 @@
  * which is 21.7 us at 460800 baud. Thus the link keeps its bytes.
  */
 
-/* The thread that sends the rows. It runs above the task of the protocol,
- * because a row that comes late shows as a dark line.
+/* The thread that sends the rows runs BELOW the task of the protocol.
+ *
+ * Note: the opposite order loses frames of the protocol. The task of the
+ * protocol then waits behind every row, its receive buffer fills, and the
+ * bytes of a burst go past its end. Measured with the rows above that task,
+ * a burst of 200 frames delivered none of them.
+ *
+ * Note: the cost of this order is a row that comes late while the protocol
+ * holds the CPU. That shows as a short flicker, and a lost frame does not
+ * repair itself.
  */
 
-#define SHIFT_PRIORITY    200
+#define SHIFT_PRIORITY    95
 #define SHIFT_STACKSIZE   1024
 
 /* The timer that paces the rows. TIM3 has no other user on this board. */
