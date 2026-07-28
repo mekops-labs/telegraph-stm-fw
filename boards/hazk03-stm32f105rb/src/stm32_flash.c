@@ -48,7 +48,13 @@
  */
 
 #define CONFIG_RECORDS    2
-#define CONFIG_MAGIC      0x484b3031u   /* "HK01" */
+
+/* The value carries the layout of the record. A change of the fields takes a
+ * new value, thus the board rejects a record of an older firmware and it
+ * starts from the default settings.
+ */
+
+#define CONFIG_MAGIC      0x484b3032u   /* "HK02" */
 #define CONFIG_BLOCKSIZE  256
 
 /* The first block of each erase sector holds one record. */

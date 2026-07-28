@@ -265,6 +265,49 @@ static void ipc_set_bright(struct ipc_ctx_s *ctx,
   ipc_ack(ctx, frame->corr_id);
 }
 
+static void ipc_set_tempoff(struct ipc_ctx_s *ctx,
+                            const struct ipc_frame_s *frame)
+{
+  if (frame->payload_len != IPC_SET_TEMPOFF_LEN)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  hazk03_display_tempoffset((int16_t)ipc_get_u16(frame->payload));
+  ipc_ack(ctx, frame->corr_id);
+}
+
+static void ipc_set_sleep(struct ipc_ctx_s *ctx,
+                          const struct ipc_frame_s *frame)
+{
+  uint16_t start;
+  uint16_t end;
+
+  if (frame->payload_len != IPC_SET_SLEEP_LEN)
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+      return;
+    }
+
+  start = ipc_get_u16(&frame->payload[IPC_SLEEP_START]);
+  end   = ipc_get_u16(&frame->payload[IPC_SLEEP_END]);
+
+  /* A minute above the day is invalid. The value that stops the function is
+   * the one exception.
+   */
+
+  if ((start >= IPC_MINUTES_PER_DAY && start != IPC_SLEEP_OFF) ||
+      (end >= IPC_MINUTES_PER_DAY && end != IPC_SLEEP_OFF))
+    {
+      ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+      return;
+    }
+
+  hazk03_display_sleep(start, end);
+  ipc_ack(ctx, frame->corr_id);
+}
+
 static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 {
   struct ipc_ctx_s *ctx = (struct ipc_ctx_s *)arg;
@@ -281,6 +324,14 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame)
 
       case IPC_OP_SET_SMALL:
         ipc_set_text(ctx, frame, HAZK03_PANEL_SUB);
+        break;
+
+      case IPC_OP_SET_TEMPOFF:
+        ipc_set_tempoff(ctx, frame);
+        break;
+
+      case IPC_OP_SET_SLEEP:
+        ipc_set_sleep(ctx, frame);
         break;
 
       case IPC_OP_SET_BRIGHT:

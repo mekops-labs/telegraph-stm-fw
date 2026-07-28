@@ -115,6 +115,9 @@ A flash operation stops the peer.
 | `ipc state` | Request the state, and show the fields |
 | `ipc time <epoch> [offset]` | Set the RTC, UTC, and the minutes from UTC |
 | `ipc bright <digits> [panels]` | Set the brightness, 0 to 8. 0 turns it off |
+| `ipc tempoff <tenths>` | Correct the temperature, in tenths of a degree |
+| `ipc sleep <start> <end>` | Stop the light between two times, each HH or HH:MM |
+| `ipc sleep off` | Keep the light through the day |
 | `ipc large <text>` | Put a text on the main panel |
 | `ipc small <text>` | Put a text on the sub panel |
 | `ipc clear` | Clear both panels |

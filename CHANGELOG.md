@@ -5,6 +5,36 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The W25Q32 serial flash on SPI1, in two partitions. The first two sectors
+  keep the settings. The sectors that come after them keep a SmartFS file
+  system at `/assets` for the fonts, the icons and the animations.
+- The board keeps the settings through a loss of power. The store holds the
+  offset of the local time, the two brightness levels, the correction of the
+  temperature and the period without light.
+- A store with two records. A write goes to the record that the board does not
+  use, thus a loss of power keeps the record from before that write.
+- The operation `0x0A` corrects the temperature, in tenths of a degree.
+- The operation `0x0B` sets a period without light, such as 23:00 until 06:00.
+  The period does not change the brightness, thus the display takes its
+  previous levels at the end of the period.
+- The Makefile builds the firmware of both MCUs, and it sends the firmware of
+  the edge MCU over the air.
+
+### Fixed
+
+- The configuration with the shell now links. The panel shows the version in
+  each configuration, and the font was in the group of files for the protocol
+  alone.
+
+### Changed
+
+- The edge MCU sends the offset of the local time one time, and not after each
+  reset of the board.
+
 ## [0.1.0] - 2026-07-28
 
 The first release. The firmware drives the display hardware of the HAZK-03
@@ -78,7 +108,7 @@ module, and it answers a binary protocol on the UART of the edge MCU.
 - One UART carries the console and the protocol, thus a build gives one or the
   other.
 - The board keeps no settings. The edge MCU sends the UTC offset again after
-  each reset of the board.
+  each reset of the board. *(The unreleased version above adds a store.)*
 - The main panel shows 11 characters, and the sub panel shows 3. Longer text
   loses its end.
 - The scan loop uses the CPU. It does not use DMA.

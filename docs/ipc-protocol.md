@@ -104,6 +104,8 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x02` | edge to STM32 | Set the text of the main panel |
 | `0x03` | edge to STM32 | Set the text of the sub panel |
 | `0x04` | edge to STM32 | Set the brightness |
+| `0x0A` | edge to STM32 | Correct the temperature |
+| `0x0B` | edge to STM32 | Set the period without light |
 | `0x10` | edge to STM32 | Request the state |
 | `0x11` | STM32 to edge | The state |
 | `0x12` | STM32 to edge | A log line, a push frame |
@@ -160,6 +162,37 @@ control, thus the driver makes the on-time of each row shorter. The level 8 is
 the full on-time.
 
 Note: a value above 8 gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x0A` Correct the temperature
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The correction in tenths of a degree Celsius, signed |
+
+The board adds this value to each reading of the DS3231. Thus the panels and
+the state frame give the same value.
+
+The reply is an ACK.
+
+### `0x0B` Set the period without light
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The minute of the local day that stops the light |
+| 2 | 2 | The minute that starts the light again |
+
+The display gives no light between these two minutes. A start after the end
+goes through midnight. Thus a start of 1380 and an end of 360 stop the light
+from 23:00 until 06:00.
+
+The value `0xFFFF` for the start stops this function.
+
+Note: the period does not change the brightness of the settings. Thus the
+display takes its previous levels at the end of the period.
+
+Note: a minute of 1440 or above gets a NACK with the code `0x03`.
 
 The reply is an ACK.
 

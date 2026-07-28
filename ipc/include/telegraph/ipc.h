@@ -78,6 +78,8 @@ extern "C" {
 #define IPC_OP_SET_LARGE    0x02u  /* edge -> STM32: text on the main panel */
 #define IPC_OP_SET_SMALL    0x03u  /* edge -> STM32: text on the sub panel  */
 #define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
+#define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
+#define IPC_OP_SET_SLEEP    0x0bu  /* edge -> STM32: the period without light */
 #define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
 #define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
 #define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
@@ -150,6 +152,27 @@ extern "C" {
 #define IPC_BRIGHT_MAX       8u
 #define IPC_SET_BRIGHT_LEN   1u
 #define IPC_SET_BRIGHT2_LEN  2u
+
+/* The payload of IPC_OP_SET_TEMPOFF. The value is a correction in tenths of a
+ * degree Celsius, with a sign. The board adds it to each reading.
+ */
+
+#define IPC_SET_TEMPOFF_LEN  2u
+
+/* The payload of IPC_OP_SET_SLEEP. The display gives no light between these
+ * two minutes of the local day. A start after the end goes through midnight.
+ *
+ * Note: the value IPC_SLEEP_OFF for the start stops this function.
+ *
+ * Note: the period does not change the brightness. Thus the display takes its
+ * previous levels at the end of the period.
+ */
+
+#define IPC_SET_SLEEP_LEN    4u
+#define IPC_SLEEP_START      0u  /* u16: the minute that stops the light   */
+#define IPC_SLEEP_END        2u  /* u16: the minute that starts it again   */
+#define IPC_SLEEP_OFF        0xffffu
+#define IPC_MINUTES_PER_DAY  1440u
 
 #define IPC_SET_TIME_UTC     0u  /* u32: the Unix time, UTC                */
 #define IPC_SET_TIME_OFFSET  4u  /* i16: minutes from UTC, with a sign     */
