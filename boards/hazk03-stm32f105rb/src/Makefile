@@ -25,14 +25,20 @@ IPCDIR := $(BOARD_DIR)$(DELIM)..$(DELIM)..$(DELIM)ipc
 
 CFLAGS += ${INCDIR_PREFIX}"$(IPCDIR)$(DELIM)include"
 
+VPATH   += :$(IPCDIR)$(DELIM)src
+DEPPATH += --dep-path $(IPCDIR)$(DELIM)src
+
+# The store of the settings gives the same check value to each record. Thus
+# every configuration builds this file.
+
+CSRCS += ipc_crc16.c
+
 # The UART of the edge MCU also carries the serial console. Thus a build with
 # a console gets no server for the protocol.
 
 ifeq ($(CONFIG_NO_SERIAL_CONSOLE),y)
-VPATH   += :$(IPCDIR)$(DELIM)src
-DEPPATH += --dep-path $(IPCDIR)$(DELIM)src
 CSRCS   += stm32_ipc.c
-CSRCS   += ipc_crc16.c ipc_encode.c ipc_parser.c
+CSRCS   += ipc_encode.c ipc_parser.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

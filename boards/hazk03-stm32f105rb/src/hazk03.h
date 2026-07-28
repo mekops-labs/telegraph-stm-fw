@@ -151,6 +151,55 @@ struct i2c_master_s *hazk03_rtc_initialize(void);
 
 int hazk03_flash_initialize(void);
 
+/* The settings that the board keeps through a loss of power. */
+
+struct hazk03_config_s
+{
+  int16_t utcoffset;      /* Minutes of the local time from UTC          */
+  uint8_t digits;         /* Brightness of the digits, 0 is off          */
+  uint8_t panels;         /* Brightness of the panels, 0 is off          */
+};
+
+/****************************************************************************
+ * Name: hazk03_config_load
+ *
+ * Description:
+ *   Read the settings from the flash.
+ *
+ *   Note: the function gives -ENOENT if the store holds no valid record. The
+ *   caller then keeps its own values.
+ *
+ ****************************************************************************/
+
+int hazk03_config_load(struct hazk03_config_s *cfg);
+
+/****************************************************************************
+ * Name: hazk03_config_save
+ *
+ * Description:
+ *   Write the settings to the flash.
+ *
+ *   Note: the store holds two records, and a write goes to the record that
+ *   the board does not use. Thus a loss of power during a write keeps the
+ *   record from before that write.
+ *
+ ****************************************************************************/
+
+int hazk03_config_save(const struct hazk03_config_s *cfg);
+
+/****************************************************************************
+ * Name: hazk03_display_setconfig
+ *
+ * Description:
+ *   Apply the settings from the store to the display.
+ *
+ *   Note: these values come from the store, thus the function writes nothing
+ *   back to it.
+ *
+ ****************************************************************************/
+
+void hazk03_display_setconfig(const struct hazk03_config_s *cfg);
+
 /****************************************************************************
  * Name: stm32_spidev_initialize
  *

@@ -3,6 +3,7 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <syslog.h>
 #include <sys/mount.h>
 
 #include <nuttx/board.h>
@@ -69,7 +70,21 @@ int stm32_bringup(void)
   hazk03_display_init();
 
 #ifdef CONFIG_MTD_W25
-  hazk03_flash_initialize();
+  if (hazk03_flash_initialize() == OK)
+    {
+      struct hazk03_config_s cfg;
+
+      /* The settings survive a reset. Thus the edge MCU sends the offset of
+       * the local time one time only.
+       */
+
+      if (hazk03_config_load(&cfg) == OK)
+        {
+          hazk03_display_setconfig(&cfg);
+          syslog(LOG_INFO, "config: offset=%d bright=%u/%u\n",
+                 cfg.utcoffset, cfg.digits, cfg.panels);
+        }
+    }
 #endif
 
 #ifdef CONFIG_NO_SERIAL_CONSOLE
