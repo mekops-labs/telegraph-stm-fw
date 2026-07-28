@@ -255,6 +255,24 @@ void hazk03_display_setconfig(const struct hazk03_config_s *cfg);
 
 void stm32_spidev_initialize(void);
 
+/* The longest report of the crystal probe. */
+
+#define HAZK03_HSE_REPORT_MAX 64
+
+/****************************************************************************
+ * Name: hazk03_hse_probe
+ *
+ * Description:
+ *   Start the external crystal and write its state and its frequency into a
+ *   text buffer.
+ *
+ *   Note: the system clock keeps the HSI. Thus a crystal that does not start
+ *   changes nothing.
+ *
+ ****************************************************************************/
+
+void hazk03_hse_probe(char *buf, size_t len);
+
 /* The two panels. */
 
 #define HAZK03_PANEL_MAIN  0
