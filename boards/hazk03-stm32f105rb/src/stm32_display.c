@@ -235,11 +235,16 @@ int hazk03_display_text(int panel, const char *s, size_t len)
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels)
 {
-  tm1629a_setbrightness(digits, true);
+  bool digits_on = digits != 0;
+  bool panels_on = panels != 0;
+  uint8_t digits_level = digits_on ? digits - 1 : 0;
+  uint8_t panels_level = panels_on ? panels - 1 : 0;
+
+  tm1629a_setbrightness(digits_level, digits_on);
 
   nxmutex_lock(&g_fblock);
-  sm1626d_setbrightness(&g_main, panels);
-  sm1626d_setbrightness(&g_sub, panels);
+  sm1626d_setbrightness(&g_main, panels_level, panels_on);
+  sm1626d_setbrightness(&g_sub, panels_level, panels_on);
   nxmutex_unlock(&g_fblock);
 
   return OK;

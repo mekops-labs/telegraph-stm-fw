@@ -124,6 +124,7 @@ void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
                   uint8_t width, uint8_t height)
 {
   dev->bright = SM1626D_BRIGHT_MAX;
+  dev->on = true;
 
   /* Keep the set-reset register and the masks of the data pin. Thus the
    * transfer loop needs no decode of the pin configuration.
@@ -153,9 +154,10 @@ void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
   stm32_gpiowrite(GPIO_SM1626D_CLK, false);
 }
 
-void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level)
+void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level, bool on)
 {
   dev->bright = (level > SM1626D_BRIGHT_MAX) ? SM1626D_BRIGHT_MAX : level;
+  dev->on = on;
 }
 
 void sm1626d_clear(struct sm1626d_dev_s *dev)
@@ -201,11 +203,20 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
 
 void sm1626d_refresh(struct sm1626d_dev_s *dev)
 {
-  int colbits = SM_COLBITS(dev->width);
-  int on_us = (SM_ROW_US * g_duty[dev->bright]) / SM_DUTY_STEPS;
+  int colbits;
+  int on_us;
   int row;
   int col;
   int rbit;
+
+  if (!dev->on)
+    {
+      sm_output(false);
+      return;
+    }
+
+  colbits = SM_COLBITS(dev->width);
+  on_us = (SM_ROW_US * g_duty[dev->bright]) / SM_DUTY_STEPS;
 
   for (row = 0; row < SM1626D_ROWS; row++)
     {

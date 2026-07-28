@@ -142,9 +142,12 @@ extern "C" {
 
 /* The payload of IPC_OP_SET_BRIGHT. One byte sets both devices. Two bytes
  * set the digits and the panels.
+ *
+ * The value 0 turns the device off. The values 1 to IPC_BRIGHT_MAX give eight
+ * levels of brightness, from the dimmest to the full level.
  */
 
-#define IPC_BRIGHT_MAX       7u
+#define IPC_BRIGHT_MAX       8u
 #define IPC_SET_BRIGHT_LEN   1u
 #define IPC_SET_BRIGHT2_LEN  2u
 

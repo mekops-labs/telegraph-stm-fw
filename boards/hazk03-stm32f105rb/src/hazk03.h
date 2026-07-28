@@ -154,7 +154,8 @@ void hazk03_display_utcoffset(int16_t minutes);
  *
  * Description:
  *   Set the brightness of the digits and of the panels. Permitted values are
- *   0 to 7.
+ *   0 to 8. The value 0 turns the device off. The values 1 to 8 give eight
+ *   levels of brightness, from the dimmest to the full level.
  *
  *   Note: the TM1629A has its own control. The panels use the on-time of
  *   each row.

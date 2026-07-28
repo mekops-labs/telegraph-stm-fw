@@ -362,7 +362,8 @@ void ipcCommand(const char *args) {
     } else if (strncmp(args, "small ", 6) == 0) {
         ipcRequest(IPC_OP_SET_SMALL, args + 6, (uint16_t)strlen(args + 6));
     } else if (strncmp(args, "bright ", 7) == 0) {
-        // The form is "bright <digits> [panels]". Permitted values are 0 to 7.
+        // The form is "bright <digits> [panels]". Permitted values are 0 to
+        // 8. The value 0 turns the device off.
         uint8_t payload[IPC_SET_BRIGHT2_LEN];
         char *end = NULL;
         uint16_t len = IPC_SET_BRIGHT_LEN;
