@@ -100,6 +100,13 @@
 #define ANIM_SRC_MAIN     512
 #define ANIM_SRC_SUB      128
 
+/* The speed a SET_TEXT frame scrolls at, when its text overflows its panel
+ * and no SET_ANIM call named a speed of its own.
+ */
+
+#define IPC_TEXT_SCROLL_PERIOD_MS 60
+#define IPC_TEXT_SCROLL_STEP      1
+
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
  */
@@ -709,6 +716,7 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
                         uint8_t valign)
 {
   struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
+  int width = sm1626d_textwidth(s, len);
 
   /* The edge MCU owns this panel from now on. Thus the content of the board
    * does not return over its text.
@@ -723,6 +731,12 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
       g_main_default = false;
     }
 
+  /* A prior call may have left this panel scrolling. A new text replaces
+   * that scroll, whether or not the new text scrolls in turn.
+   */
+
+  hazk03_display_animstop(panel);
+
   /* A second line must not erase the first, thus a text that takes the top or
    * the bottom clears its own rows alone.
    */
@@ -734,6 +748,33 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
       sm1626d_clear(dev);
       sm1626d_commit(dev);
       nxmutex_unlock(&g_fblock);
+    }
+
+  /* A text wider than the panel scrolls by itself: the caller sent one
+   * SET_TEXT frame, and does not have to know the panel width or the font
+   * metrics to pick SET_ANIM instead. The row-clearing that draw_text()
+   * would have done is unnecessary here, because the animation's window
+   * covers the same rows and every tick redraws all of them, on or off.
+   */
+
+  if (width > dev->width)
+    {
+      int line = fontext_lineheight();
+      int y = text_row(dev, valign) - fontext_ascent();
+      int ret = hazk03_display_animate(panel, 0, y, dev->width, line, false,
+                                       IPC_TEXT_SCROLL_PERIOD_MS,
+                                       IPC_TEXT_SCROLL_STEP, true, false,
+                                       0, 0, (const uint8_t *)s, len);
+
+      if (ret == OK)
+        {
+          return OK;
+        }
+
+      /* The scrolled source did not fit the board's source buffer (this
+       * text is long and the panel is the narrow one). Fall back to the
+       * truncated static draw rather than show nothing.
+       */
     }
 
   draw_text(dev, s, len, align, valign);
