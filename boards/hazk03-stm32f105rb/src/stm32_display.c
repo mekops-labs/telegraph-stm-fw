@@ -107,6 +107,12 @@
 #define IPC_TEXT_SCROLL_PERIOD_MS 60
 #define IPC_TEXT_SCROLL_STEP      1
 
+/* The blank gap after a scrolling text, before it wraps back to its start,
+ * in units of the font's advance width.
+ */
+
+#define TEXT_SCROLL_GAP_CHARS     3
+
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
  */
@@ -927,9 +933,14 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
     {
       /* The board draws the text itself. Thus a message that scrolls costs
        * one frame of the protocol, and not one frame for each step.
+       *
+       * The source wraps at its own end back to its own start. A gap of
+       * blank columns after the text keeps the wrap from reading as the
+       * text running into itself.
        */
 
-      srcw = sm1626d_textwidth((const char *)src, srclen);
+      srcw = sm1626d_textwidth((const char *)src, srclen) +
+             (TEXT_SCROLL_GAP_CHARS * fontext_advance());
       srch = h;
 
       if (srcw < w)
