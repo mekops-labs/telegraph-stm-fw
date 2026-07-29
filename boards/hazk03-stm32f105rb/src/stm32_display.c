@@ -496,11 +496,48 @@ static void anim_tick(void)
     }
 }
 
+/* Draw a text on one panel, or start it scrolling if the text does not fit.
+ *
+ * A caller that wants the fixed truncating draw calls draw_text() directly.
+ * A board default and an IPC text both go through this one instead, so a
+ * long boot version scrolls the same way a long IPC text does.
+ */
+
+static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
+                                size_t len, uint8_t align, uint8_t valign)
+{
+  int width = sm1626d_textwidth(s, len);
+
+  if (width > dev->width)
+    {
+      int panel = (dev == &g_sub) ? HAZK03_PANEL_SUB : HAZK03_PANEL_MAIN;
+      int line = fontext_lineheight();
+      int y = text_row(dev, valign) - fontext_ascent();
+      int ret = hazk03_display_animate(panel, 0, y, dev->width, line, false,
+                                       IPC_TEXT_SCROLL_PERIOD_MS,
+                                       IPC_TEXT_SCROLL_STEP, true, false,
+                                       0, 0, (const uint8_t *)s, len);
+
+      if (ret == OK)
+        {
+          return;
+        }
+
+      /* The scrolled source did not fit the source buffer of the board.
+       * This happens with a long text on the narrow panel. Fall back to
+       * the truncated static draw instead of showing nothing.
+       */
+    }
+
+  draw_text(dev, s, len, align, valign);
+}
+
 /* Put a text of the board on one panel. These texts go in the middle. */
 
 static void draw_default(struct sm1626d_dev_s *dev, const char *s)
 {
-  draw_text(dev, s, strlen(s), HAZK03_ALIGN_CENTRE, HAZK03_VALIGN_MIDDLE);
+  draw_text_or_scroll(dev, s, strlen(s), HAZK03_ALIGN_CENTRE,
+                      HAZK03_VALIGN_MIDDLE);
 }
 
 /* Put the content of the board on the panels that the edge MCU has not
@@ -716,7 +753,6 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
                         uint8_t valign)
 {
   struct sm1626d_dev_s *dev = (panel == HAZK03_PANEL_SUB) ? &g_sub : &g_main;
-  int width = sm1626d_textwidth(s, len);
 
   /* The edge MCU owns this panel from now on. Thus the content of the board
    * does not return over its text.
@@ -750,34 +786,7 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
       nxmutex_unlock(&g_fblock);
     }
 
-  /* A text wider than the panel scrolls by itself. The caller sends one
-   * SET_TEXT frame and needs no panel width or font metric to pick
-   * SET_ANIM instead. The animation redraws every pixel of its window
-   * each tick, on or off, so draw_text()'s own row-clearing is
-   * unnecessary here.
-   */
-
-  if (width > dev->width)
-    {
-      int line = fontext_lineheight();
-      int y = text_row(dev, valign) - fontext_ascent();
-      int ret = hazk03_display_animate(panel, 0, y, dev->width, line, false,
-                                       IPC_TEXT_SCROLL_PERIOD_MS,
-                                       IPC_TEXT_SCROLL_STEP, true, false,
-                                       0, 0, (const uint8_t *)s, len);
-
-      if (ret == OK)
-        {
-          return OK;
-        }
-
-      /* The scrolled source did not fit the source buffer of the board.
-       * This happens with a long text on the narrow panel. Fall back to
-       * the truncated static draw instead of showing nothing.
-       */
-    }
-
-  draw_text(dev, s, len, align, valign);
+  draw_text_or_scroll(dev, s, len, align, valign);
 
   return OK;
 }
