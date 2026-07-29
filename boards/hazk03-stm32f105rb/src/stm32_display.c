@@ -100,8 +100,8 @@
 #define ANIM_SRC_MAIN     512
 #define ANIM_SRC_SUB      128
 
-/* The speed a SET_TEXT frame scrolls at, when its text overflows its panel
- * and no SET_ANIM call named a speed of its own.
+/* A SET_TEXT frame that overflows its panel scrolls at this speed. A
+ * SET_ANIM call on the same panel may set a different speed instead.
  */
 
 #define IPC_TEXT_SCROLL_PERIOD_MS 60
@@ -750,11 +750,11 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
       nxmutex_unlock(&g_fblock);
     }
 
-  /* A text wider than the panel scrolls by itself: the caller sent one
-   * SET_TEXT frame, and does not have to know the panel width or the font
-   * metrics to pick SET_ANIM instead. The row-clearing that draw_text()
-   * would have done is unnecessary here, because the animation's window
-   * covers the same rows and every tick redraws all of them, on or off.
+  /* A text wider than the panel scrolls by itself. The caller sends one
+   * SET_TEXT frame and needs no panel width or font metric to pick
+   * SET_ANIM instead. The animation redraws every pixel of its window
+   * each tick, on or off, so draw_text()'s own row-clearing is
+   * unnecessary here.
    */
 
   if (width > dev->width)
@@ -771,9 +771,9 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
           return OK;
         }
 
-      /* The scrolled source did not fit the board's source buffer (this
-       * text is long and the panel is the narrow one). Fall back to the
-       * truncated static draw rather than show nothing.
+      /* The scrolled source did not fit the source buffer of the board.
+       * This happens with a long text on the narrow panel. Fall back to
+       * the truncated static draw instead of showing nothing.
        */
     }
 
@@ -818,9 +818,9 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
   size_t cap = (panel == HAZK03_PANEL_SUB) ? ANIM_SRC_SUB : ANIM_SRC_MAIN;
   size_t need;
 
-  /* A sprite in the flash carries its own step, thus the caller sends none.
-   * It also carries its own frame size, so a caller may leave w/h at 0 and
-   * take them from the file below instead of restating them by hand.
+  /* A sprite in the flash carries its own step. The caller sends none.
+   * It also carries its own frame size. A caller may leave w/h at 0 and
+   * take them from the file below, instead of restating them by hand.
    */
 
   if (period_ms == 0 || (step == 0 && !file) || ((w == 0 || h == 0) && !file))
