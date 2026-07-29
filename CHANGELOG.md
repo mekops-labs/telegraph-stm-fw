@@ -7,6 +7,16 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A text that overflows its panel scrolls by itself, instead of losing its
+  end. `SET_TEXT` compares the rendered width against the panel and starts
+  the same window/source scroll `SET_ANIM` uses.
+- A sprite's animation window may take its width and height from the
+  sprite's own file (its step and its height), instead of the caller
+  restating them by hand. The peer's `play` command gains a short form
+  that omits them.
+
 ### Changed
 
 - The system clock comes from the board's 25 MHz crystal and runs at 72 MHz,

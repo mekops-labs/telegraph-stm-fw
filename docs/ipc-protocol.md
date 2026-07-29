@@ -191,8 +191,10 @@ The other bits are 0. Any other value gets a NACK with the code `0x03`.
 The font of the firmware holds the ASCII table. The extended font in the flash
 holds the other letters. A character that neither font holds gives a space.
 
-The main panel holds 11 characters, and the sub panel holds 3. A longer text
-keeps its start, and it loses its end.
+**A text wider than its panel scrolls instead of losing its end.** The board
+compares the rendered width against the panel and starts the same window/source
+scroll that `0x05` uses, at a fixed speed. A text that fits stays static, as
+before.
 
 The reply is an ACK.
 
@@ -264,14 +266,19 @@ must hold exactly `((source width + 7) / 8) * source height` bytes.
 The source of the main panel holds 512 bytes and the sub panel holds 128. A
 larger source gets a NACK with the code `0x02`.
 
-Note: a width, a height, a period or a step of 0 gets a NACK with the code
-`0x03`.
+Note: a period of 0 gets a NACK with the code `0x03`. A width, a height, or a
+step of 0 also gets that NACK, except with `IPC_ANIM_FILE` (below).
 
 With `IPC_ANIM_FILE` the source is a sprite in the flash. The body is then the
 name of that sprite, such as `heart`. The file carries the size of the source,
 the step and the direction, thus the payload gives none of them. **A payload
 without a body gives the names of the sprites**, refer to
 [The names of the assets](#the-names-of-the-assets).
+
+**A width or a height of 0 takes the frame size from the file instead of a
+NACK.** The width becomes the file's step, and the height becomes the file's
+own height. A caller therefore cannot state a window that mismatches the
+sprite's frame.
 
 The reply is an ACK.
 
