@@ -777,9 +777,12 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
   size_t cap = (panel == HAZK03_PANEL_SUB) ? ANIM_SRC_SUB : ANIM_SRC_MAIN;
   size_t need;
 
-  /* A sprite in the flash carries its own step, thus the caller sends none. */
+  /* A sprite in the flash carries its own step, thus the caller sends none.
+   * It also carries its own frame size, so a caller may leave w/h at 0 and
+   * take them from the file below instead of restating them by hand.
+   */
 
-  if (w == 0 || h == 0 || period_ms == 0 || (step == 0 && !file))
+  if (period_ms == 0 || (step == 0 && !file) || ((w == 0 || h == 0) && !file))
     {
       return -EINVAL;
     }
@@ -837,6 +840,22 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h,
         {
           close(fd);
           return -E2BIG;
+        }
+
+      /* A window left at 0/0 takes the frame size from the file: the frame
+       * width is the file's step, the frame height is the file's height.
+       * This is what stops a window wider than one frame from showing part
+       * of the next one beside it.
+       */
+
+      if (w == 0)
+        {
+          w = step;
+        }
+
+      if (h == 0)
+        {
+          h = srch;
         }
 
       nxmutex_lock(&g_fblock);
