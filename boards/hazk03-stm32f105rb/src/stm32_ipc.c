@@ -567,7 +567,7 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
     char path[IPC_ASSET_PATH_MAX + 1];
     uint8_t *reply = g_reply;
     uint16_t used = IPC_FS_LIST_PATH;
-    uint16_t index;
+    uint16_t cursor;
     uint16_t ordinal = 0;
     DIR *dir;
 
@@ -576,7 +576,7 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
         return;
     }
 
-    index = ipc_get_u16(&frame->payload[IPC_FS_LIST_INDEX]);
+    cursor = ipc_get_u16(&frame->payload[IPC_FS_LIST_INDEX]);
 
     if (!ipc_take_path(frame, IPC_FS_LIST_PATH, path, sizeof(path))) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
@@ -596,18 +596,18 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
         char full[IPC_FS_FULLPATH_MAX];
 
         if (entry == NULL) {
-            index = IPC_FS_INDEX_END;
+            cursor = IPC_FS_INDEX_END;
             break;
         }
 
-        if (ordinal++ < index) {
+        if (ordinal++ < cursor) {
             continue;
         }
 
         namelen = strlen(entry->d_name);
 
         if (used + IPC_FS_ENTRY_NAME + namelen > IPC_FS_REPLY_MAX) {
-            index = (uint16_t)(ordinal - 1);
+            cursor = (uint16_t)(ordinal - 1);
             break;
         }
 
@@ -633,7 +633,7 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
 
     closedir(dir);
 
-    ipc_put_u16(&reply[IPC_FS_LIST_INDEX], index);
+    ipc_put_u16(&reply[IPC_FS_LIST_INDEX], cursor);
 
     ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), frame->opcode,
                              frame->corr_id, reply, used));
@@ -943,15 +943,15 @@ static int ipc_chan_reader(int argc, char **argv) {
  */
 
 static int ipc_usb_open(uint8_t channel) {
-    char path[IPC_USB_DEVPATH_MAX];
     char arg[IPC_USB_ARG_MAX];
-    char *argv[2];
 
     if (channel >= IPC_USB_CHANNELS) {
         return -1;
     }
 
     if (g_usb_fds[channel] < 0) {
+        char path[IPC_USB_DEVPATH_MAX];
+
         ipc_usb_devpath(path, sizeof(path), channel);
 
         /* The reader of this channel waits here, thus the device carries no
@@ -966,6 +966,8 @@ static int ipc_usb_open(uint8_t channel) {
     }
 
     if (!g_usb_reader[channel]) {
+        char *argv[2];
+
         snprintf(arg, sizeof(arg), "%u", channel);
 
         argv[0] = arg;
@@ -1026,9 +1028,10 @@ static void ipc_usb_list(struct ipc_ctx_s *ctx,
 #ifdef CONFIG_USBHOST_MSC
     {
         struct stat st;
-        size_t namelen = strlen(IPC_ROOT_MEDIA);
 
         if (stat(IPC_ROOT_MEDIA, &st) == 0) {
+            size_t namelen = strlen(IPC_ROOT_MEDIA);
+
             reply[used + IPC_USB_DEV_CHANNEL] = IPC_USB_NO_CHANNEL;
             reply[used + IPC_USB_DEV_KIND] = IPC_USB_KIND_STORAGE;
             reply[used + IPC_USB_DEV_NAMELEN] = (uint8_t)namelen;
