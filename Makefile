@@ -31,7 +31,7 @@ FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
-        flasher flasher-image flasher-ota
+        flasher flasher-image flasher-ota lint-format format-fix
 
 help:
 	@echo "Targets:"
@@ -47,6 +47,8 @@ help:
 	@echo "  compactfont   build the compact font, for two lines"
 	@echo "  sprites       build the sprites of the animation"
 	@echo "  test          build and run the host tests of the IPC library"
+	@echo "  lint-format   reject any clang-format drift in boards/ and ipc/"
+	@echo "  format-fix    reformat boards/ and ipc/ in place with clang-format"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
 	@echo "  clean         remove the build output, keep the configuration"
@@ -164,6 +166,19 @@ test:
 	$(RUN) sh -c 'mkdir -p $(BUILD) && \
 	  cc $(IPC_CF) -I$(UNITY)/src $(IPC_SRC) ipc/tests/test_ipc.c \
 	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN)'
+
+# The formatter covers this repository's own C sources only: boards/ is the
+# board port, ipc/ is the shared framing library. third_party/ is vendored
+# NuttX and stays as upstream ships it.
+FMT_DIRS  := boards ipc
+
+lint-format:
+	$(RUN) sh -c 'find $(FMT_DIRS) \( -name "*.c" -o -name "*.h" \) -print0 \
+	  | xargs -0 clang-format --dry-run --Werror'
+
+format-fix:
+	$(RUN) sh -c 'find $(FMT_DIRS) \( -name "*.c" -o -name "*.h" \) -print0 \
+	  | xargs -0 clang-format -i'
 
 menuconfig: configure
 	$(RUN) $(MAKE) -C $(NUTTX) menuconfig
