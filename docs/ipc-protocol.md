@@ -501,7 +501,13 @@ for each part that the channel gives, with the correlation ID `0x0000`:
 | 1 | n | The data |
 
 One push carries 256 bytes at most. A part longer than that takes further push
-frames.
+frames. A line of a device therefore arrives across several frames, and the
+board holds no boundary of its own — the bytes are those of the channel and
+nothing more.
+
+The board closes a channel whose device reports a fault, and it sends a `0x12`
+log line when it does. A caller that wants the channel again turns it on with
+`0x34`.
 
 ### `0x07` Stop the animations
 
