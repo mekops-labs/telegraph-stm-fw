@@ -9,9 +9,11 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,6 +68,16 @@
  */
 
 #define IPC_TEXT_MAX 64
+
+/* A stat of one entry of a list takes the directory, a separator and the name
+ * of the entry.
+ *
+ * Note: a name longer than this value gives a size of 0 in the reply, because
+ * the stat of the truncated path fails. SmartFS holds 32 characters.
+ */
+
+#define IPC_FS_NAME_MAX 64
+#define IPC_FS_FULLPATH_MAX (IPC_ASSET_PATH_MAX + 1 + IPC_FS_NAME_MAX + 1)
 
 /****************************************************************************
  * Private Types
@@ -131,6 +143,12 @@ static uint8_t ipc_credits(const struct ipc_ctx_s *ctx) {
 /* The file of the assets that a transfer holds open. */
 
 static int g_asset_fd = -1;
+
+/* The reply of a list or of a read. The buffer is static, because the stack of
+ * the task holds no room for it.
+ */
+
+static uint8_t g_fs_reply[IPC_FS_REPLY_MAX];
 #endif
 
 static void ipc_ack(struct ipc_ctx_s *ctx, uint16_t corr_id) {
@@ -457,6 +475,229 @@ static void ipc_set_sleep(struct ipc_ctx_s *ctx,
 #ifdef CONFIG_FS_SMARTFS
 /* Make the directory of a path. A path with no directory does nothing. */
 
+/* Test a path of a storage opcode against the roots the link reaches. A root
+ * matches the whole first element of the path, thus "/assetsx" is outside it.
+ */
+
+static bool ipc_path_ok(const char *path) {
+    static const char *const roots[] = {IPC_ROOT_ASSETS, IPC_ROOT_MEDIA};
+
+    if (strstr(path, "..") != NULL) {
+        return false;
+    }
+
+    for (size_t i = 0; i < sizeof(roots) / sizeof(roots[0]); i++) {
+        size_t len = strlen(roots[i]);
+
+        if (strncmp(path, roots[i], len) == 0 &&
+            (path[len] == '\0' || path[len] == '/')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Copy the path that ends the payload into dst. The caller gives the offset of
+ * the first byte of the path.
+ */
+
+static bool ipc_take_path(const struct ipc_frame_s *frame, uint16_t offset,
+                          char *dst, size_t size) {
+    uint16_t len;
+
+    if (frame->payload_len <= offset) {
+        return false;
+    }
+
+    len = frame->payload_len - offset;
+
+    if (len >= size) {
+        return false;
+    }
+
+    memcpy(dst, &frame->payload[offset], len);
+    dst[len] = '\0';
+
+    return ipc_path_ok(dst);
+}
+
+/* Give the entries of a directory, from the ordinal that the request names.
+ * The reply holds as many entries as one frame carries.
+ */
+
+static void ipc_fs_list(struct ipc_ctx_s *ctx,
+                        const struct ipc_frame_s *frame) {
+    char path[IPC_ASSET_PATH_MAX + 1];
+    uint8_t *reply = g_fs_reply;
+    uint16_t used = IPC_FS_LIST_PATH;
+    uint16_t index;
+    uint16_t ordinal = 0;
+    DIR *dir;
+
+    if (frame->payload_len < IPC_FS_LIST_PATH) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    index = ipc_get_u16(&frame->payload[IPC_FS_LIST_INDEX]);
+
+    if (!ipc_take_path(frame, IPC_FS_LIST_PATH, path, sizeof(path))) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    dir = opendir(path);
+    if (dir == NULL) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    for (;;) {
+        struct dirent *entry = readdir(dir);
+        size_t namelen;
+        struct stat st;
+        char full[IPC_FS_FULLPATH_MAX];
+
+        if (entry == NULL) {
+            index = IPC_FS_INDEX_END;
+            break;
+        }
+
+        if (ordinal++ < index) {
+            continue;
+        }
+
+        namelen = strlen(entry->d_name);
+
+        if (used + IPC_FS_ENTRY_NAME + namelen > IPC_FS_REPLY_MAX) {
+            index = (uint16_t)(ordinal - 1);
+            break;
+        }
+
+        /* The size comes from a stat of the entry. A directory reports 0. */
+
+        st.st_size = 0;
+        snprintf(full, sizeof(full), "%s/%s", path, entry->d_name);
+        stat(full, &st);
+
+        reply[used + IPC_FS_ENTRY_KIND] = (entry->d_type == DTYPE_DIRECTORY)
+                                              ? IPC_FS_KIND_DIR
+                                              : IPC_FS_KIND_FILE;
+
+        ipc_put_u32(&reply[used + IPC_FS_ENTRY_SIZE],
+                    (entry->d_type == DTYPE_DIRECTORY) ? 0u
+                                                       : (uint32_t)st.st_size);
+
+        reply[used + IPC_FS_ENTRY_NAMELEN] = (uint8_t)namelen;
+        memcpy(&reply[used + IPC_FS_ENTRY_NAME], entry->d_name, namelen);
+
+        used += (uint16_t)(IPC_FS_ENTRY_NAME + namelen);
+    }
+
+    closedir(dir);
+
+    ipc_put_u16(&reply[IPC_FS_LIST_INDEX], index);
+
+    ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), frame->opcode,
+                             frame->corr_id, reply, used));
+}
+
+/* Give one part of a file. A reply of the offset alone states that the offset
+ * is at or past the end of the file.
+ */
+
+static void ipc_fs_read(struct ipc_ctx_s *ctx,
+                        const struct ipc_frame_s *frame) {
+    char path[IPC_ASSET_PATH_MAX + 1];
+    uint8_t *reply = g_fs_reply;
+    uint32_t offset;
+    uint16_t length;
+    ssize_t got;
+    int fd;
+
+    if (frame->payload_len < IPC_FS_READ_PATH) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    offset = ipc_get_u32(&frame->payload[IPC_FS_READ_OFFSET]);
+    length = ipc_get_u16(&frame->payload[IPC_FS_READ_LENGTH]);
+
+    if (length > IPC_FS_READ_MAX) {
+        length = IPC_FS_READ_MAX;
+    }
+
+    if (!ipc_take_path(frame, IPC_FS_READ_PATH, path, sizeof(path))) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    if (lseek(fd, (off_t)offset, SEEK_SET) != (off_t)offset) {
+        close(fd);
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    got = read(fd, &reply[IPC_FS_READ_DATA], length);
+    close(fd);
+
+    if (got < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    ipc_put_u32(&reply[IPC_FS_READ_OFFSET], offset);
+
+    ipc_send(ctx,
+             ipc_encode(ctx->tx, sizeof(ctx->tx), frame->opcode, frame->corr_id,
+                        reply, (uint16_t)(IPC_FS_READ_DATA + (size_t)got)));
+}
+
+static void ipc_fs_delete(struct ipc_ctx_s *ctx,
+                          const struct ipc_frame_s *frame) {
+    char path[IPC_ASSET_PATH_MAX + 1];
+
+    if (!ipc_take_path(frame, 0, path, sizeof(path))) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    /* A directory needs its own call, and the caller does not state the kind
+     * of the entry.
+     */
+
+    if (unlink(path) < 0 && rmdir(path) < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    ipc_ack(ctx, frame->corr_id);
+}
+
+static void ipc_fs_mkdir(struct ipc_ctx_s *ctx,
+                         const struct ipc_frame_s *frame) {
+    char path[IPC_ASSET_PATH_MAX + 1];
+
+    if (!ipc_take_path(frame, 0, path, sizeof(path))) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    if (mkdir(path, 0777) < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    ipc_ack(ctx, frame->corr_id);
+}
+
 /* cppcheck-suppress constParameterPointer
  * The function writes through path via the alias strrchr() returns, which
  * cppcheck does not trace back to this parameter. A const path would still
@@ -501,6 +742,11 @@ static void ipc_write_asset(struct ipc_ctx_s *ctx,
 
     memcpy(path, &frame->payload[IPC_ASSET_PATH], pathlen);
     path[pathlen] = '\0';
+
+    if (!ipc_path_ok(path)) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
 
     data = &frame->payload[IPC_ASSET_PATH + pathlen];
     datalen = frame->payload_len - (uint16_t)(IPC_ASSET_PATH + pathlen);
@@ -555,6 +801,22 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
 #ifdef CONFIG_FS_SMARTFS
     case IPC_OP_WRITE_ASSET:
         ipc_write_asset(ctx, frame);
+        break;
+
+    case IPC_OP_FS_LIST:
+        ipc_fs_list(ctx, frame);
+        break;
+
+    case IPC_OP_FS_READ:
+        ipc_fs_read(ctx, frame);
+        break;
+
+    case IPC_OP_FS_DELETE:
+        ipc_fs_delete(ctx, frame);
+        break;
+
+    case IPC_OP_FS_MKDIR:
+        ipc_fs_mkdir(ctx, frame);
         break;
 #endif
 
