@@ -16,6 +16,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sprite's own file (its step and its height), instead of the caller
   restating them by hand. The peer's `play` command gains a short form
   that omits them.
+- A scrolling text now carries a 3-character blank gap after its end,
+  so the wrap back to the start no longer runs into the text itself.
 
 ### Changed
 
