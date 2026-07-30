@@ -435,8 +435,10 @@ one.
 ## The serial devices of the USB port
 
 A serial device of the USB port carries a channel, and the edge MCU reads and
-writes that channel over the link. The board holds one channel open at a time,
-because one device sits on the port.
+writes that channel over the link. The board follows one channel at a time. A
+task of its own waits on each device that the board opens, and that device
+stays open, thus the class of the host keeps the device under a reader that
+blocks.
 
 The class of the host is CDC/ACM. Thus a device with a serial chip of a vendor
 — an FTDI part, a CP2102, a CH340 — gives no channel, and a device that follows
@@ -481,9 +483,9 @@ The count wraps at 256, which no repeat of one write can reach.
 The board also sends a `0x12` log line for each repeat it drops, thus an
 operator sees that the stream took the bytes one time.
 
-Note: the board forgets that value when a channel opens or closes. A sender
-therefore starts a new channel from any value, and a repeat that crosses a
-close reaches the stream as a new write.
+Note: the board forgets that value when it follows another channel. A sender
+therefore starts a new channel from any value, and a repeat that crosses that
+point reaches the stream as a new write.
 
 ### `0x34` Follow a channel, `0x33` what it holds
 
@@ -505,9 +507,8 @@ frames. A line of a device therefore arrives across several frames, and the
 board holds no boundary of its own — the bytes are those of the channel and
 nothing more.
 
-The board closes a channel whose device reports a fault, and it sends a `0x12`
-log line when it does. A caller that wants the channel again turns it on with
-`0x34`.
+A `0x34` that stops a channel stops the push frames. The device stays open,
+thus its bytes reach no caller until a `0x34` starts the channel again.
 
 ### `0x07` Stop the animations
 

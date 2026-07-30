@@ -21,6 +21,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A write to a channel carries a sequence, so a request sent again after a lost
   reply adds no bytes to the stream a second time.
 
+### Changed
+
+- A task of its own waits on each channel of the USB port and gives its bytes
+  to the server through a ring. The server no longer reads a channel between
+  two waits on the link, and a device that the board opens stays open.
+
 ### Fixed
 
 - A path from the edge MCU must start with `/assets` or `/media`, so the
