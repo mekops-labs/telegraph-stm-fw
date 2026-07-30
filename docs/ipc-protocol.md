@@ -259,6 +259,10 @@ With `IPC_ANIM_TEXT` the board draws the text into the source itself, and the
 width and the height of the source are 0. **A message that scrolls thus costs
 one frame of the protocol, and not one frame for each step.**
 
+The board pads the drawn text with a blank gap of 3 character-widths before
+the source wraps back to its own start. Without that gap the wrap reads as
+the text running into itself.
+
 Without that flag the source is a bitmap. The pixels go row by row, each row
 starts at a byte, and bit 7 of a byte is the pixel at the left. The payload
 must hold exactly `((source width + 7) / 8) * source height` bytes.
