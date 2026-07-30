@@ -7,37 +7,27 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-30
+
 ### Added
 
-- A text that overflows its panel scrolls by itself, instead of losing its
-  end. `SET_TEXT` compares the rendered width against the panel and starts
-  the same window/source scroll `SET_ANIM` uses.
-- A sprite's animation window may take its width and height from the
-  sprite's own file (its step and its height), instead of the caller
-  restating them by hand. The peer's `play` command gains a short form
-  that omits them.
-- A scrolling text now carries a 3-character blank gap after its end,
-  so the wrap back to the start no longer runs into the text itself.
-- A `SET_TEXT` that overflows the panel wraps across the compact font's
-  two lines at a word boundary. A wrap that still overflows the panel
-  height scrolls down by rows instead of losing its end.
+- `SET_TEXT` scrolls a text that overflows its panel, instead of truncating it.
+- A sprite's animation window may take its width and height from the sprite's
+  own file. The peer's `play` command gains a short form that omits them.
+- A scrolling text carries a blank gap, so it does not run into itself on wrap.
+- An overflowing `SET_TEXT` wraps across the compact font's two lines at a
+  word boundary, and scrolls down by rows if the wrap itself still overflows.
 
 ### Changed
 
-- The system clock comes from the board's 25 MHz crystal and runs at 72 MHz,
-  twice the previous rate. The USB host peripheral requires a 48 MHz clock
-  that only a PLL on the crystal produces, so this path is what makes USB
-  reachable at all. Under a 1000-frame burst the link now delivers 10 000
-  frames without an error, against roughly one loss per 700 frames before.
-  The option `HAZK03_CLOCK_HSE` returns the clock to the internal oscillator
-  at 36 MHz.
+- The system clock runs at 72 MHz from the board's 25 MHz crystal, twice the
+  previous rate and the source of the USB host's 48 MHz clock. `HAZK03_CLOCK_HSE`
+  reverts to the internal 36 MHz oscillator.
 
 ### Fixed
 
-- A lost ACK no longer stops the link. The ACK carries the sender's whole
-  allowance, so losing one left that allowance at zero and no further frame
-  went out until an operator restarted the link. The sender now takes one
-  credit back after a wait that no ACK ends.
+- A lost ACK no longer stops the link; the sender now recovers a credit after
+  a wait that no ACK ends.
 
 ## [0.2.0] - 2026-07-28
 
@@ -231,6 +221,7 @@ hardware and answers a binary protocol on the edge MCU's UART.
 - The scan loop is CPU-driven, not DMA-driven.
 - The firmware has no animation support and reads no USB device.
 
+[0.3.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.3.0
 [0.2.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.2.0
 [0.1.1]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.1.1
 [0.1.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.1.0
