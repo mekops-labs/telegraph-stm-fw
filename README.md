@@ -246,12 +246,11 @@ reads the device sees no limit. The server of the protocol cannot block,
 because one task serves the link as well — for it the delay alone sets the
 rate. The value is 10 ms.
 
-**`USBHOST_CDCACM_RXBUFSIZE` is 512, and the default of 128 gives corrupt
-text.** When that buffer fills in the middle of a packet, the class copies one
-byte a second time on its next run: `usbhost_rxdata_work()` saves the index of
-the byte it has just taken rather than the index of the next one. A larger
-buffer keeps it from filling. The defect belongs to the class, not to this
-board.
+Note: the class held a defect that gave corrupt text on this path.
+`usbhost_rxdata_work()` saved the index of the byte it had just taken rather
+than the index of the next one, thus it took that byte a second time whenever
+its receive buffer filled in the middle of a packet. The fix is in the NuttX
+submodule of this repository.
 
 Note: the build takes the reduced protocol of that class, which uses the two
 bulk endpoints of the data interface alone. The compliant protocol depends on

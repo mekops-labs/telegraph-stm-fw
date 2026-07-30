@@ -30,9 +30,11 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The server of the protocol serves the link before a channel of the USB port,
   and no path through its loop spins. A wait that returned at once used to stop
   the link and the display together.
-- A channel of the USB port carries its bytes at a usable rate, and its text is
-  no longer corrupt. The rate came from a delay of the class that only a reader
-  which blocks avoids, and the corruption from a receive buffer that filled.
+- A channel of the USB port carries its bytes at a usable rate. That rate came
+  from a delay of the class which only a reader that blocks avoids.
+- A channel of the USB port no longer repeats a character. The class took one
+  byte a second time whenever its receive buffer filled in the middle of a
+  packet, and the fix is in the NuttX submodule.
 
 ## [0.3.0] - 2026-07-30
 
