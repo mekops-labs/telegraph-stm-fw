@@ -191,10 +191,9 @@ The other bits are 0. Any other value gets a NACK with the code `0x03`.
 The font of the firmware holds the ASCII table. The extended font in the flash
 holds the other letters. A character that neither font holds gives a space.
 
-**A text wider than its panel scrolls instead of losing its end.** The board
-compares the rendered width against the panel and starts the same window/source
-scroll that `0x05` uses, at a fixed speed. A text that fits stays static, as
-before.
+**A text wider than its panel scrolls.** The board compares the rendered width
+against the panel and starts the same window/source scroll that `0x05` uses,
+at a fixed speed. A text that fits stays static.
 
 **With a font whose line height leaves room for a second line, an overflowing
 text wraps at a word instead of scrolling across.** A word wider than the
@@ -287,10 +286,9 @@ the step and the direction, thus the payload gives none of them. **A payload
 without a body gives the names of the sprites**, refer to
 [The names of the assets](#the-names-of-the-assets).
 
-**A width or a height of 0 takes the frame size from the file instead of a
-NACK.** The width becomes the file's step, and the height becomes the file's
-own height. A caller therefore cannot state a window that mismatches the
-sprite's frame.
+**A width or a height of 0 takes the frame size from the file.** The width
+becomes the file's step, and the height becomes the file's own height. A
+caller therefore cannot state a window that mismatches the sprite's frame.
 
 The reply is an ACK.
 

@@ -259,6 +259,13 @@ resolves NuttX's headers through the same generated `nuttx/config.h` and
 `arch/board`/`arch/chip` symlinks a real build uses, so it needs `configure`
 to have run at least once.
 
+`ipc/` holds its own `.clang-tidy`, with `InheritParentConfig: true` layering
+`readability-identifier-length` and `readability-magic-numbers` on top of the
+root config. `ipc/` is the shared, portable framing library both MCUs and the
+host tests compile, so it is held to a stricter bar than the board-specific
+code in `boards/`. `make tidy` passes no `--config-file`, so clang-tidy finds
+the nearest `.clang-tidy` for each file on its own.
+
 ## License
 
 The license is Apache-2.0. Refer to [LICENSE](LICENSE) and [NOTICE](NOTICE).

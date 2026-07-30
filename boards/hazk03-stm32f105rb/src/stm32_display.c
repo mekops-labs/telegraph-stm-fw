@@ -86,8 +86,9 @@
 /* The thread of the board runs at this period. It moves the animations, and
  * it keeps the digits when the second of the clock changes.
  *
- * Note: the digits follow the clock and not a count of these waits. A wait
- * takes at least its period and often more, thus a count of them drifts.
+ * Note: the digits follow the clock itself, read fresh on every wait. A wait
+ * takes at least its period and often more, so this is what keeps a long
+ * iteration from costing the digits a second.
  */
 
 #define TICK_MS 20
@@ -928,7 +929,7 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
 
     /* A sprite in the flash carries its own step. The caller sends none.
      * It also carries its own frame size. A caller may leave w/h at 0 and
-     * take them from the file below, instead of restating them by hand.
+     * take them from the file below.
      */
 
     if (period_ms == 0 || (step == 0 && !file) ||
