@@ -16,6 +16,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `0x14` to `0x17`.
 - Long file names on the USB device, up to 32 characters. A name there matches
   by case.
+- A serial device of the class CDC/ACM on the USB port reaches the edge MCU as
+  a channel. Opcodes `0x30` to `0x34`.
 
 ### Fixed
 

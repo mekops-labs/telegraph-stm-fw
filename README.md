@@ -221,6 +221,17 @@ in the 8.3 form is upper case, thus a request in lower case reaches no file.
 Note: NuttX flags `FAT_LFN` with a patent notice from Microsoft. Refer to the
 `NOTICE` file of that project.
 
+The port also takes a serial device of the class CDC/ACM, which the board gives
+to the edge MCU as a channel. A device with a serial chip of a vendor — an FTDI
+part, a CP2102, a CH340 — needs a driver that NuttX does not carry, thus it
+gives no channel.
+
+Note: the build takes the reduced protocol of that class, which uses the two
+bulk endpoints of the data interface alone. The compliant protocol depends on
+`SERIAL_OFLOWCONTROL`, and a UART driver alone selects that option. A device
+that follows the standard works either way, and the endpoint of its
+notifications stays unused.
+
 ## IPC library
 
 The directory `ipc/` holds the protocol that connects the two MCUs. The code
