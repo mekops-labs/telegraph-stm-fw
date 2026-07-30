@@ -234,6 +234,17 @@ make test
 The tests use [Unity](https://www.throwtheswitch.org/unity). They run with the
 host compiler, thus they need no hardware.
 
+### Formatting
+
+```sh
+make lint-format   # reject any drift, the check CI would run
+make format-fix    # reformat boards/ and ipc/ in place
+```
+
+The style is `clang-format` with the config in `.clang-format`, the same
+style as the `wanted-engine` repository. `third_party/` is vendored NuttX
+and stays as upstream ships it.
+
 ## License
 
 The license is Apache-2.0. Refer to [LICENSE](LICENSE) and [NOTICE](NOTICE).
