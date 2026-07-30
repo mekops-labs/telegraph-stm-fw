@@ -56,6 +56,18 @@ display.
 - **The matrix scan must not stop.** The panel keeps an image only during a
   scan. There are 16 rows, and the time for one row is 200 µs. The frame rate
   is thus 312 Hz.
+- **Nothing runs above the thread that shifts the rows.** That thread takes the
+  priority 95, and a thread above it interrupts a row in the middle. Both panels
+  share the clock, the strobe and the output-enable lines, thus such an
+  interruption leaves random pixels on both of them.
+
+  The work queues therefore take priorities below it: `SCHED_HPWORKPRIORITY` is
+  70 and `SCHED_LPWORKPRIORITY` is 50. The classes of the USB host run their
+  work there, and a device that streams keeps those queues busy.
+
+  Note: the two values must differ by 16 or more. `SCHED_LPWORKPRIOMAX` comes
+  from `SCHED_HPWORKPRIORITY` less 16, and the build stops when the low priority
+  is above that limit.
 - **The TM1629A digit positions are not adjacent.** The digits use the shift
   register bits `{0..9, 12, 13}`. The bits 10 and 11 drive decorative LEDs.
 

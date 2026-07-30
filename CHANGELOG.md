@@ -18,11 +18,15 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by case.
 - A serial device of the class CDC/ACM on the USB port reaches the edge MCU as
   a channel. Opcodes `0x30` to `0x34`.
+- A write to a channel carries a sequence, so a request sent again after a lost
+  reply adds no bytes to the stream a second time.
 
 ### Fixed
 
 - A path from the edge MCU must start with `/assets` or `/media`, so the
   settings and the raw devices stay out of reach of the link.
+- The work queues run below the row shifter. A device that streams over the USB
+  port used to interrupt a row and leave both panels showing random pixels.
 
 ## [0.3.0] - 2026-07-30
 
