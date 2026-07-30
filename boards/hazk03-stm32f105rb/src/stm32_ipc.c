@@ -812,12 +812,16 @@ static bool g_usb_sub;
 static uint8_t g_usb_seq;
 static bool g_usb_seq_valid;
 
-/* Whether the channel takes its place in the wait of the server beside the
- * link. A device whose driver gives no wait clears this, and the server then
- * reads the channel after each wait instead.
+/* The server reads a followed channel after each wait of the link, and it does
+ * not wait on the channel itself.
+ *
+ * Note: the class of the host takes one packet from the device for each run of
+ * its own work, and it schedules that work again after
+ * CONFIG_USBHOST_CDCACM_RXDELAY. A reader that blocks replaces that delay with
+ * immediate work; a reader that does not block, as this server cannot, leaves
+ * the delay in place. The rate of the channel is thus one packet per that
+ * delay, and the value belongs to the configuration of the board.
  */
-
-static bool g_usb_poll;
 
 static void ipc_usb_devpath(char *path, size_t size, uint8_t channel) {
     snprintf(path, size, IPC_USB_DEVFMT, channel);
@@ -851,7 +855,6 @@ static int ipc_usb_open(uint8_t channel) {
          */
 
         g_usb_seq_valid = false;
-        g_usb_poll = true;
     }
 
     return g_usb_fd;
@@ -1168,14 +1171,13 @@ static int ipc_server(int argc, char *argv[]) {
     ipc_log(ctx, hse);
 
     for (;;) {
-        struct pollfd pfd[2];
-        int nfds = 1;
+        struct pollfd pfd;
         int timeout;
         int ret;
         bool worked = false;
 
-        pfd[0].fd = ctx->fd;
-        pfd[0].events = POLLIN;
+        pfd.fd = ctx->fd;
+        pfd.events = POLLIN;
 
         /* A wait with a limit is necessary only for a partial frame. Without
          * that condition the task blocks. Thus it does not interrupt the scan
@@ -1190,34 +1192,15 @@ static int ipc_server(int argc, char *argv[]) {
          */
 
         if (g_usb_sub && g_usb_fd >= 0) {
-            if (g_usb_poll) {
-                pfd[1].fd = g_usb_fd;
-                pfd[1].events = POLLIN;
-                nfds = 2;
-            } else {
-                /* The driver of this channel gives no wait. A read follows
-                 * each wait of the link instead, thus that wait needs a limit.
-                 */
-
-                timeout = IPC_IDLE_MS;
-            }
-        }
-#endif
-
-        ret = poll(pfd, nfds, timeout);
-
-#ifdef CONFIG_USBHOST_CDCACM
-        if (ret < 0 && nfds == 2) {
-            /* The wait failed, and the channel is the only member of the set
-             * that a driver may refuse. Take it out rather than spin here,
-             * because this task alone serves the link.
+            /* A read of the channel follows each wait of the link, thus that
+             * wait needs a limit.
              */
 
-            g_usb_poll = false;
-            ipc_log(ctx, "usb: the channel gives no wait");
-            continue;
+            timeout = IPC_IDLE_MS;
         }
 #endif
+
+        ret = poll(&pfd, 1, timeout);
 
         if (ret < 0) {
             /* Nothing here can recover a failed wait on the link. A pause
@@ -1228,27 +1211,11 @@ static int ipc_server(int argc, char *argv[]) {
             continue;
         }
 
-#ifdef CONFIG_USBHOST_CDCACM
-        /* A channel that reports a fault reports it at every wait, and such a
-         * wait returns at once. Close the channel rather than turn this loop,
-         * which serves the link, into a spin.
-         */
-
-        if (nfds == 2 && (pfd[1].revents & (POLLERR | POLLHUP)) != 0) {
-            close(g_usb_fd);
-            g_usb_fd = -1;
-            g_usb_sub = false;
-            g_usb_seq_valid = false;
-
-            ipc_log(ctx, "usb: the channel faulted and is closed");
-        }
-#endif
-
         /* The link comes first. A reply that waits behind the bytes of a
          * channel is a reply that the sender gives up on.
          */
 
-        if (ret > 0 && (pfd[0].revents & POLLIN) != 0) {
+        if (ret > 0 && (pfd.revents & POLLIN) != 0) {
             ssize_t n = read(ctx->fd, buf, sizeof(buf));
 
             worked = true;
@@ -1267,19 +1234,12 @@ static int ipc_server(int argc, char *argv[]) {
 
 #ifdef CONFIG_USBHOST_CDCACM
         if (g_usb_sub && g_usb_fd >= 0) {
-            if (nfds == 2) {
-                if (ret > 0 && (pfd[1].revents & POLLIN) != 0) {
-                    ipc_usb_push(ctx);
-                    worked = true;
-                }
-            } else {
-                /* The read gives nothing when the channel holds nothing,
-                 * because the descriptor carries O_NONBLOCK.
-                 */
+            /* The read gives nothing when the channel holds nothing, because
+             * the descriptor carries O_NONBLOCK.
+             */
 
-                ipc_usb_push(ctx);
-                worked = true;
-            }
+            ipc_usb_push(ctx);
+            worked = true;
         }
 #endif
 
