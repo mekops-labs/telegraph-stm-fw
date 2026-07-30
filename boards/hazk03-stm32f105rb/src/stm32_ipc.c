@@ -87,6 +87,27 @@
 #define IPC_USB_DEVFMT "/dev/ttyACM%u"
 #define IPC_USB_DEVPATH_MAX 16
 #define IPC_USB_NOTE_MAX 40
+#define IPC_USB_ARG_MAX 4
+
+/* One task waits on each channel. The priority is below the scan loop of the
+ * display, and the task waits on its device almost all of the time.
+ */
+
+#define IPC_CHAN_PRIORITY 80
+#define IPC_CHAN_STACKSIZE 1024
+#define IPC_CHAN_CHUNK 64
+
+/* The ring holds what a channel sends between two runs of the server. A burst
+ * of a device at 115200 baud gives near 1200 bytes.
+ */
+
+#define IPC_CHAN_RING 2048u
+
+/* The frames of a channel that one run of the server sends. The limit keeps a
+ * talkative device from holding the link away from a request.
+ */
+
+#define IPC_CHAN_DRAIN 8
 
 /****************************************************************************
  * Private Types
@@ -108,6 +129,10 @@ static struct ipc_ctx_s *g_ipc;
  * Private Functions
  ****************************************************************************/
 
+/* The count of the frames that a write of the link abandoned part way. */
+
+static uint32_t g_link_lost;
+
 static void ipc_send(const struct ipc_ctx_s *ctx, int len) {
     const uint8_t *p = ctx->tx;
 
@@ -119,6 +144,7 @@ static void ipc_send(const struct ipc_ctx_s *ctx, int len) {
         ssize_t n = write(ctx->fd, p, (size_t)len);
 
         if (n <= 0) {
+            g_link_lost++;
             return;
         }
 
@@ -797,10 +823,13 @@ static void ipc_write_asset(struct ipc_ctx_s *ctx,
 #endif
 
 #ifdef CONFIG_USBHOST_CDCACM
-/* The serial device of the USB port that the board holds open, and the channel
- * that names it. The board follows one channel at a time.
+/* The serial devices of the USB port that the board holds open, and the channel
+ * that it follows. A device stays open, because a reader of it waits in a read
+ * that only its own bytes end.
  */
 
+static int g_usb_fds[IPC_USB_CHANNELS];
+static bool g_usb_reader[IPC_USB_CHANNELS];
 static int g_usb_fd = -1;
 static uint8_t g_usb_chan;
 static bool g_usb_sub;
@@ -812,50 +841,154 @@ static bool g_usb_sub;
 static uint8_t g_usb_seq;
 static bool g_usb_seq_valid;
 
-/* The server reads a followed channel after each wait of the link, and it does
- * not wait on the channel itself.
- *
- * Note: the class of the host takes one packet from the device for each run of
- * its own work, and it schedules that work again after
- * CONFIG_USBHOST_CDCACM_RXDELAY. A reader that blocks replaces that delay with
- * immediate work; a reader that does not block, as this server cannot, leaves
- * the delay in place. The rate of the channel is thus one packet per that
- * delay, and the value belongs to the configuration of the board.
+/* What the reads of a channel gave. The counts tell a channel that carries
+ * nothing from one whose bytes the link then loses.
  */
+
+static uint32_t g_usb_bytes;
+static uint32_t g_usb_reads;
+
+/* The bytes of a followed channel wait here, between the reader of that channel
+ * and the server that sends them. One task fills the ring and one empties it,
+ * thus the two indexes need no lock.
+ */
+
+static uint8_t g_chan_ring[IPC_CHAN_RING];
+static volatile uint16_t g_chan_head;
+static volatile uint16_t g_chan_tail;
+static uint32_t g_chan_over;
+
+static uint16_t ipc_chan_next(uint16_t at) {
+    return (uint16_t)((at + 1u) % IPC_CHAN_RING);
+}
+
+static void ipc_chan_put(const uint8_t *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        uint16_t next = ipc_chan_next(g_chan_head);
+
+        if (next == g_chan_tail) {
+            g_chan_over++;
+            return;
+        }
+
+        g_chan_ring[g_chan_head] = data[i];
+        g_chan_head = next;
+    }
+}
+
+static size_t ipc_chan_take(uint8_t *data, size_t max) {
+    size_t got = 0;
+
+    while (got < max && g_chan_tail != g_chan_head) {
+        data[got++] = g_chan_ring[g_chan_tail];
+        g_chan_tail = ipc_chan_next(g_chan_tail);
+    }
+
+    return got;
+}
 
 static void ipc_usb_devpath(char *path, size_t size, uint8_t channel) {
     snprintf(path, size, IPC_USB_DEVFMT, channel);
 }
 
-/* Open the serial device of a channel, and keep it open. A request for another
- * channel closes the device of the previous one.
+/* Wait on one channel, and give what it sends to the ring.
+ *
+ * Note: the class of the USB host takes one packet from the device for each run
+ * of its own work, and it schedules that work again after a delay of at least
+ * one tick. A read that waits replaces that delay with immediate work, thus the
+ * host asks the device for a packet as fast as the device fills one. A reader
+ * that cannot wait leaves the delay in place, and a device that talks faster
+ * than the delay allows then drops what it cannot hand over. Thus this task
+ * exists: the server of the protocol serves the link, and it can never wait
+ * here.
+ */
+
+static int ipc_chan_reader(int argc, char **argv) {
+    uint8_t buf[IPC_CHAN_CHUNK];
+    uint8_t channel;
+
+    (void)argc;
+
+    channel = (uint8_t)atoi(argv[1]);
+
+    for (;;) {
+        ssize_t got = read(g_usb_fds[channel], buf, sizeof(buf));
+
+        if (got <= 0) {
+            /* Nothing here recovers a channel whose device is gone. A pause
+             * keeps this task from spinning above the scan of the display.
+             */
+
+            usleep(IPC_IDLE_MS * USEC_PER_MSEC);
+            continue;
+        }
+
+        g_usb_reads++;
+        g_usb_bytes += (uint32_t)got;
+
+        /* The bytes of a channel that no one follows end here. Draining them
+         * keeps its device from holding output that no one asked for.
+         */
+
+        if (g_usb_sub && g_usb_chan == channel) {
+            ipc_chan_put(buf, (size_t)got);
+        }
+    }
+
+    return 0;
+}
+
+/* Open the serial device of a channel, and keep it open. The reader of a
+ * channel waits in a read of it, thus no other task closes that device.
  */
 
 static int ipc_usb_open(uint8_t channel) {
     char path[IPC_USB_DEVPATH_MAX];
+    char arg[IPC_USB_ARG_MAX];
+    char *argv[2];
 
-    if (g_usb_fd >= 0) {
-        if (g_usb_chan == channel) {
-            return g_usb_fd;
-        }
-
-        close(g_usb_fd);
-        g_usb_fd = -1;
-        g_usb_sub = false;
+    if (channel >= IPC_USB_CHANNELS) {
+        return -1;
     }
 
-    ipc_usb_devpath(path, sizeof(path), channel);
+    if (g_usb_fds[channel] < 0) {
+        ipc_usb_devpath(path, sizeof(path), channel);
 
-    g_usb_fd = open(path, O_RDWR | O_NONBLOCK);
-    if (g_usb_fd >= 0) {
-        g_usb_chan = channel;
+        /* The reader of this channel waits here, thus the device carries no
+         * O_NONBLOCK.
+         */
 
-        /* A new device starts a new stream, thus the sequence of the previous
-         * one names no write of this one.
+        g_usb_fds[channel] = open(path, O_RDWR);
+    }
+
+    if (g_usb_fds[channel] < 0) {
+        return -1;
+    }
+
+    if (!g_usb_reader[channel]) {
+        snprintf(arg, sizeof(arg), "%u", channel);
+
+        argv[0] = arg;
+        argv[1] = NULL;
+
+        if (kthread_create("usbchan", IPC_CHAN_PRIORITY, IPC_CHAN_STACKSIZE,
+                           ipc_chan_reader, argv) < 0) {
+            return -1;
+        }
+
+        g_usb_reader[channel] = true;
+    }
+
+    if (g_usb_fd != g_usb_fds[channel]) {
+        /* Another device starts another stream, thus the sequence of the
+         * previous one names no write of this one.
          */
 
         g_usb_seq_valid = false;
     }
+
+    g_usb_fd = g_usb_fds[channel];
+    g_usb_chan = channel;
 
     return g_usb_fd;
 }
@@ -908,6 +1041,18 @@ static void ipc_usb_list(struct ipc_ctx_s *ctx,
 
     ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_USB_DEVS,
                              frame->corr_id, reply, used));
+
+#ifdef CONFIG_USBHOST_CDCACM
+    {
+        char note[IPC_TEXT_MAX];
+
+        snprintf(note, sizeof(note),
+                 "usb: bytes=%lu reads=%lu over=%lu lost=%lu",
+                 (unsigned long)g_usb_bytes, (unsigned long)g_usb_reads,
+                 (unsigned long)g_chan_over, (unsigned long)g_link_lost);
+        ipc_log(ctx, note);
+    }
+#endif
 }
 
 static void ipc_usb_write(struct ipc_ctx_s *ctx,
@@ -970,12 +1115,6 @@ static void ipc_usb_sub(struct ipc_ctx_s *ctx,
     }
 
     if (frame->payload[IPC_USB_STATE] == 0) {
-        if (g_usb_fd >= 0) {
-            close(g_usb_fd);
-            g_usb_fd = -1;
-            g_usb_seq_valid = false;
-        }
-
         g_usb_sub = false;
         ipc_ack(ctx, frame->corr_id);
         return;
@@ -996,11 +1135,11 @@ static void ipc_usb_sub(struct ipc_ctx_s *ctx,
 
 static void ipc_usb_push(struct ipc_ctx_s *ctx) {
     uint8_t *payload = g_reply;
-    ssize_t got;
+    size_t got;
 
-    got = read(g_usb_fd, &payload[IPC_USB_PUSH_DATA], IPC_USB_READ_MAX);
+    got = ipc_chan_take(&payload[IPC_USB_PUSH_DATA], IPC_USB_READ_MAX);
 
-    if (got <= 0) {
+    if (got == 0) {
         return;
     }
 
@@ -1008,7 +1147,7 @@ static void ipc_usb_push(struct ipc_ctx_s *ctx) {
 
     ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_USB_DATA,
                              IPC_CORR_ID_PUSH, payload,
-                             (uint16_t)(IPC_USB_PUSH_DATA + (size_t)got)));
+                             (uint16_t)(IPC_USB_PUSH_DATA + got)));
 }
 #endif
 
@@ -1165,6 +1304,12 @@ static int ipc_server(int argc, char *argv[]) {
     uint8_t buf[IPC_READ_CHUNK];
     char hse[HAZK03_HSE_REPORT_MAX];
 
+#ifdef CONFIG_USBHOST_CDCACM
+    for (uint8_t i = 0; i < IPC_USB_CHANNELS; i++) {
+        g_usb_fds[i] = -1;
+    }
+#endif
+
     ipc_log(ctx, "telegraph ipc ready");
 
     hazk03_hse_probe(hse, sizeof(hse));
@@ -1234,11 +1379,18 @@ static int ipc_server(int argc, char *argv[]) {
 
 #ifdef CONFIG_USBHOST_CDCACM
         if (g_usb_sub && g_usb_fd >= 0) {
-            /* The read gives nothing when the channel holds nothing, because
-             * the descriptor carries O_NONBLOCK.
+            /* A burst of a channel holds more than one frame. Sending all of
+             * it here keeps the ring from filling between two waits.
              */
 
-            ipc_usb_push(ctx);
+            for (uint8_t i = 0; i < IPC_CHAN_DRAIN; i++) {
+                if (g_chan_head == g_chan_tail) {
+                    break;
+                }
+
+                ipc_usb_push(ctx);
+            }
+
             worked = true;
         }
 #endif
