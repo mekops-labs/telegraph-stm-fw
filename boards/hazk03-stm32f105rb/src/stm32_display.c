@@ -113,6 +113,14 @@
 
 #define TEXT_SCROLL_GAP_CHARS     3
 
+/* The most lines a wrapped text takes, bounded so that its rendered bitmap
+ * never exceeds ANIM_SRC_MAIN: at a 70-px panel and this font's shortest
+ * possible line height (7 rows, the compact font), 7 lines plus one gap
+ * line is 504 of the 512 bytes the source buffer holds.
+ */
+
+#define TEXT_WRAP_MAX_LINES       7
+
 /* The panels stay dark during all work between two scan passes. Thus the bus
  * read for the temperature occurs rarely. The temperature changes slowly.
  */
@@ -502,6 +510,98 @@ static void anim_tick(void)
     }
 }
 
+/* Break s into lines of at most maxw pixels, breaking at a space where one
+ * is available. A single word wider than maxw breaks mid-word, at the last
+ * character that still fits. Returns the line count, at most maxlines.
+ *
+ * Note: a caller that finds the returned count below the count the text
+ * needs has lost the remainder of the text, the same way a too-long source
+ * elsewhere in this file is capped rather than rejected.
+ */
+
+static int wrap_text(const char *s, size_t len, int maxw, size_t *starts,
+                     size_t *lens, int maxlines)
+{
+  size_t i = 0;
+  int n = 0;
+
+  while (i < len && n < maxlines)
+    {
+      size_t linestart = i;
+      size_t lastspace = 0;
+      bool hasspace = false;
+      size_t j = i;
+
+      while (j < len)
+        {
+          const uint16_t *cols;
+          size_t next = j + fontext_next(&s[j], len - j, &cols);
+
+          if (sm1626d_textwidth(&s[linestart], next - linestart) > maxw)
+            {
+              break;
+            }
+
+          if (s[j] == ' ')
+            {
+              lastspace = j;
+              hasspace = true;
+            }
+
+          j = next;
+        }
+
+      if (j >= len)
+        {
+          starts[n] = linestart;
+          lens[n] = len - linestart;
+          n++;
+          break;
+        }
+
+      if (hasspace && lastspace > linestart)
+        {
+          starts[n] = linestart;
+          lens[n] = lastspace - linestart;
+          i = lastspace + 1;
+        }
+      else
+        {
+          starts[n] = linestart;
+          lens[n] = j - linestart;
+          i = j;
+        }
+
+      n++;
+    }
+
+  return n;
+}
+
+/* Draw one already-wrapped line directly onto a panel, clearing its own rows
+ * first. draw_text() does the same for a single centred line; this is the
+ * per-line version a multi-line static draw calls once per line.
+ */
+
+static void draw_line_at(struct sm1626d_dev_s *dev, const char *s, size_t len,
+                         uint8_t align, int ytop)
+{
+  int x = text_column(dev, s, len, align);
+  int line = fontext_lineheight();
+  int row;
+  int col;
+
+  for (row = ytop; row < ytop + line; row++)
+    {
+      for (col = 0; col < dev->width; col++)
+        {
+          sm1626d_drawpixel(dev, col, row, false);
+        }
+    }
+
+  sm1626d_drawtext(dev, x, ytop + fontext_ascent(), s, len);
+}
+
 /* Draw a text on one panel, or start it scrolling if the text does not fit.
  *
  * A caller that wants the fixed truncating draw calls draw_text() directly.
@@ -518,21 +618,101 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
     {
       int panel = (dev == &g_sub) ? HAZK03_PANEL_SUB : HAZK03_PANEL_MAIN;
       int line = fontext_lineheight();
-      int y = text_row(dev, valign) - fontext_ascent();
-      int ret = hazk03_display_animate(panel, 0, y, dev->width, line, false,
-                                       IPC_TEXT_SCROLL_PERIOD_MS,
-                                       IPC_TEXT_SCROLL_STEP, true, false,
-                                       0, 0, (const uint8_t *)s, len);
+      int maxlines = dev->height / line;
 
-      if (ret == OK)
+      /* The font's own line height decides whether a second line fits at
+       * all. The default font's 10 rows leave no room for one on a 14-row
+       * panel; the compact font's 7 rows leave room for two.
+       */
+
+      if (maxlines > 1)
         {
-          return;
+          size_t starts[TEXT_WRAP_MAX_LINES];
+          size_t lens[TEXT_WRAP_MAX_LINES];
+          int n = wrap_text(s, len, dev->width, starts, lens,
+                            TEXT_WRAP_MAX_LINES);
+
+          if (n > 1)
+            {
+              int total = n * line;
+
+              if (total <= dev->height)
+                {
+                  int voff = (dev->height - total) / 2;
+                  int k;
+
+                  nxmutex_lock(&g_fblock);
+                  sm1626d_begin(dev);
+
+                  for (k = 0; k < n; k++)
+                    {
+                      draw_line_at(dev, &s[starts[k]], lens[k], align,
+                                  voff + k * line);
+                    }
+
+                  sm1626d_commit(dev);
+                  nxmutex_unlock(&g_fblock);
+                  return;
+                }
+
+              /* The wrapped block is taller than the panel. Render it once
+               * into a scratch bitmap and scroll it down by rows, the same
+               * window/source mechanism the horizontal scroll uses.
+               */
+
+              {
+                static uint8_t scratch[ANIM_SRC_MAIN];
+                int xoffs[TEXT_WRAP_MAX_LINES];
+                int gap = line;
+                int srch = total + gap;
+                int stride = (dev->width + 7) / 8;
+                int ret;
+                int k;
+
+                for (k = 0; k < n; k++)
+                  {
+                    xoffs[k] = text_column(dev, &s[starts[k]], lens[k],
+                                           align);
+                  }
+
+                sm1626d_rendertextlines(scratch, dev->width, srch, starts,
+                                        lens, xoffs, n, s);
+                ret = hazk03_display_animate(
+                    panel, 0, 0, dev->width, dev->height, true,
+                    IPC_TEXT_SCROLL_PERIOD_MS, IPC_TEXT_SCROLL_STEP, false,
+                    false, dev->width, srch, scratch,
+                    (size_t)(stride * srch));
+
+                if (ret == OK)
+                  {
+                    return;
+                  }
+
+                /* The wrapped block did not fit the source buffer of the
+                 * board. Fall through to the single-line horizontal scroll
+                 * below, which truncates instead of showing nothing.
+                 */
+              }
+            }
         }
 
-      /* The scrolled source did not fit the source buffer of the board.
-       * This happens with a long text on the narrow panel. Fall back to
-       * the truncated static draw instead of showing nothing.
-       */
+      {
+        int y = text_row(dev, valign) - fontext_ascent();
+        int ret = hazk03_display_animate(panel, 0, y, dev->width, line,
+                                         false, IPC_TEXT_SCROLL_PERIOD_MS,
+                                         IPC_TEXT_SCROLL_STEP, true, false,
+                                         0, 0, (const uint8_t *)s, len);
+
+        if (ret == OK)
+          {
+            return;
+          }
+
+        /* The scrolled source did not fit the source buffer of the board.
+         * This happens with a long text on the narrow panel. Fall back to
+         * the truncated static draw instead of showing nothing.
+         */
+      }
     }
 
   draw_text(dev, s, len, align, valign);

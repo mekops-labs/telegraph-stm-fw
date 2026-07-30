@@ -238,4 +238,20 @@ int sm1626d_textwidth(const char *s, size_t len);
 void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
                         size_t len);
 
+/****************************************************************************
+ * Name: sm1626d_rendertextlines
+ *
+ * Description:
+ *   Draw n texts into the same bitmap of sm1626d_rendertext, one below the
+ *   other. Each text s[starts[k]..starts[k]+lens[k]) takes one line, in the
+ *   font's own line height, starting at column xoffs[k]. The caller wraps
+ *   the text into lines and places each one horizontally; this function
+ *   only draws already-placed lines.
+ *
+ ****************************************************************************/
+
+void sm1626d_rendertextlines(uint8_t *bits, int w, int totalh,
+                             const size_t *starts, const size_t *lens,
+                             const int *xoffs, int n, const char *s);
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_SM1626D_H */
