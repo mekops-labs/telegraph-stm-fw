@@ -92,6 +92,10 @@ int stm32_bringup(void) {
     }
 #endif
 
+#ifdef CONFIG_USBHOST
+    hazk03_usbhost_initialize();
+#endif
+
 #ifdef CONFIG_NO_SERIAL_CONSOLE
     /* This build has no console. Thus the UART carries the protocol of the
      * edge MCU.

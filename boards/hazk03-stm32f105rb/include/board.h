@@ -149,4 +149,15 @@
 #define GPIO_SPI1_MISO GPIO_SPI1_MISO_0
 #define GPIO_SPI1_MOSI GPIO_SPI1_MOSI_0
 
+/* The OTG FS peripheral uses PA11 for D- and PA12 for D+.
+ *
+ * Note: the peripheral also has a VBUS input on PA9 and an identifier line on
+ * PA10, and those two pins carry the UART of the edge MCU. A host takes the
+ * identifier from its role and the core takes an internal VBUS state, thus
+ * neither pin belongs to this peripheral here.
+ */
+
+#define GPIO_OTGFS_DM GPIO_OTGFS_DM_0
+#define GPIO_OTGFS_DP GPIO_OTGFS_DP_0
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_INCLUDE_BOARD_H */
