@@ -79,6 +79,13 @@
 #define IPC_FS_NAME_MAX 64
 #define IPC_FS_FULLPATH_MAX (IPC_ASSET_PATH_MAX + 1 + IPC_FS_NAME_MAX + 1)
 
+/* The CDC/ACM class of the USB host registers a serial device under this name,
+ * one for each channel.
+ */
+
+#define IPC_USB_DEVFMT "/dev/ttyACM%u"
+#define IPC_USB_DEVPATH_MAX 16
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -143,13 +150,14 @@ static uint8_t ipc_credits(const struct ipc_ctx_s *ctx) {
 /* The file of the assets that a transfer holds open. */
 
 static int g_asset_fd = -1;
+#endif
 
-/* The reply of a list or of a read. The buffer is static, because the stack of
- * the task holds no room for it.
+/* The payload of a reply that holds more than a few bytes: a list of a
+ * directory, a part of a file, the devices of the USB port. The buffer is
+ * static, because the stack of the task holds no room for it.
  */
 
-static uint8_t g_fs_reply[IPC_FS_REPLY_MAX];
-#endif
+static uint8_t g_reply[IPC_REPLY_MAX];
 
 static void ipc_ack(struct ipc_ctx_s *ctx, uint16_t corr_id) {
     ipc_send(ctx, ipc_encode_ack(ctx->tx, sizeof(ctx->tx), corr_id,
@@ -529,7 +537,7 @@ static bool ipc_take_path(const struct ipc_frame_s *frame, uint16_t offset,
 static void ipc_fs_list(struct ipc_ctx_s *ctx,
                         const struct ipc_frame_s *frame) {
     char path[IPC_ASSET_PATH_MAX + 1];
-    uint8_t *reply = g_fs_reply;
+    uint8_t *reply = g_reply;
     uint16_t used = IPC_FS_LIST_PATH;
     uint16_t index;
     uint16_t ordinal = 0;
@@ -610,7 +618,7 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
 static void ipc_fs_read(struct ipc_ctx_s *ctx,
                         const struct ipc_frame_s *frame) {
     char path[IPC_ASSET_PATH_MAX + 1];
-    uint8_t *reply = g_fs_reply;
+    uint8_t *reply = g_reply;
     uint32_t offset;
     uint16_t length;
     ssize_t got;
@@ -786,6 +794,173 @@ static void ipc_write_asset(struct ipc_ctx_s *ctx,
 }
 #endif
 
+#ifdef CONFIG_USBHOST_CDCACM
+/* The serial device of the USB port that the board holds open, and the channel
+ * that names it. The board follows one channel at a time.
+ */
+
+static int g_usb_fd = -1;
+static uint8_t g_usb_chan;
+static bool g_usb_sub;
+
+static void ipc_usb_devpath(char *path, size_t size, uint8_t channel) {
+    snprintf(path, size, IPC_USB_DEVFMT, channel);
+}
+
+/* Open the serial device of a channel, and keep it open. A request for another
+ * channel closes the device of the previous one.
+ */
+
+static int ipc_usb_open(uint8_t channel) {
+    char path[IPC_USB_DEVPATH_MAX];
+
+    if (g_usb_fd >= 0) {
+        if (g_usb_chan == channel) {
+            return g_usb_fd;
+        }
+
+        close(g_usb_fd);
+        g_usb_fd = -1;
+        g_usb_sub = false;
+    }
+
+    ipc_usb_devpath(path, sizeof(path), channel);
+
+    g_usb_fd = open(path, O_RDWR | O_NONBLOCK);
+    if (g_usb_fd >= 0) {
+        g_usb_chan = channel;
+    }
+
+    return g_usb_fd;
+}
+
+/* Give one record for each device of the USB port. A serial device carries the
+ * number of its channel, and the storage carries none.
+ */
+
+static void ipc_usb_list(struct ipc_ctx_s *ctx,
+                         const struct ipc_frame_s *frame) {
+    uint8_t *reply = g_reply;
+    uint16_t used = 0;
+
+    for (uint8_t channel = 0; channel < IPC_USB_CHANNELS; channel++) {
+        char path[IPC_USB_DEVPATH_MAX];
+        struct stat st;
+        size_t namelen;
+
+        ipc_usb_devpath(path, sizeof(path), channel);
+
+        if (stat(path, &st) < 0) {
+            continue;
+        }
+
+        namelen = strlen(path);
+
+        reply[used + IPC_USB_DEV_CHANNEL] = channel;
+        reply[used + IPC_USB_DEV_KIND] = IPC_USB_KIND_SERIAL;
+        reply[used + IPC_USB_DEV_NAMELEN] = (uint8_t)namelen;
+        memcpy(&reply[used + IPC_USB_DEV_NAME], path, namelen);
+
+        used += (uint16_t)(IPC_USB_DEV_NAME + namelen);
+    }
+
+#ifdef CONFIG_USBHOST_MSC
+    {
+        struct stat st;
+        size_t namelen = strlen(IPC_ROOT_MEDIA);
+
+        if (stat(IPC_ROOT_MEDIA, &st) == 0) {
+            reply[used + IPC_USB_DEV_CHANNEL] = IPC_USB_NO_CHANNEL;
+            reply[used + IPC_USB_DEV_KIND] = IPC_USB_KIND_STORAGE;
+            reply[used + IPC_USB_DEV_NAMELEN] = (uint8_t)namelen;
+            memcpy(&reply[used + IPC_USB_DEV_NAME], IPC_ROOT_MEDIA, namelen);
+
+            used += (uint16_t)(IPC_USB_DEV_NAME + namelen);
+        }
+    }
+#endif
+
+    ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_USB_DEVS,
+                             frame->corr_id, reply, used));
+}
+
+static void ipc_usb_write(struct ipc_ctx_s *ctx,
+                          const struct ipc_frame_s *frame) {
+    const uint8_t *data;
+    uint16_t datalen;
+    int fd;
+
+    if (frame->payload_len < IPC_USB_DATA) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    fd = ipc_usb_open(frame->payload[IPC_USB_CHANNEL]);
+    if (fd < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    data = &frame->payload[IPC_USB_DATA];
+    datalen = frame->payload_len - IPC_USB_DATA;
+
+    if (datalen > 0 && write(fd, data, datalen) != (ssize_t)datalen) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    ipc_ack(ctx, frame->corr_id);
+}
+
+static void ipc_usb_sub(struct ipc_ctx_s *ctx,
+                        const struct ipc_frame_s *frame) {
+    if (frame->payload_len != IPC_USB_SUB_LEN) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    if (frame->payload[IPC_USB_STATE] == 0) {
+        if (g_usb_fd >= 0) {
+            close(g_usb_fd);
+            g_usb_fd = -1;
+        }
+
+        g_usb_sub = false;
+        ipc_ack(ctx, frame->corr_id);
+        return;
+    }
+
+    if (ipc_usb_open(frame->payload[IPC_USB_CHANNEL]) < 0) {
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
+        return;
+    }
+
+    g_usb_sub = true;
+    ipc_ack(ctx, frame->corr_id);
+}
+
+/* Send what the channel holds. The frame is a push, thus it carries no
+ * request.
+ */
+
+static void ipc_usb_push(struct ipc_ctx_s *ctx) {
+    uint8_t *payload = g_reply;
+    ssize_t got;
+
+    got = read(g_usb_fd, &payload[IPC_USB_DATA], IPC_USB_READ_MAX);
+
+    if (got <= 0) {
+        return;
+    }
+
+    payload[IPC_USB_CHANNEL] = g_usb_chan;
+
+    ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_USB_DATA,
+                             IPC_CORR_ID_PUSH, payload,
+                             (uint16_t)(IPC_USB_DATA + (size_t)got)));
+}
+#endif
+
 static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
     struct ipc_ctx_s *ctx = (struct ipc_ctx_s *)arg;
 
@@ -914,6 +1089,20 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_UNSUPPORTED);
         break;
 
+#ifdef CONFIG_USBHOST_CDCACM
+    case IPC_OP_USB_LIST:
+        ipc_usb_list(ctx, frame);
+        break;
+
+    case IPC_OP_USB_WRITE:
+        ipc_usb_write(ctx, frame);
+        break;
+
+    case IPC_OP_USB_SUB:
+        ipc_usb_sub(ctx, frame);
+        break;
+#endif
+
     default:
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_OPCODE);
         break;
@@ -931,21 +1120,40 @@ static int ipc_server(int argc, char *argv[]) {
     ipc_log(ctx, hse);
 
     for (;;) {
-        struct pollfd pfd;
+        struct pollfd pfd[2];
+        int nfds = 1;
         int ret;
 
-        pfd.fd = ctx->fd;
-        pfd.events = POLLIN;
+        pfd[0].fd = ctx->fd;
+        pfd[0].events = POLLIN;
+
+#ifdef CONFIG_USBHOST_CDCACM
+        /* A followed channel of the USB port waits here beside the link, thus
+         * the task needs no thread of its own for it.
+         */
+
+        if (g_usb_sub && g_usb_fd >= 0) {
+            pfd[1].fd = g_usb_fd;
+            pfd[1].events = POLLIN;
+            nfds = 2;
+        }
+#endif
 
         /* A wait with a limit is necessary only for a partial frame. Without
          * that condition the task blocks. Thus it does not interrupt the scan
          * loop of the display 50 times each second.
          */
 
-        ret =
-            poll(&pfd, 1, ipc_parser_pending(&ctx->parser) ? IPC_IDLE_MS : -1);
+        ret = poll(pfd, nfds,
+                   ipc_parser_pending(&ctx->parser) ? IPC_IDLE_MS : -1);
 
-        if (ret > 0) {
+#ifdef CONFIG_USBHOST_CDCACM
+        if (ret > 0 && nfds == 2 && (pfd[1].revents & POLLIN) != 0) {
+            ipc_usb_push(ctx);
+        }
+#endif
+
+        if (ret > 0 && (pfd[0].revents & POLLIN) != 0) {
             ssize_t n = read(ctx->fd, buf, sizeof(buf));
 
             if (n > 0) {

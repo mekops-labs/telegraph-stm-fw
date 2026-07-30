@@ -115,6 +115,11 @@ extern "C" {
 #define IPC_OP_STATE 0x11u       /* STM32 -> edge: the state               */
 #define IPC_OP_LOG 0x12u         /* STM32 -> edge: a log line, a push      */
 #define IPC_OP_FLASH 0x20u       /* edge -> STM32: start the flash mode    */
+#define IPC_OP_USB_LIST 0x30u    /* edge -> STM32: the devices of the port */
+#define IPC_OP_USB_DEVS 0x31u    /* STM32 -> edge: those devices           */
+#define IPC_OP_USB_WRITE 0x32u   /* edge -> STM32: write a channel         */
+#define IPC_OP_USB_DATA 0x33u    /* STM32 -> edge: a channel read, a push  */
+#define IPC_OP_USB_SUB 0x34u     /* edge -> STM32: follow a channel        */
 #define IPC_OP_ACK 0xf0u         /* the receiver accepted the frame        */
 
 /* One credit gives this many bytes of the receive buffer. A frame thus costs
@@ -476,6 +481,63 @@ extern "C" {
  *
  * Note: IPC_OP_FS_DELETE takes a file, or a directory that holds no entry.
  */
+
+/* IPC_OP_USB_LIST takes no payload, and IPC_OP_USB_DEVS answers it with one
+ * record for each device of the USB port:
+ *
+ *   [channel u8] [kind u8] [length of the name u8] [the name]
+ *
+ * A serial device carries the number of its channel, which the write and the
+ * subscribe opcodes name. A mass storage device carries the channel
+ * IPC_USB_NO_CHANNEL, because the storage opcodes reach it by path instead.
+ */
+
+#define IPC_USB_DEV_CHANNEL 0u
+#define IPC_USB_DEV_KIND 1u
+#define IPC_USB_DEV_NAMELEN 2u
+#define IPC_USB_DEV_NAME 3u
+
+#define IPC_USB_KIND_SERIAL 0x00u
+#define IPC_USB_KIND_STORAGE 0x01u
+
+#define IPC_USB_NO_CHANNEL 0xffu
+
+/* The channels that the board looks for. One device sits on the port, thus a
+ * larger count needs a hub.
+ */
+
+#define IPC_USB_CHANNELS 2u
+
+/* The payload of IPC_OP_USB_WRITE, and of IPC_OP_USB_DATA which carries the
+ * same shape as a push:
+ *
+ *   [channel u8] [the data]
+ *
+ * The board follows a channel only after IPC_OP_USB_SUB turns it on:
+ *
+ *   [channel u8] [state u8]
+ *
+ * A state of 0 stops the push frames and closes the device. Any other value
+ * starts them. The reply of each is an ACK.
+ *
+ * Note: the board follows one channel at a time.
+ */
+
+#define IPC_USB_CHANNEL 0u
+#define IPC_USB_DATA 1u
+#define IPC_USB_STATE 1u
+
+#define IPC_USB_SUB_LEN 2u
+
+/* One push frame carries this many bytes of a channel at most. */
+
+#define IPC_USB_READ_MAX 256u
+
+/* The largest reply that the board builds outside the frame buffer: a list of
+ * a directory, a part of a file, the devices of the USB port.
+ */
+
+#define IPC_REPLY_MAX IPC_FS_REPLY_MAX
 
 #define IPC_SET_SLEEP_LEN 4u
 #define IPC_SLEEP_START 0u /* u16: the minute that stops the light   */
