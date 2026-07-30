@@ -27,6 +27,9 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   settings and the raw devices stay out of reach of the link.
 - The work queues run below the row shifter. A device that streams over the USB
   port used to interrupt a row and leave both panels showing random pixels.
+- The server of the protocol serves the link before a channel of the USB port,
+  and it closes a channel that reports a fault. Such a channel used to return
+  from every wait at once, which stopped the link and the display together.
 
 ## [0.3.0] - 2026-07-30
 
