@@ -78,7 +78,7 @@
  */
 
 #define IPC_FS_NAME_MAX 64
-#define IPC_FS_FULLPATH_MAX (IPC_ASSET_PATH_MAX + 1 + IPC_FS_NAME_MAX + 1)
+#define IPC_FS_FULLPATH_MAX (IPC_FS_PATH_MAX + 1 + IPC_FS_NAME_MAX + 1)
 
 /* The CDC/ACM class of the USB host registers a serial device under this name,
  * one for each channel.
@@ -564,7 +564,7 @@ static bool ipc_take_path(const struct ipc_frame_s *frame, uint16_t offset,
 
 static void ipc_fs_list(struct ipc_ctx_s *ctx,
                         const struct ipc_frame_s *frame) {
-    char path[IPC_ASSET_PATH_MAX + 1];
+    char path[IPC_FS_PATH_MAX + 1];
     uint8_t *reply = g_reply;
     uint16_t used = IPC_FS_LIST_PATH;
     uint16_t cursor;
@@ -645,7 +645,7 @@ static void ipc_fs_list(struct ipc_ctx_s *ctx,
 
 static void ipc_fs_read(struct ipc_ctx_s *ctx,
                         const struct ipc_frame_s *frame) {
-    char path[IPC_ASSET_PATH_MAX + 1];
+    char path[IPC_FS_PATH_MAX + 1];
     uint8_t *reply = g_reply;
     uint32_t offset;
     uint16_t length;
@@ -698,7 +698,7 @@ static void ipc_fs_read(struct ipc_ctx_s *ctx,
 
 static void ipc_fs_delete(struct ipc_ctx_s *ctx,
                           const struct ipc_frame_s *frame) {
-    char path[IPC_ASSET_PATH_MAX + 1];
+    char path[IPC_FS_PATH_MAX + 1];
 
     if (!ipc_take_path(frame, 0, path, sizeof(path))) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
@@ -719,7 +719,7 @@ static void ipc_fs_delete(struct ipc_ctx_s *ctx,
 
 static void ipc_fs_mkdir(struct ipc_ctx_s *ctx,
                          const struct ipc_frame_s *frame) {
-    char path[IPC_ASSET_PATH_MAX + 1];
+    char path[IPC_FS_PATH_MAX + 1];
 
     if (!ipc_take_path(frame, 0, path, sizeof(path))) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
@@ -754,29 +754,29 @@ static void ipc_asset_mkdir(char *path) {
     *slash = '/';
 }
 
-static void ipc_write_asset(struct ipc_ctx_s *ctx,
-                            const struct ipc_frame_s *frame) {
-    char path[IPC_ASSET_PATH_MAX + 1];
+static void ipc_fs_write(struct ipc_ctx_s *ctx,
+                         const struct ipc_frame_s *frame) {
+    char path[IPC_FS_PATH_MAX + 1];
     const uint8_t *data;
     uint8_t flags;
     uint8_t pathlen;
     uint16_t datalen;
 
-    if (frame->payload_len < IPC_ASSET_PATH) {
+    if (frame->payload_len < IPC_FS_WRITE_PATH) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
         return;
     }
 
-    flags = frame->payload[IPC_ASSET_FLAGS];
-    pathlen = frame->payload[IPC_ASSET_PATHLEN];
+    flags = frame->payload[IPC_FS_WRITE_FLAGS];
+    pathlen = frame->payload[IPC_FS_WRITE_PATHLEN];
 
-    if (pathlen == 0 || pathlen > IPC_ASSET_PATH_MAX ||
-        frame->payload_len < (uint16_t)(IPC_ASSET_PATH + pathlen)) {
+    if (pathlen == 0 || pathlen > IPC_FS_PATH_MAX ||
+        frame->payload_len < (uint16_t)(IPC_FS_WRITE_PATH + pathlen)) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
         return;
     }
 
-    memcpy(path, &frame->payload[IPC_ASSET_PATH], pathlen);
+    memcpy(path, &frame->payload[IPC_FS_WRITE_PATH], pathlen);
     path[pathlen] = '\0';
 
     if (!ipc_path_ok(path)) {
@@ -784,10 +784,10 @@ static void ipc_write_asset(struct ipc_ctx_s *ctx,
         return;
     }
 
-    data = &frame->payload[IPC_ASSET_PATH + pathlen];
-    datalen = frame->payload_len - (uint16_t)(IPC_ASSET_PATH + pathlen);
+    data = &frame->payload[IPC_FS_WRITE_PATH + pathlen];
+    datalen = frame->payload_len - (uint16_t)(IPC_FS_WRITE_PATH + pathlen);
 
-    if ((flags & IPC_ASSET_FIRST) != 0) {
+    if ((flags & IPC_FS_WRITE_FIRST) != 0) {
         if (g_asset_fd >= 0) {
             close(g_asset_fd);
         }
@@ -813,7 +813,7 @@ static void ipc_write_asset(struct ipc_ctx_s *ctx,
         return;
     }
 
-    if ((flags & IPC_ASSET_LAST) != 0) {
+    if ((flags & IPC_FS_WRITE_LAST) != 0) {
         close(g_asset_fd);
         g_asset_fd = -1;
     }
@@ -1158,55 +1158,61 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
     struct ipc_ctx_s *ctx = (struct ipc_ctx_s *)arg;
 
     switch (frame->opcode) {
+        /* The board */
+
+    case IPC_OP_GET_STATE:
+        ipc_send_state(ctx, frame->corr_id);
+        break;
+
     case IPC_OP_SET_TIME:
         ipc_set_time(ctx, frame);
+        break;
+
+    case IPC_OP_SET_TEMPOFF:
+        ipc_set_tempoff(ctx, frame);
+        break;
+
+        /* A flash operation uses the system bootloader. The edge MCU holds
+         * BOOT0 and it applies a reset. Thus this firmware needs no support.
+         */
+
+    case IPC_OP_FLASH:
+        ipc_nack(ctx, frame->corr_id, IPC_ERR_UNSUPPORTED);
+        break;
+
+        /* The display */
+
+    case IPC_OP_CLEAR:
+        if (frame->payload_len == 0) {
+            hazk03_display_clear(HAZK03_PANEL_MAIN);
+            hazk03_display_clear(HAZK03_PANEL_SUB);
+            ipc_ack(ctx, frame->corr_id);
+        } else if (frame->payload_len != 1) {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
+        } else if (frame->payload[0] > IPC_PANEL_SUB) {
+            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
+        } else {
+            hazk03_display_clear(frame->payload[0] == IPC_PANEL_SUB
+                                     ? HAZK03_PANEL_SUB
+                                     : HAZK03_PANEL_MAIN);
+            ipc_ack(ctx, frame->corr_id);
+        }
+        break;
+
+    case IPC_OP_SET_BRIGHT:
+        ipc_set_bright(ctx, frame);
+        break;
+
+    case IPC_OP_SET_SLEEP:
+        ipc_set_sleep(ctx, frame);
         break;
 
     case IPC_OP_SET_TEXT:
         ipc_set_text(ctx, frame);
         break;
 
-#ifdef CONFIG_FS_SMARTFS
-    case IPC_OP_WRITE_ASSET:
-        ipc_write_asset(ctx, frame);
-        break;
-
-    case IPC_OP_FS_LIST:
-        ipc_fs_list(ctx, frame);
-        break;
-
-    case IPC_OP_FS_READ:
-        ipc_fs_read(ctx, frame);
-        break;
-
-    case IPC_OP_FS_DELETE:
-        ipc_fs_delete(ctx, frame);
-        break;
-
-    case IPC_OP_FS_MKDIR:
-        ipc_fs_mkdir(ctx, frame);
-        break;
-#endif
-
-    case IPC_OP_SET_ANIM:
-        if (frame->payload_len == 0) {
-            ipc_list(ctx, frame, HAZK03_ANIM_DIR, HAZK03_ANIM_EXT);
-        } else {
-            ipc_animate(ctx, frame);
-        }
-        break;
-
-    case IPC_OP_ANIM_SPEED:
-        if (frame->payload_len != IPC_SPEED_LEN) {
-            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
-        } else if (hazk03_display_animspeed(
-                       frame->payload[IPC_SPEED_PANEL],
-                       ipc_get_u16(&frame->payload[IPC_SPEED_PERIOD]),
-                       frame->payload[IPC_SPEED_STEP]) < 0) {
-            ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
-        } else {
-            ipc_ack(ctx, frame->corr_id);
-        }
+    case IPC_OP_SET_PIXELS:
+        ipc_set_pixels(ctx, frame);
         break;
 
     case IPC_OP_SET_FONT: {
@@ -1231,19 +1237,23 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         }
     } break;
 
-    case IPC_OP_CLEAR:
+    case IPC_OP_SET_ANIM:
         if (frame->payload_len == 0) {
-            hazk03_display_clear(HAZK03_PANEL_MAIN);
-            hazk03_display_clear(HAZK03_PANEL_SUB);
-            ipc_ack(ctx, frame->corr_id);
-        } else if (frame->payload_len != 1) {
+            ipc_list(ctx, frame, HAZK03_ANIM_DIR, HAZK03_ANIM_EXT);
+        } else {
+            ipc_animate(ctx, frame);
+        }
+        break;
+
+    case IPC_OP_ANIM_SPEED:
+        if (frame->payload_len != IPC_SPEED_LEN) {
             ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
-        } else if (frame->payload[0] > IPC_PANEL_SUB) {
+        } else if (hazk03_display_animspeed(
+                       frame->payload[IPC_SPEED_PANEL],
+                       ipc_get_u16(&frame->payload[IPC_SPEED_PERIOD]),
+                       frame->payload[IPC_SPEED_STEP]) < 0) {
             ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_PAYLOAD);
         } else {
-            hazk03_display_clear(frame->payload[0] == IPC_PANEL_SUB
-                                     ? HAZK03_PANEL_SUB
-                                     : HAZK03_PANEL_MAIN);
             ipc_ack(ctx, frame->corr_id);
         }
         break;
@@ -1254,35 +1264,33 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         ipc_ack(ctx, frame->corr_id);
         break;
 
-    case IPC_OP_SET_PIXELS:
-        ipc_set_pixels(ctx, frame);
+#ifdef CONFIG_FS_SMARTFS
+        /* The storage */
+
+    case IPC_OP_FS_LIST:
+        ipc_fs_list(ctx, frame);
         break;
 
-    case IPC_OP_SET_TEMPOFF:
-        ipc_set_tempoff(ctx, frame);
+    case IPC_OP_FS_READ:
+        ipc_fs_read(ctx, frame);
         break;
 
-    case IPC_OP_SET_SLEEP:
-        ipc_set_sleep(ctx, frame);
+    case IPC_OP_FS_WRITE:
+        ipc_fs_write(ctx, frame);
         break;
 
-    case IPC_OP_SET_BRIGHT:
-        ipc_set_bright(ctx, frame);
+    case IPC_OP_FS_DELETE:
+        ipc_fs_delete(ctx, frame);
         break;
 
-    case IPC_OP_GET_STATE:
-        ipc_send_state(ctx, frame->corr_id);
+    case IPC_OP_FS_MKDIR:
+        ipc_fs_mkdir(ctx, frame);
         break;
-
-        /* A flash operation uses the system bootloader. The edge MCU holds
-         * BOOT0 and it applies a reset. Thus this firmware needs no support.
-         */
-
-    case IPC_OP_FLASH:
-        ipc_nack(ctx, frame->corr_id, IPC_ERR_UNSUPPORTED);
-        break;
+#endif
 
 #ifdef CONFIG_USBHOST_CDCACM
+        /* The USB port */
+
     case IPC_OP_USB_LIST:
         ipc_usb_list(ctx, frame);
         break;

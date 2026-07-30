@@ -13,7 +13,7 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   system at `/media`.
 - The edge MCU lists a directory, reads a file, removes an entry and creates a
   directory, on the flash of the board and on the USB device alike. Opcodes
-  `0x14` to `0x17`.
+  `0x20` to `0x24`.
 - Long file names on the USB device, up to 32 characters. A name there matches
   by case.
 - A serial device of the class CDC/ACM on the USB port reaches the edge MCU as
@@ -23,6 +23,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The opcodes are renumbered into groups: the board takes `0x01` to `0x06`, the
+  display `0x10` to `0x18`, the storage `0x20` to `0x24`, the USB port `0x30`
+  to `0x34`. Each group starts on a boundary of 16. The protocol version stays
+  1, because the two MCUs always come from the same source.
+- The chunked file write is `IPC_OP_FS_WRITE`, beside the four other storage
+  opcodes. Its payload constants take the `IPC_FS_WRITE_` prefix.
 - A task of its own waits on each channel of the USB port and gives its bytes
   to the server through a ring. The server no longer reads a channel between
   two waits on the link, and a device that the board opens stays open.
