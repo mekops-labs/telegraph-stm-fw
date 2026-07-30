@@ -116,7 +116,12 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x07` | edge to STM32 | Stop the animations |
 | `0x08` | edge to STM32 | Set the pixels of a rectangle |
 | `0x0A` | edge to STM32 | Correct the temperature |
+| `0x0C` | edge to STM32 | Write one part of a file |
 | `0x0D` | edge to STM32 | Clear a panel, or both |
+| `0x14` | edge to STM32 | List a directory |
+| `0x15` | edge to STM32 | Read one part of a file |
+| `0x16` | edge to STM32 | Remove a file, or a directory that holds no entry |
+| `0x17` | edge to STM32 | Create a directory |
 | `0x0F` | edge to STM32 | Change the rate of an animation |
 | `0x13` | edge to STM32 | Take a font from the flash, or give the names of the fonts |
 | `0x0B` | edge to STM32 | Set the period without light |
@@ -327,6 +332,96 @@ reaches no file outside the place of its kind.
 
 Note: `0x0C` writes a file, and its payload stays a full path. That opcode
 carries every kind of file, thus it needs one.
+
+## Storage
+
+The edge MCU reads and writes two file systems over the link: `/assets` on the
+flash of the board, and `/media`, which holds the mass storage device of the
+USB port when one is present. The opcodes `0x0C`, `0x14`, `0x15`, `0x16` and
+`0x17` serve both.
+
+**Every path must start with `/assets` or with `/media`, and a path holding
+`..` gets a NACK with the code `0x03`.** A root matches a whole element of the
+path, thus `/assetsx` is outside it. The settings record, the raw block devices
+and the rest of the file tree therefore stay out of reach of the link.
+
+A path holds 64 characters at most.
+
+Note: the file system of the USB device is FAT, and this build carries no
+support for a long name. A name outside the 8.3 form gets a NACK with the code
+`0x05`.
+
+### `0x0C` Write one part of a file
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The flags |
+| 1 | 1 | The length of the path |
+| 2 | n | The path |
+| 2+n | m | The data |
+
+The flag `0x01` makes the file empty, and the flag `0x02` closes it. A file of
+one part alone carries both flags. The board keeps one file open, and a first
+part closes a file that an earlier transfer left open. Every part of one file
+must carry the same path.
+
+The board creates the directory of the file when that directory is absent.
+
+The reply is an ACK.
+
+### `0x14` List a directory
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The ordinal of the first entry |
+| 2 | n | The path |
+
+The reply carries the opcode `0x14`:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The ordinal of the first entry that the reply leaves out |
+| 2 | n | The entries |
+
+Each entry is:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The kind: 0 for a file, 1 for a directory |
+| 1 | 4 | The size, and 0 for a directory |
+| 5 | 1 | The length of the name |
+| 6 | n | The name |
+
+A reply carries as many entries as one frame holds. The ordinal of the reply
+then names the first entry that it leaves out, thus a directory of any length
+takes as many requests as it needs. The value `0xFFFF` states that no entry
+remains.
+
+### `0x15` Read one part of a file
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 4 | The offset in the file |
+| 4 | 2 | The number of bytes |
+| 6 | n | The path |
+
+The reply carries the opcode `0x15`:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 4 | The offset in the file |
+| 4 | n | The data |
+
+One reply gives 512 bytes at most, and a larger request takes that value. A
+reply shorter than the request holds the end of the file, and a reply of the
+offset alone states that the offset is at or past that end. Thus a caller reads
+until it takes such a reply.
+
+### `0x16` Remove a file or a directory, `0x17` create a directory
+
+The payload of each is the path alone. The reply is an ACK, or a NACK with the
+code `0x05` when the operation fails — a directory that holds an entry, for
+one.
 
 ### `0x07` Stop the animations
 
