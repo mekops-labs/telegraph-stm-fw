@@ -129,6 +129,11 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x11` | STM32 to edge | The state |
 | `0x12` | STM32 to edge | A log line, a push frame |
 | `0x20` | edge to STM32 | Start the flash mode |
+| `0x30` | edge to STM32 | List the devices of the USB port |
+| `0x31` | STM32 to edge | Those devices |
+| `0x32` | edge to STM32 | Write a channel of a serial device |
+| `0x33` | STM32 to edge | What a channel holds, a push frame |
+| `0x34` | edge to STM32 | Follow a channel, or stop |
 | `0xF0` | STM32 to edge | ACK and the credits |
 | `0xF1` | STM32 to edge | NACK and an error code |
 
@@ -426,6 +431,58 @@ until it takes such a reply.
 The payload of each is the path alone. The reply is an ACK, or a NACK with the
 code `0x05` when the operation fails — a directory that holds an entry, for
 one.
+
+## The serial devices of the USB port
+
+A serial device of the USB port carries a channel, and the edge MCU reads and
+writes that channel over the link. The board holds one channel open at a time,
+because one device sits on the port.
+
+The class of the host is CDC/ACM. Thus a device with a serial chip of a vendor
+— an FTDI part, a CP2102, a CH340 — gives no channel, and a device that follows
+the CDC/ACM standard gives one.
+
+### `0x30` List the devices of the port, `0x31` those devices
+
+The request takes no payload. The reply carries one record for each device:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The channel |
+| 1 | 1 | The kind: 0 for a serial device, 1 for mass storage |
+| 2 | 1 | The length of the name |
+| 3 | n | The name |
+
+A mass storage device carries the channel `0xFF`, because the storage opcodes
+reach it by path instead. Refer to [Storage](#storage).
+
+### `0x32` Write a channel
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The channel |
+| 1 | n | The data |
+
+The board adds nothing to the data. The reply is an ACK, or a NACK with the
+code `0x05` when the channel holds no device.
+
+### `0x34` Follow a channel, `0x33` what it holds
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The channel |
+| 1 | 1 | The state: 0 stops, any other value starts |
+
+The reply is an ACK. While a channel runs, the board sends a `0x33` push frame
+for each part that the channel gives, with the correlation ID `0x0000`:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The channel |
+| 1 | n | The data |
+
+One push carries 256 bytes at most. A part longer than that takes further push
+frames.
 
 ### `0x07` Stop the animations
 
