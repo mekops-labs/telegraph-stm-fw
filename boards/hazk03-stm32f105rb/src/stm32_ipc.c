@@ -85,6 +85,7 @@
 
 #define IPC_USB_DEVFMT "/dev/ttyACM%u"
 #define IPC_USB_DEVPATH_MAX 16
+#define IPC_USB_NOTE_MAX 40
 
 /****************************************************************************
  * Private Types
@@ -803,6 +804,13 @@ static int g_usb_fd = -1;
 static uint8_t g_usb_chan;
 static bool g_usb_sub;
 
+/* The sequence of the last write that the board took. A repeat of that write
+ * carries the same value, and the board then adds nothing to the stream.
+ */
+
+static uint8_t g_usb_seq;
+static bool g_usb_seq_valid;
+
 static void ipc_usb_devpath(char *path, size_t size, uint8_t channel) {
     snprintf(path, size, IPC_USB_DEVFMT, channel);
 }
@@ -829,6 +837,12 @@ static int ipc_usb_open(uint8_t channel) {
     g_usb_fd = open(path, O_RDWR | O_NONBLOCK);
     if (g_usb_fd >= 0) {
         g_usb_chan = channel;
+
+        /* A new device starts a new stream, thus the sequence of the previous
+         * one names no write of this one.
+         */
+
+        g_usb_seq_valid = false;
     }
 
     return g_usb_fd;
@@ -888,9 +902,10 @@ static void ipc_usb_write(struct ipc_ctx_s *ctx,
                           const struct ipc_frame_s *frame) {
     const uint8_t *data;
     uint16_t datalen;
+    uint8_t seq;
     int fd;
 
-    if (frame->payload_len < IPC_USB_DATA) {
+    if (frame->payload_len < IPC_USB_WRITE_DATA) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_LENGTH);
         return;
     }
@@ -901,13 +916,36 @@ static void ipc_usb_write(struct ipc_ctx_s *ctx,
         return;
     }
 
-    data = &frame->payload[IPC_USB_DATA];
-    datalen = frame->payload_len - IPC_USB_DATA;
+    /* A repeat of a write carries the sequence of that write. The stream takes
+     * the bytes one time, and the sender takes the reply it missed.
+     */
+
+    seq = frame->payload[IPC_USB_WRITE_SEQ];
+
+    if (g_usb_seq_valid && g_usb_seq == seq) {
+        char note[IPC_USB_NOTE_MAX];
+
+        /* A repeat is rare, thus a line for each one costs nothing and it
+         * shows that the stream took the bytes one time.
+         */
+
+        snprintf(note, sizeof(note), "usb: repeat seq=%u took no bytes", seq);
+        ipc_log(ctx, note);
+
+        ipc_ack(ctx, frame->corr_id);
+        return;
+    }
+
+    data = &frame->payload[IPC_USB_WRITE_DATA];
+    datalen = frame->payload_len - IPC_USB_WRITE_DATA;
 
     if (datalen > 0 && write(fd, data, datalen) != (ssize_t)datalen) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
         return;
     }
+
+    g_usb_seq = seq;
+    g_usb_seq_valid = true;
 
     ipc_ack(ctx, frame->corr_id);
 }
@@ -923,6 +961,7 @@ static void ipc_usb_sub(struct ipc_ctx_s *ctx,
         if (g_usb_fd >= 0) {
             close(g_usb_fd);
             g_usb_fd = -1;
+            g_usb_seq_valid = false;
         }
 
         g_usb_sub = false;
@@ -947,7 +986,7 @@ static void ipc_usb_push(struct ipc_ctx_s *ctx) {
     uint8_t *payload = g_reply;
     ssize_t got;
 
-    got = read(g_usb_fd, &payload[IPC_USB_DATA], IPC_USB_READ_MAX);
+    got = read(g_usb_fd, &payload[IPC_USB_PUSH_DATA], IPC_USB_READ_MAX);
 
     if (got <= 0) {
         return;
@@ -957,7 +996,7 @@ static void ipc_usb_push(struct ipc_ctx_s *ctx) {
 
     ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_USB_DATA,
                              IPC_CORR_ID_PUSH, payload,
-                             (uint16_t)(IPC_USB_DATA + (size_t)got)));
+                             (uint16_t)(IPC_USB_PUSH_DATA + (size_t)got)));
 }
 #endif
 
