@@ -508,8 +508,25 @@ extern "C" {
 
 #define IPC_USB_CHANNELS 2u
 
-/* The payload of IPC_OP_USB_WRITE, and of IPC_OP_USB_DATA which carries the
- * same shape as a push:
+/* The payload of IPC_OP_USB_WRITE:
+ *
+ *   [channel u8] [sequence u8] [the data]
+ *
+ * **A write is the one operation of this protocol that a repeat does not leave
+ * unchanged.** Every other opcode sets a state, thus a sender that repeats it
+ * after a lost reply causes no harm. A write adds bytes to a stream instead,
+ * and a repeat would add them twice.
+ *
+ * The sequence closes that gap. A sender counts up for each new write, and it
+ * keeps the value for every attempt of the same write. The board holds the
+ * value of the last write it took, thus it answers a repeat with an ACK and
+ * writes nothing. The count wraps at 256, which no repeat of one write can
+ * reach.
+ *
+ * Note: the board forgets that value when a channel opens or closes, thus a
+ * sender starts a new channel from any value.
+ *
+ * IPC_OP_USB_DATA carries a channel and the data of that channel as a push:
  *
  *   [channel u8] [the data]
  *
@@ -524,9 +541,13 @@ extern "C" {
  */
 
 #define IPC_USB_CHANNEL 0u
-#define IPC_USB_DATA 1u
-#define IPC_USB_STATE 1u
 
+#define IPC_USB_WRITE_SEQ 1u
+#define IPC_USB_WRITE_DATA 2u
+
+#define IPC_USB_PUSH_DATA 1u
+
+#define IPC_USB_STATE 1u
 #define IPC_USB_SUB_LEN 2u
 
 /* One push frame carries this many bytes of a channel at most. */
