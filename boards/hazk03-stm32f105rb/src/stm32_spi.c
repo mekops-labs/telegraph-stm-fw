@@ -60,6 +60,11 @@ void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid, bool selected) {
  *
  ****************************************************************************/
 
+/* cppcheck-suppress constParameterPointer
+ * dev must match NuttX's struct spi_ops_s.status callback signature exactly
+ * (nuttx/spi/spi.h), which takes a non-const struct spi_dev_s *.
+ */
+
 uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid) { return 0; }
 
 #endif /* CONFIG_STM32_SPI1 */

@@ -108,7 +108,7 @@ static void test_encode_empty_payload(void) {
 
 static void test_encode_rejects_bad_arguments(void) {
     uint8_t buf[32];
-    uint8_t payload[4] = {0};
+    const uint8_t payload[4] = {0};
 
     TEST_ASSERT_EQUAL_INT(
         IPC_ERR_ARG, ipc_encode(NULL, sizeof(buf), IPC_OP_ACK, 1, payload, 4));

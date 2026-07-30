@@ -332,8 +332,8 @@ static void display_update_sleep(const struct tm *t) {
  * end goes past that panel, and its start stays visible.
  */
 
-static int text_column(struct sm1626d_dev_s *dev, const char *s, size_t len,
-                       uint8_t align) {
+static int text_column(const struct sm1626d_dev_s *dev, const char *s,
+                       size_t len, uint8_t align) {
     int space = dev->width - sm1626d_textwidth(s, len);
 
     if (space <= 0) {
@@ -356,7 +356,7 @@ static int text_column(struct sm1626d_dev_s *dev, const char *s, size_t len,
 
 /* Give the top row of a line of text on one panel. */
 
-static int text_row(struct sm1626d_dev_s *dev, uint8_t valign) {
+static int text_row(const struct sm1626d_dev_s *dev, uint8_t valign) {
     int line = fontext_lineheight();
 
     switch (valign) {
