@@ -1,0 +1,8 @@
+# ipc/ is the shared, portable framing library — both MCUs and the host
+# tests compile this same source, so it is held to a stricter bar than the
+# board-specific code in boards/. Layer these checks on top of the root
+# .clang-tidy rather than repeating its whole config here.
+InheritParentConfig: true
+Checks: >
+  readability-identifier-length,
+  readability-magic-numbers
