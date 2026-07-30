@@ -107,11 +107,15 @@ extern "C" {
 #define IPC_OP_CLEAR 0x0du       /* edge -> STM32: clear a panel or both  */
 #define IPC_OP_ANIM_SPEED 0x0fu  /* edge -> STM32: the rate of a movement */
 #define IPC_OP_SET_FONT 0x13u    /* edge -> STM32: take a font from flash */
-#define IPC_OP_GET_STATE 0x10u   /* edge -> STM32: request the state      */
-#define IPC_OP_STATE 0x11u       /* STM32 -> edge: the state              */
-#define IPC_OP_LOG 0x12u         /* STM32 -> edge: a log line, a push     */
-#define IPC_OP_FLASH 0x20u       /* edge -> STM32: start the flash mode   */
-#define IPC_OP_ACK 0xf0u         /* the receiver accepted the frame       */
+#define IPC_OP_FS_LIST 0x14u     /* edge -> STM32: list a directory        */
+#define IPC_OP_FS_READ 0x15u     /* edge -> STM32: read a part of a file   */
+#define IPC_OP_FS_DELETE 0x16u   /* edge -> STM32: remove an entry         */
+#define IPC_OP_FS_MKDIR 0x17u    /* edge -> STM32: create a directory      */
+#define IPC_OP_GET_STATE 0x10u   /* edge -> STM32: request the state       */
+#define IPC_OP_STATE 0x11u       /* STM32 -> edge: the state               */
+#define IPC_OP_LOG 0x12u         /* STM32 -> edge: a log line, a push      */
+#define IPC_OP_FLASH 0x20u       /* edge -> STM32: start the flash mode    */
+#define IPC_OP_ACK 0xf0u         /* the receiver accepted the frame        */
 
 /* One credit gives this many bytes of the receive buffer. A frame thus costs
  * more than one credit if its length is above this value.
@@ -396,6 +400,82 @@ extern "C" {
 #define IPC_ASSET_LAST 0x02u
 
 #define IPC_ASSET_PATH_MAX 64u
+
+/* The storage that the edge MCU reaches. Every path of every storage opcode
+ * must start with one of these roots, and a path holding ".." is refused.
+ * Thus the settings, the raw devices and the rest of the file tree stay out of
+ * reach of the link.
+ *
+ *   IPC_ROOT_ASSETS  the file system of the flash of the board
+ *   IPC_ROOT_MEDIA   the mount of a mass storage device on the USB port
+ */
+
+#define IPC_ROOT_ASSETS "/assets"
+#define IPC_ROOT_MEDIA "/media"
+
+/* The payload of IPC_OP_FS_LIST names a directory, and the reply carries the
+ * same opcode.
+ *
+ *   request: [index u16] [the path]
+ *   reply:   [next index u16] [the entries]
+ *
+ * Each entry is:
+ *
+ *   [kind u8] [size u32] [length of the name u8] [the name]
+ *
+ * The index of the request is the ordinal of the first entry that the reply
+ * carries, thus a directory of any length takes as many requests as it needs.
+ * The next index of the reply names the first entry that the reply leaves out,
+ * and IPC_FS_INDEX_END states that no entry remains.
+ *
+ * Note: the size of a directory is 0.
+ */
+
+#define IPC_FS_LIST_INDEX 0u
+#define IPC_FS_LIST_PATH 2u
+
+#define IPC_FS_ENTRY_KIND 0u
+#define IPC_FS_ENTRY_SIZE 1u
+#define IPC_FS_ENTRY_NAMELEN 5u
+#define IPC_FS_ENTRY_NAME 6u
+
+#define IPC_FS_KIND_FILE 0x00u
+#define IPC_FS_KIND_DIR 0x01u
+
+#define IPC_FS_INDEX_END 0xffffu
+
+/* The payload of IPC_OP_FS_READ takes one part of a file, and the reply
+ * carries the same opcode.
+ *
+ *   request: [offset u32] [length u16] [the path]
+ *   reply:   [offset u32] [the data]
+ *
+ * A reply shorter than the requested length holds the end of the file. A
+ * reply of the offset alone states that the offset is at or past that end,
+ * thus a caller reads until it takes such a reply.
+ *
+ * Note: a length above IPC_FS_READ_MAX gives that value instead of a NACK.
+ */
+
+#define IPC_FS_READ_OFFSET 0u
+#define IPC_FS_READ_LENGTH 4u
+#define IPC_FS_READ_PATH 6u
+#define IPC_FS_READ_DATA 4u /* in the reply, which carries no length   */
+
+#define IPC_FS_READ_MAX 512u
+
+/* The largest reply of IPC_OP_FS_LIST and of IPC_OP_FS_READ. A list longer
+ * than this value takes a further request, and a read gives this many bytes at
+ * most.
+ */
+
+#define IPC_FS_REPLY_MAX (IPC_FS_READ_DATA + IPC_FS_READ_MAX)
+
+/* The payload of IPC_OP_FS_DELETE and of IPC_OP_FS_MKDIR is the path alone.
+ * Both answer with an ACK or a NACK.
+ *
+ * Note: IPC_OP_FS_DELETE takes a file, or a directory that holds no entry.
+ */
 
 #define IPC_SET_SLEEP_LEN 4u
 #define IPC_SLEEP_START 0u /* u16: the minute that stops the light   */
