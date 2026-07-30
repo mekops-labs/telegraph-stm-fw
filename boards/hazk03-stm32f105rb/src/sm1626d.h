@@ -13,7 +13,7 @@
  * are sufficient for one row.
  */
 
-#define SM1626D_ROWS      16
+#define SM1626D_ROWS 16
 
 /* The brightness level. The value 0 is the lowest, and it stays visible. */
 
@@ -24,26 +24,25 @@
  * different. Thus one instance holds a framebuffer and a data pin.
  */
 
-struct sm1626d_dev_s
-{
-  uint32_t din;                                       /* GPIO pin config */
-  uint32_t din_bsrr;                       /* set-reset register of the pin */
-  uint32_t din_set;
-  uint32_t din_clr;
-  uint8_t width;
-  uint8_t height;
-  uint8_t bright;
-  bool on;
+struct sm1626d_dev_s {
+    uint32_t din;      /* GPIO pin config */
+    uint32_t din_bsrr; /* set-reset register of the pin */
+    uint32_t din_set;
+    uint32_t din_clr;
+    uint8_t width;
+    uint8_t height;
+    uint8_t bright;
+    bool on;
 
-  /* The panel keeps two images. The scan reads one of them and a writer
-   * changes the other, thus no scan ever shows a partial image.
-   */
+    /* The panel keeps two images. The scan reads one of them and a writer
+     * changes the other, thus no scan ever shows a partial image.
+     */
 
-  uint8_t       front;   /* the image that the scan reads                  */
-  bool          dirty;   /* a writer has changed the other image           */
-  volatile bool swap;    /* the scan takes the other image at the next one */
+    uint8_t front;      /* the image that the scan reads                  */
+    bool dirty;         /* a writer has changed the other image           */
+    volatile bool swap; /* the scan takes the other image at the next one */
 
-  uint8_t fb[2][SM1626D_ROWS][SM1626D_ROW_BYTES];
+    uint8_t fb[2][SM1626D_ROWS][SM1626D_ROW_BYTES];
 };
 
 /****************************************************************************
@@ -88,11 +87,11 @@ void sm1626d_swapnow(struct sm1626d_dev_s *dev);
  *
  ****************************************************************************/
 
-void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y,
-                        int w, int h, const uint8_t *bits);
+void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y, int w, int h,
+                        const uint8_t *bits);
 
-void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
-                  uint8_t width, uint8_t height);
+void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din, uint8_t width,
+                  uint8_t height);
 
 /* Set the brightness. The driver makes the on-time of each row shorter.
  *
@@ -131,8 +130,7 @@ void sm1626d_refresh(struct sm1626d_dev_s *dev);
  *
  ****************************************************************************/
 
-void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
-                       int count);
+void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from, int count);
 
 /****************************************************************************
  * Name: sm1626d_rowbits
@@ -206,8 +204,8 @@ int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us);
  *
  ****************************************************************************/
 
-void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
-                      const char *s, size_t len);
+void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y, const char *s,
+                      size_t len);
 
 /****************************************************************************
  * Name: sm1626d_textwidth
@@ -235,8 +233,7 @@ int sm1626d_textwidth(const char *s, size_t len);
  *
  ****************************************************************************/
 
-void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
-                        size_t len);
+void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s, size_t len);
 
 /****************************************************************************
  * Name: sm1626d_rendertextlines

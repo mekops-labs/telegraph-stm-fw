@@ -21,17 +21,17 @@
  * inside the letter.
  */
 
-#define FONTEXT_MAGIC     0x31464754u  /* "TGF1", little-endian */
+#define FONTEXT_MAGIC 0x31464754u /* "TGF1", little-endian */
 
 /* The largest cell that a font in the flash may use. The file gives the cell
  * that it actually uses, thus one build carries a font of 5x7 for one line and
  * a smaller font for two lines.
  */
 
-#define FONTEXT_WIDTH     5
-#define FONTEXT_ROWS      10
-#define FONTEXT_ASCENT    2
-#define FONTEXT_ADVANCE   (FONTEXT_WIDTH + 1)
+#define FONTEXT_WIDTH 5
+#define FONTEXT_ROWS 10
+#define FONTEXT_ASCENT 2
+#define FONTEXT_ADVANCE (FONTEXT_WIDTH + 1)
 
 /* The file holds this header, and then one entry for each character. The
  * entries go up by their code point, thus a search divides the range.
@@ -40,12 +40,12 @@
  * each column of the cell. Bit 0 of a column is the row at the top.
  */
 
-#define FONTEXT_HEADER_LEN  12
-#define FONTEXT_ENTRY_LEN   (2 + (FONTEXT_WIDTH * 2))
+#define FONTEXT_HEADER_LEN 12
+#define FONTEXT_ENTRY_LEN (2 + (FONTEXT_WIDTH * 2))
 
 /* The largest font that the board reads into memory. */
 
-#define FONTEXT_MAX_GLYPHS  128
+#define FONTEXT_MAX_GLYPHS 128
 
 /****************************************************************************
  * Name: fontext_load

@@ -3,8 +3,8 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
-#include <syslog.h>
 #include <sys/mount.h>
+#include <syslog.h>
 
 #include <nuttx/board.h>
 
@@ -34,14 +34,13 @@
  *
  ****************************************************************************/
 
-static void hazk03_jtag_reclaim(void)
-{
-  uint32_t regval;
+static void hazk03_jtag_reclaim(void) {
+    uint32_t regval;
 
-  regval  = getreg32(STM32_AFIO_MAPR);
-  regval &= ~AFIO_MAPR_SWJ_CFG_MASK;
-  regval |= AFIO_MAPR_DISAB;
-  putreg32(regval, STM32_AFIO_MAPR);
+    regval = getreg32(STM32_AFIO_MAPR);
+    regval &= ~AFIO_MAPR_SWJ_CFG_MASK;
+    regval |= AFIO_MAPR_DISAB;
+    putreg32(regval, STM32_AFIO_MAPR);
 }
 
 /****************************************************************************
@@ -52,65 +51,61 @@ static void hazk03_jtag_reclaim(void)
  * Name: stm32_bringup
  ****************************************************************************/
 
-int stm32_bringup(void)
-{
-  /* Do this step before the configuration of PA13 below. */
+int stm32_bringup(void) {
+    /* Do this step before the configuration of PA13 below. */
 
-  hazk03_jtag_reclaim();
+    hazk03_jtag_reclaim();
 
-  stm32_configgpio(GPIO_TM1629A_STB);
-  stm32_configgpio(GPIO_TM1629A_CLK);
-  stm32_configgpio(GPIO_TM1629A_DIO);
+    stm32_configgpio(GPIO_TM1629A_STB);
+    stm32_configgpio(GPIO_TM1629A_CLK);
+    stm32_configgpio(GPIO_TM1629A_DIO);
 
-  stm32_configgpio(GPIO_SM1626D_CLK);
-  stm32_configgpio(GPIO_SM1626D_OE);
-  stm32_configgpio(GPIO_SM1626D_STB);
-  stm32_configgpio(GPIO_SM1626D_DIN_MAIN);
-  stm32_configgpio(GPIO_SM1626D_DIN_SUB);
+    stm32_configgpio(GPIO_SM1626D_CLK);
+    stm32_configgpio(GPIO_SM1626D_OE);
+    stm32_configgpio(GPIO_SM1626D_STB);
+    stm32_configgpio(GPIO_SM1626D_DIN_MAIN);
+    stm32_configgpio(GPIO_SM1626D_DIN_SUB);
 
-  hazk03_display_init();
+    hazk03_display_init();
 
 #ifdef CONFIG_MTD_W25
-  if (hazk03_flash_initialize() == OK)
-    {
-      struct hazk03_config_s cfg;
+    if (hazk03_flash_initialize() == OK) {
+        struct hazk03_config_s cfg;
 
-      /* The settings survive a reset. Thus the edge MCU sends the offset of
-       * the local time one time only.
-       */
+        /* The settings survive a reset. Thus the edge MCU sends the offset of
+         * the local time one time only.
+         */
 
-      if (hazk03_config_load(&cfg) == OK)
-        {
-          hazk03_display_setconfig(&cfg);
-          syslog(LOG_INFO, "config: offset=%d bright=%u/%u\n",
-                 cfg.utcoffset, cfg.digits, cfg.panels);
+        if (hazk03_config_load(&cfg) == OK) {
+            hazk03_display_setconfig(&cfg);
+            syslog(LOG_INFO, "config: offset=%d bright=%u/%u\n", cfg.utcoffset,
+                   cfg.digits, cfg.panels);
         }
 
 #ifdef CONFIG_FS_SMARTFS
-      /* The extended font holds the letters outside the ASCII table. A board
-       * without that file keeps the font of the firmware.
-       */
+        /* The extended font holds the letters outside the ASCII table. A board
+         * without that file keeps the font of the firmware.
+         */
 
-      fontext_load(HAZK03_FONT_PATH);
+        fontext_load(HAZK03_FONT_PATH);
 #endif
     }
 #endif
 
 #ifdef CONFIG_NO_SERIAL_CONSOLE
-  /* This build has no console. Thus the UART carries the protocol of the
-   * edge MCU.
-   */
+    /* This build has no console. Thus the UART carries the protocol of the
+     * edge MCU.
+     */
 
-  hazk03_ipc_init();
+    hazk03_ipc_init();
 #endif
 
 #ifdef CONFIG_FS_PROCFS
-  int ret = mount(NULL, "/proc", "procfs", 0, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: mount /proc failed: %d\n", ret);
+    int ret = mount(NULL, "/proc", "procfs", 0, NULL);
+    if (ret < 0) {
+        syslog(LOG_ERR, "ERROR: mount /proc failed: %d\n", ret);
     }
 #endif
 
-  return OK;
+    return OK;
 }
