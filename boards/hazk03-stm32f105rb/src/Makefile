@@ -21,6 +21,10 @@ ifeq ($(CONFIG_MTD_W25),y)
 CSRCS += stm32_spi.c stm32_flash.c
 endif
 
+ifeq ($(CONFIG_USBHOST),y)
+CSRCS += stm32_usbhost.c
+endif
+
 # The library of the protocol is outside the board directory. Both MCUs use
 # the same source.
 

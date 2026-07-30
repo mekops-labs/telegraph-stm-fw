@@ -502,4 +502,23 @@ int hazk03_display_brightness(uint8_t digits, uint8_t panels);
 
 int hazk03_ipc_init(void);
 
+/****************************************************************************
+ * Name: hazk03_usbhost_initialize
+ *
+ * Description:
+ *   Start the USB host on the OTG FS peripheral and register the class
+ *   drivers of the supported devices. A thread then enumerates each device
+ *   that arrives on the port.
+ *
+ *   Note: the peripheral takes a clock of exactly 48 MHz, and a PLL on the
+ *   crystal is its only source. Refer to HAZK03_CLOCK_HSE.
+ *
+ *   Note: the pins PA11 and PA12 carry the two data lines. The pins of the
+ *   VBUS input and of the OTG identifier carry the UART of the edge MCU, thus
+ *   the core takes its VBUS state from an internal source.
+ *
+ ****************************************************************************/
+
+int hazk03_usbhost_initialize(void);
+
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_HAZK03_H */
