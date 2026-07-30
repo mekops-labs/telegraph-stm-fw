@@ -106,7 +106,7 @@ commit adds the count of the commits and the short hash. A tree with local
 changes gets the suffix `-dirty`. A repository without a tag gives the short
 hash alone.
 
-The main panel shows the version for three seconds after a reset. A `0x11`
+The main panel shows the version for three seconds after a reset. A `0x02`
 state frame also carries it, thus the edge MCU reads the version of the
 running image. Refer to [IPC library](#ipc-library).
 

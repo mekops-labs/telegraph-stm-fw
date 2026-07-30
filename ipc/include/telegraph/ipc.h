@@ -95,32 +95,52 @@ extern "C" {
  * Opcodes
  ****************************************************************************/
 
-#define IPC_OP_SET_TIME 0x01u    /* edge -> STM32: set the RTC            */
-#define IPC_OP_SET_TEXT 0x02u    /* edge -> STM32: text on a panel        */
-#define IPC_OP_SET_BRIGHT 0x04u  /* edge -> STM32: the brightness         */
-#define IPC_OP_SET_ANIM 0x05u    /* edge -> STM32: animate a rectangle    */
-#define IPC_OP_ANIM_STOP 0x07u   /* edge -> STM32: stop an animation      */
-#define IPC_OP_SET_PIXELS 0x08u  /* edge -> STM32: pixels on a panel      */
-#define IPC_OP_SET_TEMPOFF 0x0au /* edge -> STM32: correct the temperature */
-#define IPC_OP_SET_SLEEP 0x0bu   /* edge -> STM32: the period without light */
-#define IPC_OP_WRITE_ASSET 0x0cu /* edge -> STM32: a part of a file       */
-#define IPC_OP_CLEAR 0x0du       /* edge -> STM32: clear a panel or both  */
-#define IPC_OP_ANIM_SPEED 0x0fu  /* edge -> STM32: the rate of a movement */
-#define IPC_OP_SET_FONT 0x13u    /* edge -> STM32: take a font from flash */
-#define IPC_OP_FS_LIST 0x14u     /* edge -> STM32: list a directory        */
-#define IPC_OP_FS_READ 0x15u     /* edge -> STM32: read a part of a file   */
-#define IPC_OP_FS_DELETE 0x16u   /* edge -> STM32: remove an entry         */
-#define IPC_OP_FS_MKDIR 0x17u    /* edge -> STM32: create a directory      */
-#define IPC_OP_GET_STATE 0x10u   /* edge -> STM32: request the state       */
-#define IPC_OP_STATE 0x11u       /* STM32 -> edge: the state               */
-#define IPC_OP_LOG 0x12u         /* STM32 -> edge: a log line, a push      */
-#define IPC_OP_FLASH 0x20u       /* edge -> STM32: start the flash mode    */
-#define IPC_OP_USB_LIST 0x30u    /* edge -> STM32: the devices of the port */
-#define IPC_OP_USB_DEVS 0x31u    /* STM32 -> edge: those devices           */
-#define IPC_OP_USB_WRITE 0x32u   /* edge -> STM32: write a channel         */
-#define IPC_OP_USB_DATA 0x33u    /* STM32 -> edge: a channel read, a push  */
-#define IPC_OP_USB_SUB 0x34u     /* edge -> STM32: follow a channel        */
-#define IPC_OP_ACK 0xf0u         /* the receiver accepted the frame        */
+/* The opcodes are grouped by what they reach: the board itself, the display,
+ * the storage, the USB port. Each group starts on a boundary of 16, thus a new
+ * opcode joins its own group and the number says where it belongs.
+ */
+
+/* The board: its state, its clock, its mode. */
+
+#define IPC_OP_GET_STATE 0x01u   /* edge -> STM32: request the state       */
+#define IPC_OP_STATE 0x02u       /* STM32 -> edge: the state               */
+#define IPC_OP_LOG 0x03u         /* STM32 -> edge: a log line, a push      */
+#define IPC_OP_SET_TIME 0x04u    /* edge -> STM32: set the RTC             */
+#define IPC_OP_SET_TEMPOFF 0x05u /* edge -> STM32: correct the temperature */
+#define IPC_OP_FLASH 0x06u       /* edge -> STM32: start the flash mode    */
+
+/* The display: what the panels show, and how they move. */
+
+#define IPC_OP_CLEAR 0x10u      /* edge -> STM32: clear a panel or both   */
+#define IPC_OP_SET_BRIGHT 0x11u /* edge -> STM32: the brightness          */
+#define IPC_OP_SET_SLEEP 0x12u  /* edge -> STM32: the period without light */
+#define IPC_OP_SET_TEXT 0x13u   /* edge -> STM32: text on a panel         */
+#define IPC_OP_SET_PIXELS 0x14u /* edge -> STM32: pixels on a panel       */
+#define IPC_OP_SET_FONT 0x15u   /* edge -> STM32: take a font from flash  */
+#define IPC_OP_SET_ANIM 0x16u   /* edge -> STM32: animate a rectangle     */
+#define IPC_OP_ANIM_SPEED 0x17u /* edge -> STM32: the rate of a movement  */
+#define IPC_OP_ANIM_STOP 0x18u  /* edge -> STM32: stop an animation       */
+
+/* The storage: the flash of the board and the USB device alike. */
+
+#define IPC_OP_FS_LIST 0x20u   /* edge -> STM32: list a directory        */
+#define IPC_OP_FS_READ 0x21u   /* edge -> STM32: read a part of a file   */
+#define IPC_OP_FS_WRITE 0x22u  /* edge -> STM32: write a part of a file  */
+#define IPC_OP_FS_DELETE 0x23u /* edge -> STM32: remove an entry         */
+#define IPC_OP_FS_MKDIR 0x24u  /* edge -> STM32: create a directory      */
+
+/* The USB port: its devices, and the channel of a serial device. */
+
+#define IPC_OP_USB_LIST 0x30u  /* edge -> STM32: the devices of the port */
+#define IPC_OP_USB_DEVS 0x31u  /* STM32 -> edge: those devices           */
+#define IPC_OP_USB_WRITE 0x32u /* edge -> STM32: write a channel         */
+#define IPC_OP_USB_DATA 0x33u  /* STM32 -> edge: a channel read, a push  */
+#define IPC_OP_USB_SUB 0x34u   /* edge -> STM32: follow a channel        */
+
+/* The transport: the reply that every request takes. */
+
+#define IPC_OP_ACK 0xf0u  /* the receiver accepted the frame        */
+#define IPC_OP_NACK 0xf1u /* the receiver rejected the frame        */
 
 /* One credit gives this many bytes of the receive buffer. A frame thus costs
  * more than one credit if its length is above this value.
@@ -132,7 +152,6 @@ extern "C" {
 
 #define IPC_FRAME_CREDITS(len)                                                 \
     (((len) + IPC_FRAME_OVERHEAD + IPC_CREDIT_UNIT - 1) / IPC_CREDIT_UNIT)
-#define IPC_OP_NACK 0xf1u /* the receiver rejected the frame       */
 
 /****************************************************************************
  * NACK error codes
@@ -383,7 +402,7 @@ extern "C" {
  * previous levels at the end of the period.
  */
 
-/* The payload of IPC_OP_WRITE_ASSET. The frame carries one part of a file of
+/* The payload of IPC_OP_FS_WRITE. The frame carries one part of a file of
  * the assets.
  *
  *   [flags u8] [length of the path u8] [the path] [the data]
@@ -397,14 +416,14 @@ extern "C" {
  * Note: the path of every part of one file must be the same.
  */
 
-#define IPC_ASSET_FLAGS 0u
-#define IPC_ASSET_PATHLEN 1u
-#define IPC_ASSET_PATH 2u
+#define IPC_FS_WRITE_FLAGS 0u
+#define IPC_FS_WRITE_PATHLEN 1u
+#define IPC_FS_WRITE_PATH 2u
 
-#define IPC_ASSET_FIRST 0x01u
-#define IPC_ASSET_LAST 0x02u
+#define IPC_FS_WRITE_FIRST 0x01u
+#define IPC_FS_WRITE_LAST 0x02u
 
-#define IPC_ASSET_PATH_MAX 64u
+#define IPC_FS_PATH_MAX 64u
 
 /* The storage that the edge MCU reaches. Every path of every storage opcode
  * must start with one of these roots, and a path holding ".." is refused.

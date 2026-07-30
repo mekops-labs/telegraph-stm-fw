@@ -109,35 +109,84 @@ one caller shares the UART, and the callers need no lock between them.
 
 | Opcode | Direction | Description |
 | :--- | :--- | :--- |
-| `0x01` | edge to STM32 | Set the RTC |
-| `0x02` | edge to STM32 | Set the text of a panel |
-| `0x04` | edge to STM32 | Set the brightness |
-| `0x05` | edge to STM32 | Animate a rectangle, or give the names of the sprites |
-| `0x07` | edge to STM32 | Stop the animations |
-| `0x08` | edge to STM32 | Set the pixels of a rectangle |
-| `0x0A` | edge to STM32 | Correct the temperature |
-| `0x0C` | edge to STM32 | Write one part of a file |
-| `0x0D` | edge to STM32 | Clear a panel, or both |
-| `0x14` | edge to STM32 | List a directory |
-| `0x15` | edge to STM32 | Read one part of a file |
-| `0x16` | edge to STM32 | Remove a file, or a directory that holds no entry |
-| `0x17` | edge to STM32 | Create a directory |
-| `0x0F` | edge to STM32 | Change the rate of an animation |
-| `0x13` | edge to STM32 | Take a font from the flash, or give the names of the fonts |
-| `0x0B` | edge to STM32 | Set the period without light |
-| `0x10` | edge to STM32 | Request the state |
-| `0x11` | STM32 to edge | The state |
-| `0x12` | STM32 to edge | A log line, a push frame |
-| `0x20` | edge to STM32 | Start the flash mode |
+| | | **The board** |
+| `0x01` | edge to STM32 | Request the state |
+| `0x02` | STM32 to edge | The state |
+| `0x03` | STM32 to edge | A log line, a push frame |
+| `0x04` | edge to STM32 | Set the RTC |
+| `0x05` | edge to STM32 | Correct the temperature |
+| `0x06` | edge to STM32 | Start the flash mode |
+| | | **The display** |
+| `0x10` | edge to STM32 | Clear a panel, or both |
+| `0x11` | edge to STM32 | Set the brightness |
+| `0x12` | edge to STM32 | Set the period without light |
+| `0x13` | edge to STM32 | Set the text of a panel |
+| `0x14` | edge to STM32 | Set the pixels of a rectangle |
+| `0x15` | edge to STM32 | Take a font from the flash, or give the names of the fonts |
+| `0x16` | edge to STM32 | Animate a rectangle, or give the names of the sprites |
+| `0x17` | edge to STM32 | Change the rate of an animation |
+| `0x18` | edge to STM32 | Stop the animations |
+| | | **The storage** |
+| `0x20` | edge to STM32 | List a directory |
+| `0x21` | edge to STM32 | Read one part of a file |
+| `0x22` | edge to STM32 | Write one part of a file |
+| `0x23` | edge to STM32 | Remove a file, or a directory that holds no entry |
+| `0x24` | edge to STM32 | Create a directory |
+| | | **The USB port** |
 | `0x30` | edge to STM32 | List the devices of the USB port |
 | `0x31` | STM32 to edge | Those devices |
 | `0x32` | edge to STM32 | Write a channel of a serial device |
 | `0x33` | STM32 to edge | What a channel holds, a push frame |
 | `0x34` | edge to STM32 | Follow a channel, or stop |
+| | | **The transport** |
 | `0xF0` | STM32 to edge | ACK and the credits |
 | `0xF1` | STM32 to edge | NACK and an error code |
 
-### `0x01` Set the RTC
+Each group starts on a boundary of 16. A new opcode joins its own group, thus
+the number tells a reader where the opcode belongs.
+
+## The board
+
+These opcodes reach the board itself: its state, its clock, its mode.
+
+
+### `0x01` Request the state, `0x02` the state
+
+The request has an empty payload. The reply is a `0x02` frame with the same
+correlation ID. The first 12 bytes are always present:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 4 | The Unix time of the RTC |
+| 4 | 2 | The temperature in tenths of a degree Celsius, signed |
+| 6 | 2 | The count of the accepted frames |
+| 8 | 2 | The count of the CRC errors |
+| 10 | 1 | The count of the resynchronization operations |
+| 11 | 1 | The version of the protocol, currently 1 |
+| 12 | n | The version of the firmware, text without a terminator |
+
+The length of the version text is the length of the payload less 12. The
+longest text is 32 bytes.
+
+The version comes from the git tags of the firmware. A build from a tag gives
+that tag, such as `v0.1.0`. A build from a later commit adds the count of the
+commits and the short hash. A build from a tree with local changes adds the
+suffix `-dirty`. A repository without a tag gives the short hash alone.
+
+Note: the edge MCU compares this text with the version of the image that it
+holds. Thus it writes the firmware only when the two differ. A `-dirty` text
+never matches a released image, thus such a build always gets written again.
+
+Note: a `0x02` frame gets no ACK. The frame is itself the reply.
+
+### `0x03` A log line
+
+The payload holds text without a terminator. The correlation ID is `0x0000`.
+
+The STM32 transmits this frame without a request. Thus the edge MCU gets the
+diagnostic output of a build that has no console.
+
+### `0x04` Set the RTC
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -151,20 +200,100 @@ The STM32 writes the DS3231. A battery holds that device, thus the time stays
 correct after a power interruption.
 
 **The RTC keeps UTC. The offset changes the panels only.** Thus a change of
-the season needs no change of the RTC, and the `0x11` frame always gives UTC.
+the season needs no change of the RTC, and the `0x02` frame always gives UTC.
 
 The board keeps the offset in its flash. Thus the edge MCU sends it one time,
 and not after each reset of the board.
 
 The reply is an ACK.
 
-## The panel is an argument, not an opcode
+### `0x05` Correct the temperature
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The correction in tenths of a degree Celsius, signed |
+
+The board adds this value to each reading of the DS3231. Thus the panels and
+the state frame give the same value.
+
+The reply is an ACK.
+
+### `0x06` Start the flash mode
+
+This opcode is a reservation. The STM32 answers with a NACK and the error code
+`0x06`, which is `IPC_ERR_UNSUPPORTED`.
+
+Note: a flash operation uses the system bootloader. The edge MCU holds BOOT0
+and it applies a reset. Thus the application firmware needs no support.
+
+## The display
+
+These opcodes reach the two panels.
+
+
+### The panel is an argument, not an opcode
 
 Every operation that names a panel takes it as the **first byte of its
 payload**: `00` for the main panel and `01` for the sub panel. Thus one opcode
 serves both, and an operation needs no opcode of its own for each of them.
 
-### `0x02` Set the text of a panel
+### `0x10` Clear a panel
+
+| Payload | Effect |
+| :--- | :--- |
+| empty | Both panels |
+| `00` | The main panel alone |
+| `01` | The sub panel alone |
+
+The panel loses every pixel.
+
+**The animation of that panel stops as well.** An animation that kept its steps
+would draw over the panel again at its next one, thus the panel would not stay
+empty.
+
+The reply is an ACK.
+
+### `0x11` Set the brightness
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The brightness of the digits, 0 to 8 |
+| 1 | 1 | The brightness of the panels, 0 to 8, optional |
+
+A payload of 1 byte gives the same level to both devices.
+
+The value 0 turns the device off. The values 1 to 8 give eight levels of
+brightness, from the dimmest to the full level.
+
+The TM1629A has its own control for the digits. The panels have no such
+control, thus the driver makes the on-time of each row shorter. The level 8 is
+the full on-time.
+
+Note: a value above 8 gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x12` Set the period without light
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The minute of the local day that stops the light |
+| 2 | 2 | The minute that starts the light again |
+
+The display gives no light between these two minutes. A start after the end
+goes through midnight. Thus a start of 1380 and an end of 360 stop the light
+from 23:00 until 06:00.
+
+The value `0xFFFF` for the start stops this function.
+
+Note: the period does not change the brightness of the settings. Thus the
+display takes its previous levels at the end of the period.
+
+Note: a minute of 1440 or above gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x13` Set the text of a panel
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -202,7 +331,7 @@ The font of the firmware holds the ASCII table. The extended font in the flash
 holds the other letters. A character that neither font holds gives a space.
 
 **A text wider than its panel scrolls.** The board compares the rendered width
-against the panel and starts the same window/source scroll that `0x05` uses,
+against the panel and starts the same window/source scroll that `0x16` uses,
 at a fixed speed. A text that fits stays static.
 
 **With a font whose line height leaves room for a second line, an overflowing
@@ -215,27 +344,49 @@ scroll above; the compact font gets the wrap.
 
 The reply is an ACK.
 
-### `0x04` Set the brightness
+### `0x14` Set the pixels of a rectangle
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
-| 0 | 1 | The brightness of the digits, 0 to 8 |
-| 1 | 1 | The brightness of the panels, 0 to 8, optional |
+| 0 | 1 | The panel |
+| 1 | 1 | The column of the left edge |
+| 2 | 1 | The row of the top edge |
+| 3 | 1 | The width |
+| 4 | 1 | The height |
+| 5 | n | The pixels |
 
-A payload of 1 byte gives the same level to both devices.
+The pixels go row by row, and each row starts at a byte. Bit 7 of a byte is the
+pixel at the left. Thus one row takes `(width + 7) / 8` bytes, and the payload
+takes that many bytes for each row.
 
-The value 0 turns the device off. The values 1 to 8 give eight levels of
-brightness, from the dimmest to the full level.
+**The rectangle changes those pixels alone.** The rest of the panel keeps its
+content, thus one part of a panel carries a clock while another part carries a
+notification. A rectangle that goes past an edge loses the part outside.
 
-The TM1629A has its own control for the digits. The panels have no such
-control, thus the driver makes the on-time of each row shorter. The level 8 is
-the full on-time.
+Note: the panel holds two images. A write changes the image that the scan does
+not read, and the scan takes the new one between two images. Thus no image ever
+shows one part of a change.
 
-Note: a value above 8 gets a NACK with the code `0x03`.
+Note: a width or a height of 0 gets a NACK with the code `0x03`, and a payload
+that does not match the rectangle gets one with the code `0x02`.
 
 The reply is an ACK.
 
-### `0x05` Animate a rectangle
+### `0x15` Take a font from the flash
+
+The payload is the name of a font, such as `compact`. **An empty payload gives
+the names of the fonts**, refer to
+[The names of the assets](#the-names-of-the-assets).
+
+A font carries its own cell. The font of the firmware takes 7 rows for a
+letter, thus one line fills a panel of 14 rows. The compact font takes 5 rows
+in a cell of 7, thus **two lines fit**.
+
+A file that is absent or not a font gets a NACK with the code `0x05`.
+
+The reply is an ACK.
+
+### `0x16` Animate a rectangle
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -302,17 +453,26 @@ caller therefore cannot state a window that mismatches the sprite's frame.
 
 The reply is an ACK.
 
-### `0x13` Take a font from the flash
+### `0x17` Change the rate of an animation
 
-The payload is the name of a font, such as `compact`. **An empty payload gives
-the names of the fonts**, refer to
-[The names of the assets](#the-names-of-the-assets).
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The panel, 0 for the main one and 1 for the sub one |
+| 1 | 2 | The period of one step, in milliseconds |
+| 3 | 1 | The step in pixels, or 0 to keep the one in use |
 
-A font carries its own cell. The font of the firmware takes 7 rows for a
-letter, thus one line fills a panel of 14 rows. The compact font takes 5 rows
-in a cell of 7, thus **two lines fit**.
+The animation keeps its source and its place. **Thus the rate changes without
+the cost of sending that source again**, which matters for a text that the
+board drew into a source of its own.
 
-A file that is absent or not a font gets a NACK with the code `0x05`.
+Note: a panel without an animation, or a period of 0, gets a NACK with the code
+`0x03`.
+
+The reply is an ACK.
+
+### `0x18` Stop the animations
+
+The payload names a panel, or it is empty for both. Each rectangle keeps the pixels of its last step.
 
 The reply is an ACK.
 
@@ -324,8 +484,8 @@ an ending.
 
 | Kind | Place | Ending | Opcode |
 | :--- | :--- | :--- | :--- |
-| Font | `/assets/fonts` | `.tgf` | `0x13` |
-| Sprite | `/assets/animations` | `.tgs` | `0x05` with `IPC_ANIM_FILE` |
+| Font | `/assets/fonts` | `.tgf` | `0x15` |
+| Sprite | `/assets/animations` | `.tgs` | `0x16` with `IPC_ANIM_FILE` |
 
 A request without a name asks for the names that the board holds. The reply
 carries the opcode of that request and its correlation ID, and its payload is
@@ -335,15 +495,14 @@ board holds no asset of that kind.
 Note: a name that holds `/` gets a NACK with the code `0x03`. Thus a request
 reaches no file outside the place of its kind.
 
-Note: `0x0C` writes a file, and its payload stays a full path. That opcode
+Note: `0x22` writes a file, and its payload stays a full path. That opcode
 carries every kind of file, thus it needs one.
 
 ## Storage
 
 The edge MCU reads and writes two file systems over the link: `/assets` on the
 flash of the board, and `/media`, which holds the mass storage device of the
-USB port when one is present. The opcodes `0x0C`, `0x14`, `0x15`, `0x16` and
-`0x17` serve both.
+USB port when one is present. The opcodes `0x20` to `0x24` serve both.
 
 **Every path must start with `/assets` or with `/media`, and a path holding
 `..` gets a NACK with the code `0x03`.** A root matches a whole element of the
@@ -356,36 +515,18 @@ The file system of the USB device is FAT, and a name there holds 32 characters.
 A longer name gets a NACK with the code `0x05`.
 
 **A name on that device matches by case.** Thus a caller takes each name from
-the reply of `0x14` and gives it back unchanged. A name that another system
+the reply of `0x20` and gives it back unchanged. A name that another system
 wrote in the 8.3 form is upper case, and a request in lower case reaches no
 file.
 
-### `0x0C` Write one part of a file
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 1 | The flags |
-| 1 | 1 | The length of the path |
-| 2 | n | The path |
-| 2+n | m | The data |
-
-The flag `0x01` makes the file empty, and the flag `0x02` closes it. A file of
-one part alone carries both flags. The board keeps one file open, and a first
-part closes a file that an earlier transfer left open. Every part of one file
-must carry the same path.
-
-The board creates the directory of the file when that directory is absent.
-
-The reply is an ACK.
-
-### `0x14` List a directory
+### `0x20` List a directory
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
 | 0 | 2 | The ordinal of the first entry |
 | 2 | n | The path |
 
-The reply carries the opcode `0x14`:
+The reply carries the opcode `0x20`:
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -406,7 +547,7 @@ then names the first entry that it leaves out, thus a directory of any length
 takes as many requests as it needs. The value `0xFFFF` states that no entry
 remains.
 
-### `0x15` Read one part of a file
+### `0x21` Read one part of a file
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -414,7 +555,7 @@ remains.
 | 4 | 2 | The number of bytes |
 | 6 | n | The path |
 
-The reply carries the opcode `0x15`:
+The reply carries the opcode `0x21`:
 
 | Offset | Size | Field |
 | :--- | :--- | :--- |
@@ -426,7 +567,25 @@ reply shorter than the request holds the end of the file, and a reply of the
 offset alone states that the offset is at or past that end. Thus a caller reads
 until it takes such a reply.
 
-### `0x16` Remove a file or a directory, `0x17` create a directory
+### `0x22` Write one part of a file
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The flags |
+| 1 | 1 | The length of the path |
+| 2 | n | The path |
+| 2+n | m | The data |
+
+The flag `0x01` makes the file empty, and the flag `0x02` closes it. A file of
+one part alone carries both flags. The board keeps one file open, and a first
+part closes a file that an earlier transfer left open. Every part of one file
+must carry the same path.
+
+The board creates the directory of the file when that directory is absent.
+
+The reply is an ACK.
+
+### `0x23` Remove a file or a directory, `0x24` create a directory
 
 The payload of each is the path alone. The reply is an ACK, or a NACK with the
 code `0x05` when the operation fails — a directory that holds an entry, for
@@ -480,7 +639,7 @@ attempt of one write carries the same value. The board holds the value of the
 last write it took, thus it answers a repeat with an ACK and writes nothing.
 The count wraps at 256, which no repeat of one write can reach.
 
-The board also sends a `0x12` log line for each repeat it drops, thus an
+The board also sends a `0x03` log line for each repeat it drops, thus an
 operator sees that the stream took the bytes one time.
 
 Note: the board forgets that value when it follows another channel. A sender
@@ -510,147 +669,10 @@ nothing more.
 A `0x34` that stops a channel stops the push frames. The device stays open,
 thus its bytes reach no caller until a `0x34` starts the channel again.
 
-### `0x07` Stop the animations
+## The transport
 
-The payload names a panel, or it is empty for both. Each rectangle keeps the pixels of its last step.
+Every request takes one of these two replies.
 
-The reply is an ACK.
-
-### `0x08` Set the pixels of a rectangle
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 1 | The panel |
-| 1 | 1 | The column of the left edge |
-| 2 | 1 | The row of the top edge |
-| 3 | 1 | The width |
-| 4 | 1 | The height |
-| 5 | n | The pixels |
-
-The pixels go row by row, and each row starts at a byte. Bit 7 of a byte is the
-pixel at the left. Thus one row takes `(width + 7) / 8` bytes, and the payload
-takes that many bytes for each row.
-
-**The rectangle changes those pixels alone.** The rest of the panel keeps its
-content, thus one part of a panel carries a clock while another part carries a
-notification. A rectangle that goes past an edge loses the part outside.
-
-Note: the panel holds two images. A write changes the image that the scan does
-not read, and the scan takes the new one between two images. Thus no image ever
-shows one part of a change.
-
-Note: a width or a height of 0 gets a NACK with the code `0x03`, and a payload
-that does not match the rectangle gets one with the code `0x02`.
-
-The reply is an ACK.
-
-### `0x0D` Clear a panel
-
-| Payload | Effect |
-| :--- | :--- |
-| empty | Both panels |
-| `00` | The main panel alone |
-| `01` | The sub panel alone |
-
-The panel loses every pixel.
-
-**The animation of that panel stops as well.** An animation that kept its steps
-would draw over the panel again at its next one, thus the panel would not stay
-empty.
-
-The reply is an ACK.
-
-### `0x0F` Change the rate of an animation
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 1 | The panel, 0 for the main one and 1 for the sub one |
-| 1 | 2 | The period of one step, in milliseconds |
-| 3 | 1 | The step in pixels, or 0 to keep the one in use |
-
-The animation keeps its source and its place. **Thus the rate changes without
-the cost of sending that source again**, which matters for a text that the
-board drew into a source of its own.
-
-Note: a panel without an animation, or a period of 0, gets a NACK with the code
-`0x03`.
-
-The reply is an ACK.
-
-### `0x0A` Correct the temperature
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 2 | The correction in tenths of a degree Celsius, signed |
-
-The board adds this value to each reading of the DS3231. Thus the panels and
-the state frame give the same value.
-
-The reply is an ACK.
-
-### `0x0B` Set the period without light
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 2 | The minute of the local day that stops the light |
-| 2 | 2 | The minute that starts the light again |
-
-The display gives no light between these two minutes. A start after the end
-goes through midnight. Thus a start of 1380 and an end of 360 stop the light
-from 23:00 until 06:00.
-
-The value `0xFFFF` for the start stops this function.
-
-Note: the period does not change the brightness of the settings. Thus the
-display takes its previous levels at the end of the period.
-
-Note: a minute of 1440 or above gets a NACK with the code `0x03`.
-
-The reply is an ACK.
-
-### `0x10` Request the state, `0x11` the state
-
-The request has an empty payload. The reply is a `0x11` frame with the same
-correlation ID. The first 12 bytes are always present:
-
-| Offset | Size | Field |
-| :--- | :--- | :--- |
-| 0 | 4 | The Unix time of the RTC |
-| 4 | 2 | The temperature in tenths of a degree Celsius, signed |
-| 6 | 2 | The count of the accepted frames |
-| 8 | 2 | The count of the CRC errors |
-| 10 | 1 | The count of the resynchronization operations |
-| 11 | 1 | The version of the protocol, currently 1 |
-| 12 | n | The version of the firmware, text without a terminator |
-
-The length of the version text is the length of the payload less 12. The
-longest text is 32 bytes.
-
-The version comes from the git tags of the firmware. A build from a tag gives
-that tag, such as `v0.1.0`. A build from a later commit adds the count of the
-commits and the short hash. A build from a tree with local changes adds the
-suffix `-dirty`. A repository without a tag gives the short hash alone.
-
-Note: the edge MCU compares this text with the version of the image that it
-holds. Thus it writes the firmware only when the two differ. A `-dirty` text
-never matches a released image, thus such a build always gets written again.
-
-Note: a `0x11` frame gets no ACK. The frame is itself the reply.
-
-### `0x12` A log line
-
-The payload holds text without a terminator. The correlation ID is `0x0000`.
-
-The STM32 transmits this frame without a request. Thus the edge MCU gets the
-diagnostic output of a build that has no console.
-
-### `0x20` Start the flash mode
-
-This opcode is a reservation. The STM32 answers with a NACK and the code
-`0x06`.
-
-Note: a flash operation uses the system bootloader. The edge MCU holds BOOT0
-and it applies a reset. Thus the application firmware needs no support.
 
 ### `0xF0` ACK
 
@@ -673,6 +695,7 @@ The payload holds one error code:
 The sender transmits the frame again after a NACK with the code `0x04`. Do not
 transmit the frame again after the other codes. These codes show an error in
 the frame itself.
+
 
 ## Flow control
 
