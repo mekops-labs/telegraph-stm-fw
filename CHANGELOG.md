@@ -7,6 +7,19 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The USB port reads a mass storage device. The board mounts its FAT file
+  system at `/media`.
+- The edge MCU lists a directory, reads a file, removes an entry and creates a
+  directory, on the flash of the board and on the USB device alike. Opcodes
+  `0x14` to `0x17`.
+
+### Fixed
+
+- A path from the edge MCU must start with `/assets` or `/media`, so the
+  settings and the raw devices stay out of reach of the link.
+
 ## [0.3.0] - 2026-07-30
 
 ### Added

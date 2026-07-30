@@ -183,14 +183,36 @@ The board directory is `boards/hazk03-stm32f105rb/`. The build keeps it
 the submodules, and a rebase stays simple.
 
 The file `stm32_clockconfig.c` replaces the standard clock setup. The
-connectivity-line code in the NuttX tree always drives the PLL from the HSE
-input. This board cannot use that input.
+connectivity-line code in the NuttX tree waits for each PLL without a limit,
+thus a clock that never comes up stops the boot with no sign of the cause.
+Every wait in this file has an end, and a failure leaves the internal
+oscillator running.
 
 **The board builds through `configure.sh` and make.** NuttX also carries a
 CMake build, and a board in its tree gives a file for each of the two. This
 board gives the make file alone, because `make build` is the only path that the
 repository uses. A second list of the sources goes stale without a build that
 reads it.
+
+### The USB host port
+
+The OTG FS peripheral drives the module's USB connector as a host. The board
+enumerates a mass storage device and mounts its FAT file system at `/media`,
+thus the edge MCU reads and writes that device over the protocol. Refer to
+[IPC protocol](docs/ipc-protocol.md).
+
+The peripheral takes a clock of exactly 48 MHz, and a PLL on the crystal is its
+only source. A build without `HAZK03_CLOCK_HSE` therefore carries no USB host.
+
+The pins PA11 and PA12 carry the two data lines. The peripheral also has a VBUS
+input on PA9 and an identifier line on PA10, and those two pins carry the UART
+of the edge MCU — a host takes the identifier from its role, and the core takes
+an internal VBUS state, thus neither pin belongs to this peripheral here. The
+option `STM32_OTGFS_VBUS_CONTROL` must stay off: it calls for a GPIO that drives
+a power switch, and the module carries no such switch.
+
+Note: this build accepts a file name in the 8.3 form alone. `FAT_LFN` adds a
+long name, and NuttX flags that option with a patent notice.
 
 ## IPC library
 
