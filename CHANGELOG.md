@@ -18,6 +18,9 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that omits them.
 - A scrolling text now carries a 3-character blank gap after its end,
   so the wrap back to the start no longer runs into the text itself.
+- A `SET_TEXT` that overflows the panel wraps across the compact font's
+  two lines at a word boundary. A wrap that still overflows the panel
+  height scrolls down by rows instead of losing its end.
 
 ### Changed
 

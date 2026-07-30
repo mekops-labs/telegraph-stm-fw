@@ -196,6 +196,14 @@ compares the rendered width against the panel and starts the same window/source
 scroll that `0x05` uses, at a fixed speed. A text that fits stays static, as
 before.
 
+**With a font whose line height leaves room for a second line, an overflowing
+text wraps at a word instead of scrolling across.** A word wider than the
+panel breaks mid-word. A wrapped text that still overflows the panel height
+scrolls down by rows instead, each line centered the same way a static one is.
+Whether a font leaves room for a second line follows only from its own line
+height against the panel height, so the font of 5 by 7 keeps the single-line
+scroll above; the compact font gets the wrap.
+
 The reply is an ACK.
 
 ### `0x04` Set the brightness
