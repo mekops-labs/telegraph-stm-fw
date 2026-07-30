@@ -13,6 +13,7 @@ RUN apt-get update \
     # Toolchain for the host. NuttX builds its own host tools.
     build-essential \
     ccache \
+    clang-format \
     cmake \
     ninja-build \
     # ARM cross toolchain. The STM32F105 has a Cortex-M3 core.
