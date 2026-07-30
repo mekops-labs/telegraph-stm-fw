@@ -87,7 +87,7 @@ static struct ipc_ctx_s *g_ipc;
  * Private Functions
  ****************************************************************************/
 
-static void ipc_send(struct ipc_ctx_s *ctx, int len) {
+static void ipc_send(const struct ipc_ctx_s *ctx, int len) {
     const uint8_t *p = ctx->tx;
 
     if (len <= 0) {
@@ -108,7 +108,7 @@ static void ipc_send(struct ipc_ctx_s *ctx, int len) {
 
 /* Give the number of the frames that the receive buffer still accepts. */
 
-static uint8_t ipc_credits(struct ipc_ctx_s *ctx) {
+static uint8_t ipc_credits(const struct ipc_ctx_s *ctx) {
     int pending = 0;
     int free_bytes;
 
@@ -456,6 +456,14 @@ static void ipc_set_sleep(struct ipc_ctx_s *ctx,
 
 #ifdef CONFIG_FS_SMARTFS
 /* Make the directory of a path. A path with no directory does nothing. */
+
+/* cppcheck-suppress constParameterPointer
+ * The function writes through path via the alias strrchr() returns, which
+ * cppcheck does not trace back to this parameter. A const path would still
+ * compile, because the standard strrchr() prototype returns a non-const
+ * char* regardless of its own argument's constness, but path is genuinely
+ * mutated here.
+ */
 
 static void ipc_asset_mkdir(char *path) {
     char *slash = strrchr(path, '/');
