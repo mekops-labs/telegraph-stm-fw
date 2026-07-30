@@ -81,14 +81,17 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y,
     }
 }
 
-void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
-                        size_t len)
-{
-  int stride = (w + 7) / 8;
-  size_t i = 0;
-  int x = 0;
+/* Draw one text into bits, at the cell whose top is ytop and whose height is
+ * cellheight. Both sm1626d_rendertext() and sm1626d_rendertextlines() place
+ * one text this way; the second calls this once per wrapped line.
+ */
 
-  memset(bits, 0, (size_t)(stride * h));
+static void rendertext_at(uint8_t *bits, int w, int totalh, int stride,
+                          int xoff, int ytop, int cellheight, const char *s,
+                          size_t len)
+{
+  size_t i = 0;
+  int x = xoff;
 
   while (i < len && x < w)
     {
@@ -112,9 +115,10 @@ void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
                * belongs above the letter, thus it moves down here.
                */
 
-              int y = row - fontext_ascent() + ((h - (fontext_rows() - fontext_ascent() - 1)) / 2);
+              int y = ytop + row - fontext_ascent() +
+                      ((cellheight - (fontext_rows() - fontext_ascent() - 1)) / 2);
 
-              if (y < 0 || y >= h)
+              if (y < 0 || y >= totalh)
                 {
                   continue;
                 }
@@ -128,5 +132,31 @@ void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
         }
 
       x += fontext_advance();
+    }
+}
+
+void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
+                        size_t len)
+{
+  int stride = (w + 7) / 8;
+
+  memset(bits, 0, (size_t)(stride * h));
+  rendertext_at(bits, w, h, stride, 0, 0, h, s, len);
+}
+
+void sm1626d_rendertextlines(uint8_t *bits, int w, int totalh,
+                             const size_t *starts, const size_t *lens,
+                             const int *xoffs, int n, const char *s)
+{
+  int stride = (w + 7) / 8;
+  int lineheight = fontext_lineheight();
+  int k;
+
+  memset(bits, 0, (size_t)(stride * totalh));
+
+  for (k = 0; k < n; k++)
+    {
+      rendertext_at(bits, w, totalh, stride, xoffs[k], k * lineheight,
+                    lineheight, &s[starts[k]], lens[k]);
     }
 }
