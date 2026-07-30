@@ -31,8 +31,8 @@ static uint16_t g_count;
  * the font of the firmware.
  */
 
-static int g_width  = FONTEXT_WIDTH;
-static int g_rows   = FONTEXT_ROWS;
+static int g_width = FONTEXT_WIDTH;
+static int g_rows = FONTEXT_ROWS;
 static int g_ascent = FONTEXT_ASCENT;
 
 /* The columns of one character of the font of the firmware, after the move to
@@ -45,9 +45,8 @@ static uint16_t g_fallback[FONTEXT_WIDTH];
  * Private Functions
  ****************************************************************************/
 
-static uint16_t fontext_get_u16(const uint8_t *p)
-{
-  return (uint16_t)(p[0] | (p[1] << 8));
+static uint16_t fontext_get_u16(const uint8_t *p) {
+    return (uint16_t)(p[0] | (p[1] << 8));
 }
 
 /* Take one code point from a text in UTF-8.
@@ -56,215 +55,176 @@ static uint16_t fontext_get_u16(const uint8_t *p)
  * that starts no valid sequence gives the code point of the space.
  */
 
-static size_t fontext_utf8(const char *s, size_t len, uint32_t *cp)
-{
-  const uint8_t *p = (const uint8_t *)s;
+static size_t fontext_utf8(const char *s, size_t len, uint32_t *cp) {
+    const uint8_t *p = (const uint8_t *)s;
 
-  if ((p[0] & 0x80) == 0)
-    {
-      *cp = p[0];
-      return 1;
+    if ((p[0] & 0x80) == 0) {
+        *cp = p[0];
+        return 1;
     }
 
-  if ((p[0] & 0xe0) == 0xc0 && len >= 2 && (p[1] & 0xc0) == 0x80)
-    {
-      *cp = (uint32_t)((p[0] & 0x1f) << 6) | (p[1] & 0x3f);
-      return 2;
+    if ((p[0] & 0xe0) == 0xc0 && len >= 2 && (p[1] & 0xc0) == 0x80) {
+        *cp = (uint32_t)((p[0] & 0x1f) << 6) | (p[1] & 0x3f);
+        return 2;
     }
 
-  if ((p[0] & 0xf0) == 0xe0 && len >= 3 && (p[1] & 0xc0) == 0x80 &&
-      (p[2] & 0xc0) == 0x80)
-    {
-      *cp = (uint32_t)((p[0] & 0x0f) << 12) |
-            (uint32_t)((p[1] & 0x3f) << 6) | (p[2] & 0x3f);
-      return 3;
+    if ((p[0] & 0xf0) == 0xe0 && len >= 3 && (p[1] & 0xc0) == 0x80 &&
+        (p[2] & 0xc0) == 0x80) {
+        *cp = (uint32_t)((p[0] & 0x0f) << 12) | (uint32_t)((p[1] & 0x3f) << 6) |
+              (p[2] & 0x3f);
+        return 3;
     }
 
-  *cp = ' ';
-  return 1;
+    *cp = ' ';
+    return 1;
 }
 
 /* Look for one code point in the extended font. The entries go up, thus the
  * search divides the range at each step.
  */
 
-static const uint16_t *fontext_find(uint32_t cp)
-{
-  int lo = 0;
-  int hi = (int)g_count - 1;
+static const uint16_t *fontext_find(uint32_t cp) {
+    int lo = 0;
+    int hi = (int)g_count - 1;
 
-  if (cp > 0xffff)
-    {
-      return NULL;
+    if (cp > 0xffff) {
+        return NULL;
     }
 
-  while (lo <= hi)
-    {
-      int mid = (lo + hi) / 2;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
 
-      if (g_cp[mid] == (uint16_t)cp)
-        {
-          return g_cols[mid];
+        if (g_cp[mid] == (uint16_t)cp) {
+            return g_cols[mid];
         }
 
-      if (g_cp[mid] < (uint16_t)cp)
-        {
-          lo = mid + 1;
-        }
-      else
-        {
-          hi = mid - 1;
+        if (g_cp[mid] < (uint16_t)cp) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
         }
     }
 
-  return NULL;
+    return NULL;
 }
 
 /* Move one character of the font of the firmware into the taller cell. */
 
-static const uint16_t *fontext_fromascii(uint32_t cp)
-{
-  const uint8_t *glyph = font5x7_glyph((char)cp);
-  int col;
+static const uint16_t *fontext_fromascii(uint32_t cp) {
+    const uint8_t *glyph = font5x7_glyph((char)cp);
+    int col;
 
-  for (col = 0; col < FONTEXT_WIDTH; col++)
-    {
-      g_fallback[col] = (uint16_t)(glyph[col] << g_ascent);
+    for (col = 0; col < FONTEXT_WIDTH; col++) {
+        g_fallback[col] = (uint16_t)(glyph[col] << g_ascent);
     }
 
-  return g_fallback;
+    return g_fallback;
 }
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-int fontext_load(const char *path)
-{
-  uint8_t header[FONTEXT_HEADER_LEN];
-  uint8_t entry[FONTEXT_ENTRY_LEN];
-  uint16_t count;
-  uint16_t i;
-  int fd;
-  int ret = -EINVAL;
+int fontext_load(const char *path) {
+    uint8_t header[FONTEXT_HEADER_LEN];
+    uint8_t entry[FONTEXT_ENTRY_LEN];
+    uint16_t count;
+    uint16_t i;
+    int fd;
+    int ret = -EINVAL;
 
-  fd = open(path, O_RDONLY);
-  if (fd < 0)
-    {
-      return -ENOENT;
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return -ENOENT;
     }
 
-  if (read(fd, header, sizeof(header)) != (ssize_t)sizeof(header))
-    {
-      goto done;
+    if (read(fd, header, sizeof(header)) != (ssize_t)sizeof(header)) {
+        goto done;
     }
 
-  if (fontext_get_u16(&header[0]) != (uint16_t)(FONTEXT_MAGIC & 0xffff) ||
-      fontext_get_u16(&header[2]) != (uint16_t)(FONTEXT_MAGIC >> 16))
-    {
-      syslog(LOG_ERR, "font: %s is not a font\n", path);
-      goto done;
+    if (fontext_get_u16(&header[0]) != (uint16_t)(FONTEXT_MAGIC & 0xffff) ||
+        fontext_get_u16(&header[2]) != (uint16_t)(FONTEXT_MAGIC >> 16)) {
+        syslog(LOG_ERR, "font: %s is not a font\n", path);
+        goto done;
     }
 
-  count = fontext_get_u16(&header[4]);
+    count = fontext_get_u16(&header[4]);
 
-  /* The file carries its own cell. A cell larger than the store of this build
-   * is the only one that it refuses.
-   */
+    /* The file carries its own cell. A cell larger than the store of this build
+     * is the only one that it refuses.
+     */
 
-  if (header[6] == 0 || header[6] > FONTEXT_WIDTH ||
-      header[7] == 0 || header[7] > 16 || header[8] >= header[7])
-    {
-      syslog(LOG_ERR, "font: %s has a cell of %u by %u that does not fit\n",
-             path, header[6], header[7]);
-      goto done;
+    if (header[6] == 0 || header[6] > FONTEXT_WIDTH || header[7] == 0 ||
+        header[7] > 16 || header[8] >= header[7]) {
+        syslog(LOG_ERR, "font: %s has a cell of %u by %u that does not fit\n",
+               path, header[6], header[7]);
+        goto done;
     }
 
-  if (count > FONTEXT_MAX_GLYPHS)
-    {
-      syslog(LOG_ERR, "font: %s holds %u characters, the limit is %u\n",
-             path, count, FONTEXT_MAX_GLYPHS);
-      goto done;
+    if (count > FONTEXT_MAX_GLYPHS) {
+        syslog(LOG_ERR, "font: %s holds %u characters, the limit is %u\n", path,
+               count, FONTEXT_MAX_GLYPHS);
+        goto done;
     }
 
-  for (i = 0; i < count; i++)
-    {
-      int col;
-      size_t entrylen = 2 + ((size_t)header[6] * 2);
+    for (i = 0; i < count; i++) {
+        int col;
+        size_t entrylen = 2 + ((size_t)header[6] * 2);
 
-      if (read(fd, entry, entrylen) != (ssize_t)entrylen)
-        {
-          goto done;
+        if (read(fd, entry, entrylen) != (ssize_t)entrylen) {
+            goto done;
         }
 
-      g_cp[i] = fontext_get_u16(&entry[0]);
+        g_cp[i] = fontext_get_u16(&entry[0]);
 
-      for (col = 0; col < FONTEXT_WIDTH; col++)
-        {
-          g_cols[i][col] = (col < header[6]) ?
-              fontext_get_u16(&entry[2 + (col * 2)]) : 0;
+        for (col = 0; col < FONTEXT_WIDTH; col++) {
+            g_cols[i][col] =
+                (col < header[6]) ? fontext_get_u16(&entry[2 + (col * 2)]) : 0;
         }
     }
 
-  g_count  = count;
-  g_width  = header[6];
-  g_rows   = header[7];
-  g_ascent = header[8];
-  ret = OK;
+    g_count = count;
+    g_width = header[6];
+    g_rows = header[7];
+    g_ascent = header[8];
+    ret = OK;
 
-  syslog(LOG_INFO, "font: %s gives %u characters in a cell of %d by %d\n",
-         path, count, g_width, g_rows);
+    syslog(LOG_INFO, "font: %s gives %u characters in a cell of %d by %d\n",
+           path, count, g_width, g_rows);
 
 done:
-  close(fd);
-  return ret;
+    close(fd);
+    return ret;
 }
 
-size_t fontext_next(const char *s, size_t len, const uint16_t **cols)
-{
-  const uint16_t *found;
-  uint32_t cp;
-  size_t used;
+size_t fontext_next(const char *s, size_t len, const uint16_t **cols) {
+    const uint16_t *found;
+    uint32_t cp;
+    size_t used;
 
-  used = fontext_utf8(s, len, &cp);
+    used = fontext_utf8(s, len, &cp);
 
-  found = fontext_find(cp);
-  if (found != NULL)
-    {
-      *cols = found;
-      return used;
+    found = fontext_find(cp);
+    if (found != NULL) {
+        *cols = found;
+        return used;
     }
 
-  /* The font of the firmware holds the ASCII table. Any other character has
-   * no shape, thus it gives a space.
-   */
+    /* The font of the firmware holds the ASCII table. Any other character has
+     * no shape, thus it gives a space.
+     */
 
-  *cols = fontext_fromascii((cp >= 0x20 && cp <= 0x7e) ? cp : ' ');
+    *cols = fontext_fromascii((cp >= 0x20 && cp <= 0x7e) ? cp : ' ');
 
-  return used;
+    return used;
 }
 
-int fontext_width(void)
-{
-  return g_width;
-}
+int fontext_width(void) { return g_width; }
 
-int fontext_rows(void)
-{
-  return g_rows;
-}
+int fontext_rows(void) { return g_rows; }
 
-int fontext_ascent(void)
-{
-  return g_ascent;
-}
+int fontext_ascent(void) { return g_ascent; }
 
-int fontext_advance(void)
-{
-  return g_width + 1;
-}
+int fontext_advance(void) { return g_width + 1; }
 
-int fontext_lineheight(void)
-{
-  return g_rows;
-}
+int fontext_lineheight(void) { return g_rows; }

@@ -26,26 +26,32 @@
  * serial bus.
  */
 
-#define GPIO_TM1629A_STB  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN5)
-#define GPIO_TM1629A_CLK  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN3)
-#define GPIO_TM1629A_DIO  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN4)
+#define GPIO_TM1629A_STB                                                       \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTB | GPIO_PIN5)
+#define GPIO_TM1629A_CLK                                                       \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTB | GPIO_PIN3)
+#define GPIO_TM1629A_DIO                                                       \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTB | GPIO_PIN4)
 
 /* SM1626D dot matrix. Both screens share the clock, the output-enable and the
  * strobe lines. Only the serial data input is different.
  */
 
-#define GPIO_SM1626D_CLK  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN12)
-#define GPIO_SM1626D_OE   (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN13)
-#define GPIO_SM1626D_STB  (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN14)
-#define GPIO_SM1626D_DIN_MAIN \
-                          (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN15)
+#define GPIO_SM1626D_CLK                                                       \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_CLEAR |      \
+     GPIO_PORTB | GPIO_PIN12)
+#define GPIO_SM1626D_OE                                                        \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTB | GPIO_PIN13)
+#define GPIO_SM1626D_STB                                                       \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_CLEAR |      \
+     GPIO_PORTB | GPIO_PIN14)
+#define GPIO_SM1626D_DIN_MAIN                                                  \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_CLEAR |      \
+     GPIO_PORTB | GPIO_PIN15)
 
 /* This is the data input of the sub-screen.
  *
@@ -53,19 +59,21 @@
  * hazk03_jtag_reclaim() in the file stm32_bringup.c.
  */
 
-#define GPIO_SM1626D_DIN_SUB \
-                          (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_CLEAR | GPIO_PORTA | GPIO_PIN13)
+#define GPIO_SM1626D_DIN_SUB                                                   \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_CLEAR |      \
+     GPIO_PORTA | GPIO_PIN13)
 
 /* DS3231 RTC. The pins PC6 and PC7 have no connection to an I2C peripheral on
  * this part. Thus software drives the bus. Both lines are open-drain and use
  * the pull-up resistors on the board.
  */
 
-#define GPIO_DS3231_SCL   (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTC | GPIO_PIN6)
-#define GPIO_DS3231_SDA   (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTC | GPIO_PIN7)
+#define GPIO_DS3231_SCL                                                        \
+    (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTC | GPIO_PIN6)
+#define GPIO_DS3231_SDA                                                        \
+    (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTC | GPIO_PIN7)
 
 /* Winbond W25Q32 serial flash, 4 MB, on SPI1. The peripheral drives PA5, PA6
  * and PA7. The chip-select line is a GPIO, because the driver of the bus
@@ -74,8 +82,9 @@
  * Note: the idle level of the chip-select line is high.
  */
 
-#define GPIO_W25_CS       (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | \
-                           GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN4)
+#define GPIO_W25_CS                                                            \
+    (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
+     GPIO_PORTA | GPIO_PIN4)
 
 /* The layout of the flash. One erase sector is 4096 bytes.
  *
@@ -87,14 +96,14 @@
  */
 
 #define W25_BLOCKS_PER_SECTOR 16
-#define W25_CONFIG_SECTORS    2
-#define W25_TOTAL_SECTORS     1024
+#define W25_CONFIG_SECTORS 2
+#define W25_TOTAL_SECTORS 1024
 
 #define W25_CONFIG_FIRSTBLOCK 0
-#define W25_CONFIG_NBLOCKS    (W25_CONFIG_SECTORS * W25_BLOCKS_PER_SECTOR)
+#define W25_CONFIG_NBLOCKS (W25_CONFIG_SECTORS * W25_BLOCKS_PER_SECTOR)
 #define W25_ASSETS_FIRSTBLOCK W25_CONFIG_NBLOCKS
-#define W25_ASSETS_NBLOCKS    ((W25_TOTAL_SECTORS * W25_BLOCKS_PER_SECTOR) - \
-                               W25_ASSETS_FIRSTBLOCK)
+#define W25_ASSETS_NBLOCKS                                                     \
+    ((W25_TOTAL_SECTORS * W25_BLOCKS_PER_SECTOR) - W25_ASSETS_FIRSTBLOCK)
 
 /****************************************************************************
  * Public Function Prototypes
@@ -155,20 +164,20 @@ int hazk03_flash_initialize(void);
  * asset alone, thus it needs neither the place nor the ending.
  */
 
-#define HAZK03_FONT_DIR   "/assets/fonts"
-#define HAZK03_FONT_EXT   ".tgf"
-#define HAZK03_ANIM_DIR   "/assets/animations"
-#define HAZK03_ANIM_EXT   ".tgs"
+#define HAZK03_FONT_DIR "/assets/fonts"
+#define HAZK03_FONT_EXT ".tgf"
+#define HAZK03_ANIM_DIR "/assets/animations"
+#define HAZK03_ANIM_EXT ".tgs"
 
 /* The longest name of an asset, without its ending. */
 
-#define HAZK03_ASSET_NAME_MAX  32
+#define HAZK03_ASSET_NAME_MAX 32
 
-#define HAZK03_FONT_PATH  HAZK03_FONT_DIR "/default" HAZK03_FONT_EXT
+#define HAZK03_FONT_PATH HAZK03_FONT_DIR "/default" HAZK03_FONT_EXT
 
 /* The value that turns the sleep period off. */
 
-#define HAZK03_SLEEP_OFF  0xffffu
+#define HAZK03_SLEEP_OFF 0xffffu
 
 /* The settings that the board keeps through a loss of power.
  *
@@ -178,14 +187,13 @@ int hazk03_flash_initialize(void);
  * step of the firmware loses no setting.
  */
 
-struct hazk03_config_s
-{
-  int16_t  utcoffset;     /* Minutes of the local time from UTC          */
-  uint8_t  digits;        /* Brightness of the digits, 0 is off          */
-  uint8_t  panels;        /* Brightness of the panels, 0 is off          */
-  int16_t  tempoffset;    /* Correction of the temperature, in tenths    */
-  uint16_t sleepmin;      /* Minute of the day that stops the display    */
-  uint16_t wakemin;       /* Minute of the day that starts it again      */
+struct hazk03_config_s {
+    int16_t utcoffset;  /* Minutes of the local time from UTC          */
+    uint8_t digits;     /* Brightness of the digits, 0 is off          */
+    uint8_t panels;     /* Brightness of the panels, 0 is off          */
+    int16_t tempoffset; /* Correction of the temperature, in tenths    */
+    uint16_t sleepmin;  /* Minute of the day that stops the display    */
+    uint16_t wakemin;   /* Minute of the day that starts it again      */
 };
 
 /* The settings of a board with an empty store. A record that lacks a field
@@ -195,15 +203,15 @@ struct hazk03_config_s
  * display is one of them, because zero is midnight.
  */
 
-#define HAZK03_CONFIG_DEFAULTS \
-  {                            \
-    0,                         /* utcoffset  */ \
-    5,                         /* digits     */ \
-    8,                         /* panels     */ \
-    0,                         /* tempoffset */ \
-    HAZK03_SLEEP_OFF,          /* sleepmin   */ \
-    HAZK03_SLEEP_OFF           /* wakemin    */ \
-  }
+#define HAZK03_CONFIG_DEFAULTS                                                 \
+    {                                                                          \
+        0,                /* utcoffset  */                                     \
+        5,                /* digits     */                                     \
+        8,                /* panels     */                                     \
+        0,                /* tempoffset */                                     \
+        HAZK03_SLEEP_OFF, /* sleepmin   */                                     \
+        HAZK03_SLEEP_OFF  /* wakemin    */                                     \
+    }
 
 /****************************************************************************
  * Name: hazk03_config_load
@@ -275,19 +283,19 @@ void hazk03_hse_probe(char *buf, size_t len);
 
 /* The two panels. */
 
-#define HAZK03_PANEL_MAIN  0
-#define HAZK03_PANEL_SUB   1
+#define HAZK03_PANEL_MAIN 0
+#define HAZK03_PANEL_SUB 1
 
 /* The place of a text across a panel. */
 
 #define HAZK03_ALIGN_CENTRE 0
-#define HAZK03_ALIGN_LEFT   1
-#define HAZK03_ALIGN_RIGHT  2
+#define HAZK03_ALIGN_LEFT 1
+#define HAZK03_ALIGN_RIGHT 2
 
 /* The place of a text down a panel. */
 
 #define HAZK03_VALIGN_MIDDLE 0
-#define HAZK03_VALIGN_TOP    1
+#define HAZK03_VALIGN_TOP 1
 #define HAZK03_VALIGN_BOTTOM 2
 
 /****************************************************************************
@@ -351,8 +359,8 @@ int hazk03_display_pixels(int panel, int x, int y, int w, int h,
  *
  ****************************************************************************/
 
-int hazk03_asset_path(char *buf, size_t len, const char *dir,
-                      const char *name, size_t namelen, const char *ext);
+int hazk03_asset_path(char *buf, size_t len, const char *dir, const char *name,
+                      size_t namelen, const char *ext);
 
 /****************************************************************************
  * Name: hazk03_asset_list
@@ -368,10 +376,10 @@ int hazk03_asset_path(char *buf, size_t len, const char *dir,
 size_t hazk03_asset_list(char *buf, size_t len, const char *dir,
                          const char *ext);
 
-int hazk03_display_animate(int panel, int x, int y, int w, int h,
-                           bool vertical, uint16_t period_ms, uint8_t step,
-                           bool text, bool file, int srcw, int srch,
-                           const uint8_t *src, size_t srclen);
+int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
+                           uint16_t period_ms, uint8_t step, bool text,
+                           bool file, int srcw, int srch, const uint8_t *src,
+                           size_t srclen);
 
 /****************************************************************************
  * Name: hazk03_display_animstop

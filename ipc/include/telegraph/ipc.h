@@ -39,10 +39,10 @@ extern "C" {
  * is a constant, thus it adds no information.
  */
 
-#define IPC_SOF             0xaau
-#define IPC_HEADER_LEN      6u
-#define IPC_CRC_LEN         2u
-#define IPC_FRAME_OVERHEAD  (IPC_HEADER_LEN + IPC_CRC_LEN)
+#define IPC_SOF 0xaau
+#define IPC_HEADER_LEN 6u
+#define IPC_CRC_LEN 2u
+#define IPC_FRAME_OVERHEAD (IPC_HEADER_LEN + IPC_CRC_LEN)
 
 /* The maximum payload. A larger value makes the parser buffer larger.
  *
@@ -51,10 +51,10 @@ extern "C" {
  */
 
 #ifndef IPC_MAX_PAYLOAD
-#  define IPC_MAX_PAYLOAD   1024u
+#define IPC_MAX_PAYLOAD 1024u
 #endif
 
-#define IPC_FRAME_MAX       (IPC_MAX_PAYLOAD + IPC_FRAME_OVERHEAD)
+#define IPC_FRAME_MAX (IPC_MAX_PAYLOAD + IPC_FRAME_OVERHEAD)
 
 /****************************************************************************
  * Correlation IDs
@@ -68,7 +68,7 @@ extern "C" {
  * The broker sends these frames to the subscribers of the channel.
  */
 
-#define IPC_CORR_ID_PUSH    0x0000u
+#define IPC_CORR_ID_PUSH 0x0000u
 
 /****************************************************************************
  * Panels
@@ -79,54 +79,54 @@ extern "C" {
  * opcode of its own for each of them.
  */
 
-#define IPC_PANEL_MAIN      0u
-#define IPC_PANEL_SUB       1u
+#define IPC_PANEL_MAIN 0u
+#define IPC_PANEL_SUB 1u
 
 /****************************************************************************
  * Opcodes
  ****************************************************************************/
 
-#define IPC_OP_SET_TIME     0x01u  /* edge -> STM32: set the RTC            */
-#define IPC_OP_SET_TEXT     0x02u  /* edge -> STM32: text on a panel        */
-#define IPC_OP_SET_BRIGHT   0x04u  /* edge -> STM32: the brightness         */
-#define IPC_OP_SET_ANIM     0x05u  /* edge -> STM32: animate a rectangle    */
-#define IPC_OP_ANIM_STOP    0x07u  /* edge -> STM32: stop an animation      */
-#define IPC_OP_SET_PIXELS   0x08u  /* edge -> STM32: pixels on a panel      */
-#define IPC_OP_SET_TEMPOFF  0x0au  /* edge -> STM32: correct the temperature */
-#define IPC_OP_SET_SLEEP    0x0bu  /* edge -> STM32: the period without light */
-#define IPC_OP_WRITE_ASSET  0x0cu  /* edge -> STM32: a part of a file       */
-#define IPC_OP_CLEAR        0x0du  /* edge -> STM32: clear a panel or both  */
-#define IPC_OP_ANIM_SPEED   0x0fu  /* edge -> STM32: the rate of a movement */
-#define IPC_OP_SET_FONT     0x13u  /* edge -> STM32: take a font from flash */
-#define IPC_OP_GET_STATE    0x10u  /* edge -> STM32: request the state      */
-#define IPC_OP_STATE        0x11u  /* STM32 -> edge: the state              */
-#define IPC_OP_LOG          0x12u  /* STM32 -> edge: a log line, a push     */
-#define IPC_OP_FLASH        0x20u  /* edge -> STM32: start the flash mode   */
-#define IPC_OP_ACK          0xf0u  /* the receiver accepted the frame       */
+#define IPC_OP_SET_TIME 0x01u    /* edge -> STM32: set the RTC            */
+#define IPC_OP_SET_TEXT 0x02u    /* edge -> STM32: text on a panel        */
+#define IPC_OP_SET_BRIGHT 0x04u  /* edge -> STM32: the brightness         */
+#define IPC_OP_SET_ANIM 0x05u    /* edge -> STM32: animate a rectangle    */
+#define IPC_OP_ANIM_STOP 0x07u   /* edge -> STM32: stop an animation      */
+#define IPC_OP_SET_PIXELS 0x08u  /* edge -> STM32: pixels on a panel      */
+#define IPC_OP_SET_TEMPOFF 0x0au /* edge -> STM32: correct the temperature */
+#define IPC_OP_SET_SLEEP 0x0bu   /* edge -> STM32: the period without light */
+#define IPC_OP_WRITE_ASSET 0x0cu /* edge -> STM32: a part of a file       */
+#define IPC_OP_CLEAR 0x0du       /* edge -> STM32: clear a panel or both  */
+#define IPC_OP_ANIM_SPEED 0x0fu  /* edge -> STM32: the rate of a movement */
+#define IPC_OP_SET_FONT 0x13u    /* edge -> STM32: take a font from flash */
+#define IPC_OP_GET_STATE 0x10u   /* edge -> STM32: request the state      */
+#define IPC_OP_STATE 0x11u       /* STM32 -> edge: the state              */
+#define IPC_OP_LOG 0x12u         /* STM32 -> edge: a log line, a push     */
+#define IPC_OP_FLASH 0x20u       /* edge -> STM32: start the flash mode   */
+#define IPC_OP_ACK 0xf0u         /* the receiver accepted the frame       */
 
 /* One credit gives this many bytes of the receive buffer. A frame thus costs
  * more than one credit if its length is above this value.
  */
 
-#define IPC_CREDIT_UNIT     64u
+#define IPC_CREDIT_UNIT 64u
 
 /* The credits that a frame of this length costs. */
 
-#define IPC_FRAME_CREDITS(len) \
-  (((len) + IPC_FRAME_OVERHEAD + IPC_CREDIT_UNIT - 1) / IPC_CREDIT_UNIT)
-#define IPC_OP_NACK         0xf1u  /* the receiver rejected the frame       */
+#define IPC_FRAME_CREDITS(len)                                                 \
+    (((len) + IPC_FRAME_OVERHEAD + IPC_CREDIT_UNIT - 1) / IPC_CREDIT_UNIT)
+#define IPC_OP_NACK 0xf1u /* the receiver rejected the frame       */
 
 /****************************************************************************
  * NACK error codes
  ****************************************************************************/
 
-#define IPC_ERR_NONE          0x00u
-#define IPC_ERR_BAD_OPCODE    0x01u  /* the receiver has no such opcode     */
-#define IPC_ERR_BAD_LENGTH    0x02u  /* the payload has the wrong length    */
-#define IPC_ERR_BAD_PAYLOAD   0x03u  /* a field holds an invalid value      */
-#define IPC_ERR_BUSY          0x04u  /* the receiver cannot accept the work */
-#define IPC_ERR_FAILED        0x05u  /* the operation started, and it failed */
-#define IPC_ERR_UNSUPPORTED   0x06u  /* the build has no support for this   */
+#define IPC_ERR_NONE 0x00u
+#define IPC_ERR_BAD_OPCODE 0x01u  /* the receiver has no such opcode     */
+#define IPC_ERR_BAD_LENGTH 0x02u  /* the payload has the wrong length    */
+#define IPC_ERR_BAD_PAYLOAD 0x03u /* a field holds an invalid value      */
+#define IPC_ERR_BUSY 0x04u        /* the receiver cannot accept the work */
+#define IPC_ERR_FAILED 0x05u      /* the operation started, and it failed */
+#define IPC_ERR_UNSUPPORTED 0x06u /* the build has no support for this   */
 
 /****************************************************************************
  * Return codes
@@ -136,10 +136,10 @@ extern "C" {
  * between NuttX, ESP-IDF and a host libc.
  */
 
-#define IPC_OK              0
-#define IPC_ERR_ARG         (-1)  /* a pointer is NULL, or a value is bad   */
-#define IPC_ERR_SPACE       (-2)  /* the destination buffer is too small    */
-#define IPC_ERR_TOO_LARGE   (-3)  /* the payload is above IPC_MAX_PAYLOAD   */
+#define IPC_OK 0
+#define IPC_ERR_ARG (-1)       /* a pointer is NULL, or a value is bad   */
+#define IPC_ERR_SPACE (-2)     /* the destination buffer is too small    */
+#define IPC_ERR_TOO_LARGE (-3) /* the payload is above IPC_MAX_PAYLOAD   */
 
 /****************************************************************************
  * Payloads
@@ -149,7 +149,7 @@ extern "C" {
  * keeps this value, and the two MCUs always come from the same source.
  */
 
-#define IPC_PROTO_VERSION   1u
+#define IPC_PROTO_VERSION 1u
 
 /* The payload of IPC_OP_SET_LARGE and IPC_OP_SET_SMALL.
  *
@@ -163,27 +163,27 @@ extern "C" {
  * attribute gets a text in the middle. The other bits are 0.
  */
 
-#define IPC_TEXT_PANEL       0u
-#define IPC_TEXT_ATTRS       1u
-#define IPC_TEXT_BODY        2u
+#define IPC_TEXT_PANEL 0u
+#define IPC_TEXT_ATTRS 1u
+#define IPC_TEXT_BODY 2u
 
-#define IPC_ALIGN_MASK       0x03u
-#define IPC_ALIGN_CENTRE     0u
-#define IPC_ALIGN_LEFT       1u
-#define IPC_ALIGN_RIGHT      2u
+#define IPC_ALIGN_MASK 0x03u
+#define IPC_ALIGN_CENTRE 0u
+#define IPC_ALIGN_LEFT 1u
+#define IPC_ALIGN_RIGHT 2u
 
 /* The bits 2 and 3 give the place of the text down the panel. A compact font
  * from the flash gives two lines on a panel of 14 rows, thus one text takes
  * the top and another takes the bottom.
  */
 
-#define IPC_VALIGN_SHIFT     2u
-#define IPC_VALIGN_MASK      0x0cu
-#define IPC_VALIGN_MIDDLE    0u
-#define IPC_VALIGN_TOP       1u
-#define IPC_VALIGN_BOTTOM    2u
+#define IPC_VALIGN_SHIFT 2u
+#define IPC_VALIGN_MASK 0x0cu
+#define IPC_VALIGN_MIDDLE 0u
+#define IPC_VALIGN_TOP 1u
+#define IPC_VALIGN_BOTTOM 2u
 
-#define IPC_TEXT_ATTR_MASK   (IPC_ALIGN_MASK | IPC_VALIGN_MASK)
+#define IPC_TEXT_ATTR_MASK (IPC_ALIGN_MASK | IPC_VALIGN_MASK)
 
 /* The payload of IPC_OP_SET_TIME.
  *
@@ -195,8 +195,8 @@ extern "C" {
  * of the season needs no change of the RTC.
  */
 
-#define IPC_SET_TIME_LEN     4u
-#define IPC_SET_TIME_TZ_LEN  6u
+#define IPC_SET_TIME_LEN 4u
+#define IPC_SET_TIME_TZ_LEN 6u
 
 /* The payload of IPC_OP_SET_BRIGHT. One byte sets both devices. Two bytes
  * set the digits and the panels.
@@ -205,9 +205,9 @@ extern "C" {
  * levels of brightness, from the dimmest to the full level.
  */
 
-#define IPC_BRIGHT_MAX       8u
-#define IPC_SET_BRIGHT_LEN   1u
-#define IPC_SET_BRIGHT2_LEN  2u
+#define IPC_BRIGHT_MAX 8u
+#define IPC_SET_BRIGHT_LEN 1u
+#define IPC_SET_BRIGHT2_LEN 2u
 
 /* The payload of IPC_OP_SET_PIX_LARGE and IPC_OP_SET_PIX_SMALL.
  *
@@ -223,13 +223,13 @@ extern "C" {
  * main panel thus takes 126 bytes of pixels, far inside one frame.
  */
 
-#define IPC_PIX_PANEL        0u
-#define IPC_PIX_X            1u
-#define IPC_PIX_Y            2u
-#define IPC_PIX_W            3u
-#define IPC_PIX_H            4u
-#define IPC_PIX_BITS         5u
-#define IPC_PIX_HEADER       5u
+#define IPC_PIX_PANEL 0u
+#define IPC_PIX_X 1u
+#define IPC_PIX_Y 2u
+#define IPC_PIX_W 3u
+#define IPC_PIX_H 4u
+#define IPC_PIX_BITS 5u
+#define IPC_PIX_HEADER 5u
 
 /* The payload of IPC_OP_ANIM_LARGE and IPC_OP_ANIM_SMALL.
  *
@@ -257,22 +257,22 @@ extern "C" {
  * sub panel holds half of that. A larger source gets a NACK.
  */
 
-#define IPC_ANIM_PANEL       0u
-#define IPC_ANIM_X           1u
-#define IPC_ANIM_Y           2u
-#define IPC_ANIM_W           3u
-#define IPC_ANIM_H           4u
-#define IPC_ANIM_FLAGS       5u
-#define IPC_ANIM_PERIOD      6u
-#define IPC_ANIM_STEP        8u
-#define IPC_ANIM_SRCW        9u
-#define IPC_ANIM_SRCH        10u
-#define IPC_ANIM_BODY        11u
+#define IPC_ANIM_PANEL 0u
+#define IPC_ANIM_X 1u
+#define IPC_ANIM_Y 2u
+#define IPC_ANIM_W 3u
+#define IPC_ANIM_H 4u
+#define IPC_ANIM_FLAGS 5u
+#define IPC_ANIM_PERIOD 6u
+#define IPC_ANIM_STEP 8u
+#define IPC_ANIM_SRCW 9u
+#define IPC_ANIM_SRCH 10u
+#define IPC_ANIM_BODY 11u
 
-#define IPC_ANIM_VERTICAL    0x01u
-#define IPC_ANIM_TEXT        0x02u
-#define IPC_ANIM_FILE        0x04u
-#define IPC_ANIM_FLAG_MASK   0x07u
+#define IPC_ANIM_VERTICAL 0x01u
+#define IPC_ANIM_TEXT 0x02u
+#define IPC_ANIM_FILE 0x04u
+#define IPC_ANIM_FLAG_MASK 0x07u
 
 /* With IPC_ANIM_FILE the body is the path of a sprite in the flash of the
  * board, and not pixels. That file gives the size of the source and the step,
@@ -285,10 +285,10 @@ extern "C" {
  * The pixels follow, row by row, as in the operations above.
  */
 
-#define IPC_SPRITE_MAGIC     0x31534754u
-#define IPC_SPRITE_HEADER    10u
+#define IPC_SPRITE_MAGIC 0x31534754u
+#define IPC_SPRITE_HEADER 10u
 
-#define IPC_ANIM_SRC_MAX     512u
+#define IPC_ANIM_SRC_MAX 512u
 
 /* The payload of IPC_OP_ANIM_STOP names a panel, or it is empty for both. The
  * rectangle keeps the pixels of its last step.
@@ -311,15 +311,14 @@ extern "C" {
  * the names that the board holds.
  */
 
-#define IPC_LIST_MAX         192u
+#define IPC_LIST_MAX 192u
 
 /* The rate of the link. The STM32 takes its rate from CONFIG_USART1_BAUD, and
  * its server refuses to build if that value differs from this one. Thus the
  * two sides never take different rates.
  */
 
-#define IPC_BAUD             460800u
-
+#define IPC_BAUD 460800u
 
 /* The payload of IPC_OP_ANIM_SPEED.
  *
@@ -335,10 +334,10 @@ extern "C" {
  * Note: a panel without an animation gets a NACK with the code 0x03.
  */
 
-#define IPC_SPEED_PANEL      0u
-#define IPC_SPEED_PERIOD     1u
-#define IPC_SPEED_STEP       3u
-#define IPC_SPEED_LEN        4u
+#define IPC_SPEED_PANEL 0u
+#define IPC_SPEED_PERIOD 1u
+#define IPC_SPEED_STEP 3u
+#define IPC_SPEED_LEN 4u
 
 /* The payload of IPC_OP_CLEAR names the panel, or it is empty.
  *
@@ -355,7 +354,7 @@ extern "C" {
  * degree Celsius, with a sign. The board adds it to each reading.
  */
 
-#define IPC_SET_TEMPOFF_LEN  2u
+#define IPC_SET_TEMPOFF_LEN 2u
 
 /* The payload of IPC_OP_SET_SLEEP. The display gives no light between these
  * two minutes of the local day. A start after the end goes through midnight.
@@ -380,23 +379,23 @@ extern "C" {
  * Note: the path of every part of one file must be the same.
  */
 
-#define IPC_ASSET_FLAGS      0u
-#define IPC_ASSET_PATHLEN    1u
-#define IPC_ASSET_PATH       2u
+#define IPC_ASSET_FLAGS 0u
+#define IPC_ASSET_PATHLEN 1u
+#define IPC_ASSET_PATH 2u
 
-#define IPC_ASSET_FIRST      0x01u
-#define IPC_ASSET_LAST       0x02u
+#define IPC_ASSET_FIRST 0x01u
+#define IPC_ASSET_LAST 0x02u
 
-#define IPC_ASSET_PATH_MAX   64u
+#define IPC_ASSET_PATH_MAX 64u
 
-#define IPC_SET_SLEEP_LEN    4u
-#define IPC_SLEEP_START      0u  /* u16: the minute that stops the light   */
-#define IPC_SLEEP_END        2u  /* u16: the minute that starts it again   */
-#define IPC_SLEEP_OFF        0xffffu
-#define IPC_MINUTES_PER_DAY  1440u
+#define IPC_SET_SLEEP_LEN 4u
+#define IPC_SLEEP_START 0u /* u16: the minute that stops the light   */
+#define IPC_SLEEP_END 2u   /* u16: the minute that starts it again   */
+#define IPC_SLEEP_OFF 0xffffu
+#define IPC_MINUTES_PER_DAY 1440u
 
-#define IPC_SET_TIME_UTC     0u  /* u32: the Unix time, UTC                */
-#define IPC_SET_TIME_OFFSET  4u  /* i16: minutes from UTC, with a sign     */
+#define IPC_SET_TIME_UTC 0u    /* u32: the Unix time, UTC                */
+#define IPC_SET_TIME_OFFSET 4u /* i16: minutes from UTC, with a sign     */
 
 /* The payload of IPC_OP_STATE. All the multiple-byte fields are
  * little-endian.
@@ -410,19 +409,19 @@ extern "C" {
  * board only when the two differ.
  */
 
-#define IPC_STATE_LEN       12u
+#define IPC_STATE_LEN 12u
 
-#define IPC_STATE_TIME      0u   /* u32: the Unix time of the RTC          */
-#define IPC_STATE_TEMP      4u   /* i16: tenths of a degree Celsius        */
-#define IPC_STATE_FRAMES    6u   /* u16: the count of the accepted frames  */
-#define IPC_STATE_CRC_ERR   8u   /* u16: the count of the CRC errors       */
-#define IPC_STATE_RESYNC    10u  /* u8:  the count of the resync operations */
-#define IPC_STATE_VERSION   11u  /* u8:  IPC_PROTO_VERSION                 */
-#define IPC_STATE_FWVER     12u  /* text: the version of the firmware      */
+#define IPC_STATE_TIME 0u     /* u32: the Unix time of the RTC          */
+#define IPC_STATE_TEMP 4u     /* i16: tenths of a degree Celsius        */
+#define IPC_STATE_FRAMES 6u   /* u16: the count of the accepted frames  */
+#define IPC_STATE_CRC_ERR 8u  /* u16: the count of the CRC errors       */
+#define IPC_STATE_RESYNC 10u  /* u8:  the count of the resync operations */
+#define IPC_STATE_VERSION 11u /* u8:  IPC_PROTO_VERSION                 */
+#define IPC_STATE_FWVER 12u   /* text: the version of the firmware      */
 
 /* The longest version text that a STATE frame carries. */
 
-#define IPC_FWVER_MAX       32u
+#define IPC_FWVER_MAX 32u
 
 /****************************************************************************
  * Byte order
@@ -430,29 +429,25 @@ extern "C" {
 
 /* These functions read and write the little-endian fields of a payload. */
 
-static inline uint16_t ipc_get_u16(const uint8_t *p)
-{
-  return (uint16_t)(p[0] | (p[1] << 8));
+static inline uint16_t ipc_get_u16(const uint8_t *p) {
+    return (uint16_t)(p[0] | (p[1] << 8));
 }
 
-static inline uint32_t ipc_get_u32(const uint8_t *p)
-{
-  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+static inline uint32_t ipc_get_u32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
 }
 
-static inline void ipc_put_u16(uint8_t *p, uint16_t v)
-{
-  p[0] = (uint8_t)(v & 0xff);
-  p[1] = (uint8_t)(v >> 8);
+static inline void ipc_put_u16(uint8_t *p, uint16_t v) {
+    p[0] = (uint8_t)(v & 0xff);
+    p[1] = (uint8_t)(v >> 8);
 }
 
-static inline void ipc_put_u32(uint8_t *p, uint32_t v)
-{
-  p[0] = (uint8_t)(v & 0xff);
-  p[1] = (uint8_t)((v >> 8) & 0xff);
-  p[2] = (uint8_t)((v >> 16) & 0xff);
-  p[3] = (uint8_t)((v >> 24) & 0xff);
+static inline void ipc_put_u32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)(v & 0xff);
+    p[1] = (uint8_t)((v >> 8) & 0xff);
+    p[2] = (uint8_t)((v >> 16) & 0xff);
+    p[3] = (uint8_t)((v >> 24) & 0xff);
 }
 
 /****************************************************************************
@@ -465,23 +460,21 @@ static inline void ipc_put_u32(uint8_t *p, uint32_t v)
  * valid only during the callback. A user that keeps the data must copy it.
  */
 
-struct ipc_frame_s
-{
-  uint8_t        opcode;
-  uint16_t       corr_id;
-  const uint8_t *payload;
-  uint16_t       payload_len;
+struct ipc_frame_s {
+    uint8_t opcode;
+    uint16_t corr_id;
+    const uint8_t *payload;
+    uint16_t payload_len;
 };
 
 /* Counts of the frames and of the errors on the link. */
 
-struct ipc_stats_s
-{
-  uint32_t frames;      /* the parser accepted this many frames            */
-  uint32_t crc_errors;  /* the CRC of a candidate frame was incorrect      */
-  uint32_t bad_length;  /* a LEN field was above IPC_MAX_PAYLOAD           */
-  uint32_t resyncs;     /* the parser discarded bytes to find the next SOF */
-  uint32_t dropped;     /* the count of the discarded bytes                */
+struct ipc_stats_s {
+    uint32_t frames;     /* the parser accepted this many frames            */
+    uint32_t crc_errors; /* the CRC of a candidate frame was incorrect      */
+    uint32_t bad_length; /* a LEN field was above IPC_MAX_PAYLOAD           */
+    uint32_t resyncs;    /* the parser discarded bytes to find the next SOF */
+    uint32_t dropped;    /* the count of the discarded bytes                */
 };
 
 /* The state of the parser.
@@ -490,11 +483,10 @@ struct ipc_stats_s
  * heap, and not on the stack of a task.
  */
 
-struct ipc_parser_s
-{
-  uint8_t            buf[IPC_FRAME_MAX];
-  uint16_t           len;
-  struct ipc_stats_s stats;
+struct ipc_parser_s {
+    uint8_t buf[IPC_FRAME_MAX];
+    uint16_t len;
+    struct ipc_stats_s stats;
 };
 
 /* The parser calls this function one time for each accepted frame. */
@@ -542,8 +534,7 @@ int ipc_encode(void *dst, size_t dstlen, uint8_t opcode, uint16_t corr_id,
  *
  ****************************************************************************/
 
-int ipc_encode_ack(void *dst, size_t dstlen, uint16_t corr_id,
-                   uint8_t credits);
+int ipc_encode_ack(void *dst, size_t dstlen, uint16_t corr_id, uint8_t credits);
 
 /****************************************************************************
  * Name: ipc_encode_nack
@@ -556,8 +547,7 @@ int ipc_encode_ack(void *dst, size_t dstlen, uint16_t corr_id,
  *
  ****************************************************************************/
 
-int ipc_encode_nack(void *dst, size_t dstlen, uint16_t corr_id,
-                    uint8_t error);
+int ipc_encode_nack(void *dst, size_t dstlen, uint16_t corr_id, uint8_t error);
 
 /****************************************************************************
  * Name: ipc_parser_init
@@ -610,8 +600,8 @@ unsigned int ipc_parser_push(struct ipc_parser_s *parser, const void *data,
  *
  ****************************************************************************/
 
-unsigned int ipc_parser_timeout(struct ipc_parser_s *parser,
-                                ipc_frame_cb_t cb, void *arg);
+unsigned int ipc_parser_timeout(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
+                                void *arg);
 
 /****************************************************************************
  * Name: ipc_parser_pending

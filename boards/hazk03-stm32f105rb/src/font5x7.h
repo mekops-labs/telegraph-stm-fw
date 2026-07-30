@@ -13,11 +13,11 @@
  * with space above it and below it.
  */
 
-#define FONT5X7_WIDTH    5
-#define FONT5X7_HEIGHT   7
-#define FONT5X7_ADVANCE  (FONT5X7_WIDTH + 1)
-#define FONT5X7_FIRST    0x20
-#define FONT5X7_LAST     0x7e
+#define FONT5X7_WIDTH 5
+#define FONT5X7_HEIGHT 7
+#define FONT5X7_ADVANCE (FONT5X7_WIDTH + 1)
+#define FONT5X7_FIRST 0x20
+#define FONT5X7_LAST 0x7e
 
 /****************************************************************************
  * Name: font5x7_glyph

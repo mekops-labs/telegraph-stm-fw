@@ -33,10 +33,7 @@
  *
  ****************************************************************************/
 
-void stm32_spidev_initialize(void)
-{
-  stm32_configgpio(GPIO_W25_CS);
-}
+void stm32_spidev_initialize(void) { stm32_configgpio(GPIO_W25_CS); }
 
 /****************************************************************************
  * Name: stm32_spi1select
@@ -49,11 +46,9 @@ void stm32_spidev_initialize(void)
  *
  ****************************************************************************/
 
-void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid, bool selected)
-{
-  if (devid == SPIDEV_FLASH(0))
-    {
-      stm32_gpiowrite(GPIO_W25_CS, !selected);
+void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid, bool selected) {
+    if (devid == SPIDEV_FLASH(0)) {
+        stm32_gpiowrite(GPIO_W25_CS, !selected);
     }
 }
 
@@ -65,9 +60,6 @@ void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid, bool selected)
  *
  ****************************************************************************/
 
-uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid)
-{
-  return 0;
-}
+uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid) { return 0; }
 
 #endif /* CONFIG_STM32_SPI1 */

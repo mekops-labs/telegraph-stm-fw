@@ -24,9 +24,7 @@
  *
  ****************************************************************************/
 
-void stm32_boardinitialize(void)
-{
-}
+void stm32_boardinitialize(void) {}
 
 /****************************************************************************
  * Name: board_late_initialize
@@ -40,10 +38,7 @@ void stm32_boardinitialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_BOARD_LATE_INITIALIZE
-void board_late_initialize(void)
-{
-  stm32_bringup();
-}
+void board_late_initialize(void) { stm32_bringup(); }
 #endif
 
 /****************************************************************************
@@ -51,8 +46,5 @@ void board_late_initialize(void)
  ****************************************************************************/
 
 #ifndef CONFIG_BOARD_LATE_INITIALIZE
-int board_app_initialize(uintptr_t arg)
-{
-  return stm32_bringup();
-}
+int board_app_initialize(uintptr_t arg) { return stm32_bringup(); }
 #endif

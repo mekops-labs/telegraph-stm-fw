@@ -35,13 +35,13 @@
  * That rate is above the limit for visible flicker.
  */
 
-#define SM_ROW_US       200
+#define SM_ROW_US 200
 
 #define SM_ROW_SELECT_BITS 16
 
 /* The main screen uses five shift registers. The sub-screen uses two. */
 
-#define SM_COLBITS(w)   (((w) > 32) ? 80 : 32)
+#define SM_COLBITS(w) (((w) > 32) ? 80 : 32)
 
 /* The on-time of each level, in sixteenths of the row time.
  *
@@ -58,186 +58,155 @@
  * is on port A.
  */
 
-#define SM_BSRR_SET(pin)  (1ul << (pin))
-#define SM_BSRR_CLR(pin)  (1ul << ((pin) + 16))
+#define SM_BSRR_SET(pin) (1ul << (pin))
+#define SM_BSRR_CLR(pin) (1ul << ((pin) + 16))
 
-#define SM_CLK_PIN      12
-#define SM_OE_PIN       13
-#define SM_STB_PIN      14
+#define SM_CLK_PIN 12
+#define SM_OE_PIN 13
+#define SM_STB_PIN 14
 
-#define SM_DUTY_STEPS   16
+#define SM_DUTY_STEPS 16
 
-static const uint8_t g_duty[SM1626D_BRIGHT_MAX + 1] =
-{
-  1, 2, 4, 10, 11, 12, 13, SM_DUTY_STEPS
-};
+static const uint8_t g_duty[SM1626D_BRIGHT_MAX + 1] = {
+    1, 2, 4, 10, 11, 12, 13, SM_DUTY_STEPS};
 
-#define SM_Y_OFFSET     2
-#define SM_CHIP_COLS    16
+#define SM_Y_OFFSET 2
+#define SM_CHIP_COLS 16
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static inline int sm_mapx(int x)
-{
-  int chip = x / SM_CHIP_COLS;
-  int local = x % SM_CHIP_COLS;
+static inline int sm_mapx(int x) {
+    int chip = x / SM_CHIP_COLS;
+    int local = x % SM_CHIP_COLS;
 
-  return (chip * SM_CHIP_COLS) + (SM_CHIP_COLS - 1 - local);
+    return (chip * SM_CHIP_COLS) + (SM_CHIP_COLS - 1 - local);
 }
 
-static inline int sm_mapy(int y)
-{
-  return y + SM_Y_OFFSET;
-}
+static inline int sm_mapy(int y) { return y + SM_Y_OFFSET; }
 
 /* The part reads the data at the rising edge of the clock. */
 
-static inline void sm_shiftbit(const struct sm1626d_dev_s *dev, bool val)
-{
-  putreg32(SM_BSRR_CLR(SM_CLK_PIN), STM32_GPIOB_BSRR);
-  putreg32(val ? dev->din_set : dev->din_clr, dev->din_bsrr);
-  putreg32(SM_BSRR_SET(SM_CLK_PIN), STM32_GPIOB_BSRR);
+static inline void sm_shiftbit(const struct sm1626d_dev_s *dev, bool val) {
+    putreg32(SM_BSRR_CLR(SM_CLK_PIN), STM32_GPIOB_BSRR);
+    putreg32(val ? dev->din_set : dev->din_clr, dev->din_bsrr);
+    putreg32(SM_BSRR_SET(SM_CLK_PIN), STM32_GPIOB_BSRR);
 }
 
-static inline void sm_latch(void)
-{
-  putreg32(SM_BSRR_SET(SM_STB_PIN), STM32_GPIOB_BSRR);
-  up_udelay(1);
-  putreg32(SM_BSRR_CLR(SM_STB_PIN), STM32_GPIOB_BSRR);
+static inline void sm_latch(void) {
+    putreg32(SM_BSRR_SET(SM_STB_PIN), STM32_GPIOB_BSRR);
+    up_udelay(1);
+    putreg32(SM_BSRR_CLR(SM_STB_PIN), STM32_GPIOB_BSRR);
 }
 
-static inline void sm_output(bool enable)
-{
-  /* The output-enable signal is active low. */
+static inline void sm_output(bool enable) {
+    /* The output-enable signal is active low. */
 
-  putreg32(enable ? SM_BSRR_CLR(SM_OE_PIN) : SM_BSRR_SET(SM_OE_PIN),
-           STM32_GPIOB_BSRR);
+    putreg32(enable ? SM_BSRR_CLR(SM_OE_PIN) : SM_BSRR_SET(SM_OE_PIN),
+             STM32_GPIOB_BSRR);
 }
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din,
-                  uint8_t width, uint8_t height)
-{
-  dev->bright = SM1626D_BRIGHT_MAX;
-  dev->on = true;
+void sm1626d_init(struct sm1626d_dev_s *dev, uint32_t din, uint8_t width,
+                  uint8_t height) {
+    dev->bright = SM1626D_BRIGHT_MAX;
+    dev->on = true;
 
-  /* Keep the set-reset register and the masks of the data pin. Thus the
-   * transfer loop needs no decode of the pin configuration.
-   */
+    /* Keep the set-reset register and the masks of the data pin. Thus the
+     * transfer loop needs no decode of the pin configuration.
+     */
 
-  if ((din & GPIO_PORT_MASK) == GPIO_PORTA)
-    {
-      dev->din_bsrr = STM32_GPIOA_BSRR;
-    }
-  else
-    {
-      dev->din_bsrr = STM32_GPIOB_BSRR;
+    if ((din & GPIO_PORT_MASK) == GPIO_PORTA) {
+        dev->din_bsrr = STM32_GPIOA_BSRR;
+    } else {
+        dev->din_bsrr = STM32_GPIOB_BSRR;
     }
 
-  dev->din_set = SM_BSRR_SET((din & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT);
-  dev->din_clr = SM_BSRR_CLR((din & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT);
-  dev->din    = din;
-  dev->width  = width;
-  dev->height = height;
+    dev->din_set = SM_BSRR_SET((din & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT);
+    dev->din_clr = SM_BSRR_CLR((din & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT);
+    dev->din = din;
+    dev->width = width;
+    dev->height = height;
 
-  memset(dev->fb, 0, sizeof(dev->fb));
+    memset(dev->fb, 0, sizeof(dev->fb));
 
-  /* The panels stay blank until a scan starts. */
+    /* The panels stay blank until a scan starts. */
 
-  stm32_gpiowrite(GPIO_SM1626D_OE, true);
-  stm32_gpiowrite(GPIO_SM1626D_STB, false);
-  stm32_gpiowrite(GPIO_SM1626D_CLK, false);
+    stm32_gpiowrite(GPIO_SM1626D_OE, true);
+    stm32_gpiowrite(GPIO_SM1626D_STB, false);
+    stm32_gpiowrite(GPIO_SM1626D_CLK, false);
 }
 
-void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level, bool on)
-{
-  dev->bright = (level > SM1626D_BRIGHT_MAX) ? SM1626D_BRIGHT_MAX : level;
-  dev->on = on;
+void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level, bool on) {
+    dev->bright = (level > SM1626D_BRIGHT_MAX) ? SM1626D_BRIGHT_MAX : level;
+    dev->on = on;
 }
 
-void sm1626d_begin(struct sm1626d_dev_s *dev)
-{
-  if (!dev->dirty)
-    {
-      /* The other image holds what the scan showed two images ago. Copy the
-       * one on the panel now, thus a change of one part keeps the rest.
-       */
+void sm1626d_begin(struct sm1626d_dev_s *dev) {
+    if (!dev->dirty) {
+        /* The other image holds what the scan showed two images ago. Copy the
+         * one on the panel now, thus a change of one part keeps the rest.
+         */
 
-      memcpy(dev->fb[dev->front ^ 1], dev->fb[dev->front],
-             sizeof(dev->fb[0]));
-      dev->dirty = true;
+        memcpy(dev->fb[dev->front ^ 1], dev->fb[dev->front],
+               sizeof(dev->fb[0]));
+        dev->dirty = true;
     }
 }
 
-void sm1626d_commit(struct sm1626d_dev_s *dev)
-{
-  dev->swap = true;
-}
+void sm1626d_commit(struct sm1626d_dev_s *dev) { dev->swap = true; }
 
-void sm1626d_swapnow(struct sm1626d_dev_s *dev)
-{
-  if (dev->swap)
-    {
-      dev->front = dev->front ^ 1;
-      dev->swap  = false;
-      dev->dirty = false;
+void sm1626d_swapnow(struct sm1626d_dev_s *dev) {
+    if (dev->swap) {
+        dev->front = dev->front ^ 1;
+        dev->swap = false;
+        dev->dirty = false;
     }
 }
 
-void sm1626d_clear(struct sm1626d_dev_s *dev)
-{
-  memset(dev->fb[dev->front ^ 1], 0, sizeof(dev->fb[0]));
+void sm1626d_clear(struct sm1626d_dev_s *dev) {
+    memset(dev->fb[dev->front ^ 1], 0, sizeof(dev->fb[0]));
 }
 
-void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y,
-                        int w, int h, const uint8_t *bits)
-{
-  int stride = (w + 7) / 8;
-  int row;
-  int col;
+void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y, int w, int h,
+                        const uint8_t *bits) {
+    int stride = (w + 7) / 8;
+    int row;
+    int col;
 
-  for (row = 0; row < h; row++)
-    {
-      for (col = 0; col < w; col++)
-        {
-          bool on = (bits[(row * stride) + (col / 8)] &
-                     (0x80 >> (col % 8))) != 0;
+    for (row = 0; row < h; row++) {
+        for (col = 0; col < w; col++) {
+            bool on =
+                (bits[(row * stride) + (col / 8)] & (0x80 >> (col % 8))) != 0;
 
-          sm1626d_drawpixel(dev, x + col, y + row, on);
+            sm1626d_drawpixel(dev, x + col, y + row, on);
         }
     }
 }
 
-void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
-{
-  int px;
-  int py;
+void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on) {
+    int px;
+    int py;
 
-  if (x < 0 || x >= dev->width || y < 0 || y >= dev->height)
-    {
-      return;
+    if (x < 0 || x >= dev->width || y < 0 || y >= dev->height) {
+        return;
     }
 
-  px = sm_mapx(x);
-  py = sm_mapy(y);
+    px = sm_mapx(x);
+    py = sm_mapy(y);
 
-  if (py >= SM1626D_ROWS || (px / 8) >= SM1626D_ROW_BYTES)
-    {
-      return;
+    if (py >= SM1626D_ROWS || (px / 8) >= SM1626D_ROW_BYTES) {
+        return;
     }
 
-  if (on)
-    {
-      dev->fb[dev->front ^ 1][py][px / 8] |= (1 << (px % 8));
-    }
-  else
-    {
-      dev->fb[dev->front ^ 1][py][px / 8] &= ~(1 << (px % 8));
+    if (on) {
+        dev->fb[dev->front ^ 1][py][px / 8] |= (1 << (px % 8));
+    } else {
+        dev->fb[dev->front ^ 1][py][px / 8] &= ~(1 << (px % 8));
     }
 }
 
@@ -254,181 +223,149 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on)
  */
 
 static inline void sm_shiftbit2(const struct sm1626d_dev_s *a, bool aval,
-                                const struct sm1626d_dev_s *b, bool bval)
-{
-  putreg32(SM_BSRR_CLR(SM_CLK_PIN), STM32_GPIOB_BSRR);
-  putreg32(aval ? a->din_set : a->din_clr, a->din_bsrr);
-  putreg32(bval ? b->din_set : b->din_clr, b->din_bsrr);
-  putreg32(SM_BSRR_SET(SM_CLK_PIN), STM32_GPIOB_BSRR);
+                                const struct sm1626d_dev_s *b, bool bval) {
+    putreg32(SM_BSRR_CLR(SM_CLK_PIN), STM32_GPIOB_BSRR);
+    putreg32(aval ? a->din_set : a->din_clr, a->din_bsrr);
+    putreg32(bval ? b->din_set : b->din_clr, b->din_bsrr);
+    putreg32(SM_BSRR_SET(SM_CLK_PIN), STM32_GPIOB_BSRR);
 }
 
 void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
-                           struct sm1626d_dev_s *sub, int row)
-{
-  int mcols = SM_COLBITS(main->width);
-  int scols = SM_COLBITS(sub->width);
-  int total = mcols + SM_ROW_SELECT_BITS;
-  int subfirst = total - (scols + SM_ROW_SELECT_BITS);
-  int i;
+                           struct sm1626d_dev_s *sub, int row) {
+    int mcols = SM_COLBITS(main->width);
+    int scols = SM_COLBITS(sub->width);
+    int total = mcols + SM_ROW_SELECT_BITS;
+    int subfirst = total - (scols + SM_ROW_SELECT_BITS);
+    int i;
 
-  /* The register of the sub panel is shorter than the pass. Thus its bits go
-   * at the end, and the bits before them leave that register again.
-   */
+    /* The register of the sub panel is shorter than the pass. Thus its bits go
+     * at the end, and the bits before them leave that register again.
+     */
 
-  for (i = 0; i < total; i++)
-    {
-      bool mval;
-      bool sval = false;
+    for (i = 0; i < total; i++) {
+        bool mval;
+        bool sval = false;
 
-      if (i < mcols)
-        {
-          int col = mcols - 1 - i;
+        if (i < mcols) {
+            int col = mcols - 1 - i;
 
-          mval = (main->fb[main->front][row][col / 8] &
-                  (1 << (col % 8))) != 0;
-        }
-      else
-        {
-          mval = ((total - 1 - i) == row);
+            mval =
+                (main->fb[main->front][row][col / 8] & (1 << (col % 8))) != 0;
+        } else {
+            mval = ((total - 1 - i) == row);
         }
 
-      if (i >= subfirst)
-        {
-          if (i < mcols)
-            {
-              int col = mcols - 1 - i;
+        if (i >= subfirst) {
+            if (i < mcols) {
+                int col = mcols - 1 - i;
 
-              sval = (sub->fb[sub->front][row][col / 8] &
-                      (1 << (col % 8))) != 0;
-            }
-          else
-            {
-              sval = ((total - 1 - i) == row);
+                sval =
+                    (sub->fb[sub->front][row][col / 8] & (1 << (col % 8))) != 0;
+            } else {
+                sval = ((total - 1 - i) == row);
             }
         }
 
-      sm_shiftbit2(main, mval, sub, sval);
+        sm_shiftbit2(main, mval, sub, sval);
     }
 }
 
-int sm1626d_rowbits(const struct sm1626d_dev_s *dev)
-{
-  return SM_COLBITS(dev->width) + SM_ROW_SELECT_BITS;
+int sm1626d_rowbits(const struct sm1626d_dev_s *dev) {
+    return SM_COLBITS(dev->width) + SM_ROW_SELECT_BITS;
 }
 
 void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from,
-                       int count)
-{
-  int colbits = SM_COLBITS(dev->width);
-  int total = colbits + SM_ROW_SELECT_BITS;
-  int i;
+                       int count) {
+    int colbits = SM_COLBITS(dev->width);
+    int total = colbits + SM_ROW_SELECT_BITS;
+    int i;
 
-  if (from + count > total)
-    {
-      count = total - from;
+    if (from + count > total) {
+        count = total - from;
     }
 
-  for (i = from; i < from + count; i++)
-    {
-      bool on;
+    for (i = from; i < from + count; i++) {
+        bool on;
 
-      if (i < colbits)
-        {
-          /* The column of the highest number goes first. */
+        if (i < colbits) {
+            /* The column of the highest number goes first. */
 
-          int col = colbits - 1 - i;
+            int col = colbits - 1 - i;
 
-          on = (dev->fb[dev->front][row][col / 8] &
-                (1 << (col % 8))) != 0;
-        }
-      else
-        {
-          /* The selection of the row comes after the columns, and its
-           * highest bit goes first.
-           */
+            on = (dev->fb[dev->front][row][col / 8] & (1 << (col % 8))) != 0;
+        } else {
+            /* The selection of the row comes after the columns, and its
+             * highest bit goes first.
+             */
 
-          int rbit = total - 1 - i;
+            int rbit = total - 1 - i;
 
-          on = (rbit == row);
+            on = (rbit == row);
         }
 
-      sm_shiftbit(dev, on);
+        sm_shiftbit(dev, on);
     }
 }
 
-void sm1626d_latch(void)
-{
-  sm_latch();
-}
+void sm1626d_latch(void) { sm_latch(); }
 
-void sm1626d_output(bool enable)
-{
-  sm_output(enable);
-}
+void sm1626d_output(bool enable) { sm_output(enable); }
 
-int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us)
-{
-  if (!dev->on)
-    {
-      return 0;
+int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us) {
+    if (!dev->on) {
+        return 0;
     }
 
-  return (rowtime_us * g_duty[dev->bright]) / SM_DUTY_STEPS;
+    return (rowtime_us * g_duty[dev->bright]) / SM_DUTY_STEPS;
 }
 
-void sm1626d_refresh(struct sm1626d_dev_s *dev)
-{
-  int colbits;
-  int on_us;
-  int row;
-  int col;
-  int rbit;
+void sm1626d_refresh(struct sm1626d_dev_s *dev) {
+    int colbits;
+    int on_us;
+    int row;
+    int col;
+    int rbit;
 
-  if (!dev->on)
-    {
-      sm_output(false);
-      return;
+    if (!dev->on) {
+        sm_output(false);
+        return;
     }
 
-  colbits = SM_COLBITS(dev->width);
-  on_us = (SM_ROW_US * g_duty[dev->bright]) / SM_DUTY_STEPS;
+    colbits = SM_COLBITS(dev->width);
+    on_us = (SM_ROW_US * g_duty[dev->bright]) / SM_DUTY_STEPS;
 
-  for (row = 0; row < SM1626D_ROWS; row++)
-    {
-      /* The panel keeps the last row while the driver sends the next one.
-       * That time is near the row time itself. Thus the output-enable signal
-       * stays off during the transfer, and the brightness is exact.
-       */
+    for (row = 0; row < SM1626D_ROWS; row++) {
+        /* The panel keeps the last row while the driver sends the next one.
+         * That time is near the row time itself. Thus the output-enable signal
+         * stays off during the transfer, and the brightness is exact.
+         */
 
-      sm_output(false);
+        sm_output(false);
 
-      for (col = colbits - 1; col >= 0; col--)
-        {
-          bool on = (dev->fb[dev->front][row][col / 8] &
-                     (1 << (col % 8))) != 0;
-          sm_shiftbit(dev, on);
+        for (col = colbits - 1; col >= 0; col--) {
+            bool on =
+                (dev->fb[dev->front][row][col / 8] & (1 << (col % 8))) != 0;
+            sm_shiftbit(dev, on);
         }
 
-      /* Select one row. The most significant bit goes first. */
+        /* Select one row. The most significant bit goes first. */
 
-      for (rbit = SM_ROW_SELECT_BITS - 1; rbit >= 0; rbit--)
-        {
-          sm_shiftbit(dev, rbit == row);
+        for (rbit = SM_ROW_SELECT_BITS - 1; rbit >= 0; rbit--) {
+            sm_shiftbit(dev, rbit == row);
         }
 
-      sm_latch();
+        sm_latch();
 
-      /* The on-time of the row gives the brightness. The row time stays the
-       * same, thus the frame rate does not change with the level.
-       */
+        /* The on-time of the row gives the brightness. The row time stays the
+         * same, thus the frame rate does not change with the level.
+         */
 
-      sm_output(true);
-      up_udelay(on_us);
-      sm_output(false);
+        sm_output(true);
+        up_udelay(on_us);
+        sm_output(false);
 
-      if (on_us < SM_ROW_US)
-        {
-          up_udelay(SM_ROW_US - on_us);
+        if (on_us < SM_ROW_US) {
+            up_udelay(SM_ROW_US - on_us);
         }
     }
 }
