@@ -238,6 +238,21 @@ to the edge MCU as a channel. A device with a serial chip of a vendor — an FTD
 part, a CP2102, a CH340 — needs a driver that NuttX does not carry, thus it
 gives no channel.
 
+**The rate of a channel comes from `USBHOST_CDCACM_RXDELAY`, and the default of
+200 ms is far too slow here.** The class takes one packet from the device for
+each run of its own work, then schedules that work again after this delay. A
+reader that blocks replaces the delay with immediate work, thus a shell that
+reads the device sees no limit. The server of the protocol cannot block,
+because one task serves the link as well — for it the delay alone sets the
+rate. The value is 10 ms.
+
+**`USBHOST_CDCACM_RXBUFSIZE` is 512, and the default of 128 gives corrupt
+text.** When that buffer fills in the middle of a packet, the class copies one
+byte a second time on its next run: `usbhost_rxdata_work()` saves the index of
+the byte it has just taken rather than the index of the next one. A larger
+buffer keeps it from filling. The defect belongs to the class, not to this
+board.
+
 Note: the build takes the reduced protocol of that class, which uses the two
 bulk endpoints of the data interface alone. The compliant protocol depends on
 `SERIAL_OFLOWCONTROL`, and a UART driver alone selects that option. A device

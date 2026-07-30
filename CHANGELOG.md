@@ -28,8 +28,11 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The work queues run below the row shifter. A device that streams over the USB
   port used to interrupt a row and leave both panels showing random pixels.
 - The server of the protocol serves the link before a channel of the USB port,
-  and it closes a channel that reports a fault. Such a channel used to return
-  from every wait at once, which stopped the link and the display together.
+  and no path through its loop spins. A wait that returned at once used to stop
+  the link and the display together.
+- A channel of the USB port carries its bytes at a usable rate, and its text is
+  no longer corrupt. The rate came from a delay of the class that only a reader
+  which blocks avoids, and the corruption from a receive buffer that filled.
 
 ## [0.3.0] - 2026-07-30
 
