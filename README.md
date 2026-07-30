@@ -245,6 +245,20 @@ The style is `clang-format` with the config in `.clang-format`, the same
 style as the `wanted-engine` repository. `third_party/` is vendored NuttX
 and stays as upstream ships it.
 
+### Static analysis
+
+```sh
+make tidy       # clang-tidy the host-buildable ipc/ sources
+make cppcheck   # cppcheck boards/ and ipc/
+```
+
+`tidy` covers `ipc/` only: `boards/` needs the ARM cross toolchain and the
+full NuttX header tree, and clang-tidy has no compilation database for that
+build. `cppcheck` parses source directly and covers both directories; it
+resolves NuttX's headers through the same generated `nuttx/config.h` and
+`arch/board`/`arch/chip` symlinks a real build uses, so it needs `configure`
+to have run at least once.
+
 ## License
 
 The license is Apache-2.0. Refer to [LICENSE](LICENSE) and [NOTICE](NOTICE).
