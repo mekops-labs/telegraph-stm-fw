@@ -4,7 +4,11 @@
 
 #include <errno.h>
 #include <syslog.h>
+#include <unistd.h>
 
+#include <sys/mount.h>
+
+#include <nuttx/clock.h>
 #include <nuttx/kthread.h>
 #include <nuttx/usb/usbhost.h>
 
@@ -35,6 +39,18 @@
 #define USBHOST_PRIORITY 50
 #define USBHOST_STACKSIZE 1536
 
+#ifdef CONFIG_USBHOST_MSC
+/* The mass storage class registers its block device during the enumeration,
+ * and its geometry arrives from a work queue. Thus the mount takes a few
+ * attempts on a slow device.
+ */
+
+#define USBHOST_BLOCK "/dev/sda"
+#define USBHOST_MOUNT "/media"
+#define USBHOST_MOUNT_TRIES 20
+#define USBHOST_MOUNT_WAIT_MS 100
+#endif
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -54,6 +70,32 @@ static struct usbhost_connection_s *g_usbconn;
  *
  ****************************************************************************/
 
+#ifdef CONFIG_USBHOST_MSC
+/****************************************************************************
+ * Name: usbhost_mount
+ *
+ * Description:
+ *   Mount the file system of a mass storage device. The edge MCU reaches this
+ *   path over the protocol, thus a build with no console still serves the
+ *   device.
+ *
+ ****************************************************************************/
+
+static void usbhost_mount(void) {
+    for (int i = 0; i < USBHOST_MOUNT_TRIES; i++) {
+        if (mount(USBHOST_BLOCK, USBHOST_MOUNT, "vfat", 0, NULL) == OK) {
+            syslog(LOG_INFO, "usbhost: %s holds a file system\n",
+                   USBHOST_MOUNT);
+            return;
+        }
+
+        usleep(USBHOST_MOUNT_WAIT_MS * USEC_PER_MSEC);
+    }
+
+    syslog(LOG_ERR, "usbhost: no file system on %s\n", USBHOST_BLOCK);
+}
+#endif
+
 static int usbhost_waiter(int argc, char *argv[]) {
     for (;;) {
         struct usbhost_hubport_s *hport;
@@ -66,8 +108,18 @@ static int usbhost_waiter(int argc, char *argv[]) {
             int ret = CONN_ENUMERATE(g_usbconn, hport);
 
             syslog(LOG_INFO, "usbhost: port %d gives %d\n", hport->port, ret);
+
+#ifdef CONFIG_USBHOST_MSC
+            if (ret == OK) {
+                usbhost_mount();
+            }
+#endif
         } else {
             syslog(LOG_INFO, "usbhost: port %d is empty\n", hport->port);
+
+#ifdef CONFIG_USBHOST_MSC
+            umount(USBHOST_MOUNT);
+#endif
         }
     }
 
