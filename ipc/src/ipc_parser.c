@@ -27,14 +27,14 @@ static void ipc_discard(struct ipc_parser_s *parser, uint16_t n) {
  */
 
 static void ipc_resync(struct ipc_parser_s *parser) {
-    uint16_t i;
+    uint16_t idx;
 
     parser->stats.resyncs++;
 
-    for (i = 1; i < parser->len; i++) {
-        if (parser->buf[i] == IPC_SOF) {
-            parser->stats.dropped += i;
-            ipc_discard(parser, i);
+    for (idx = 1; idx < parser->len; idx++) {
+        if (parser->buf[idx] == IPC_SOF) {
+            parser->stats.dropped += idx;
+            ipc_discard(parser, idx);
             return;
         }
     }
@@ -45,8 +45,8 @@ static void ipc_resync(struct ipc_parser_s *parser) {
 
 /* Take the complete frames out of the buffer. */
 
-static unsigned int ipc_drain(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
-                              void *arg) {
+static unsigned int ipc_drain(struct ipc_parser_s *parser,
+                              ipc_frame_cb_t callback, void *arg) {
     unsigned int accepted = 0;
 
     for (;;) {
@@ -69,7 +69,9 @@ static unsigned int ipc_drain(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
             break;
         }
 
-        payload_len = (uint16_t)(parser->buf[1] | (parser->buf[2] << 8));
+        payload_len =
+            (uint16_t)(parser->buf[IPC_OFF_LEN] |
+                       (parser->buf[IPC_OFF_LEN + 1] << IPC_BYTE_BITS));
 
         if (payload_len > IPC_MAX_PAYLOAD) {
             parser->stats.bad_length++;
@@ -83,9 +85,11 @@ static unsigned int ipc_drain(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
             break;
         }
 
-        want = ipc_crc16(&parser->buf[1], IPC_HEADER_LEN - 1 + payload_len);
+        want = ipc_crc16(&parser->buf[IPC_OFF_LEN],
+                         IPC_HEADER_LEN - 1 + payload_len);
         got = (uint16_t)(parser->buf[IPC_HEADER_LEN + payload_len] |
-                         (parser->buf[IPC_HEADER_LEN + payload_len + 1] << 8));
+                         (parser->buf[IPC_HEADER_LEN + payload_len + 1]
+                          << IPC_BYTE_BITS));
 
         if (want != got) {
             parser->stats.crc_errors++;
@@ -93,16 +97,18 @@ static unsigned int ipc_drain(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
             continue;
         }
 
-        frame.opcode = parser->buf[3];
-        frame.corr_id = (uint16_t)(parser->buf[4] | (parser->buf[5] << 8));
+        frame.opcode = parser->buf[IPC_OFF_OPCODE];
+        frame.corr_id =
+            (uint16_t)(parser->buf[IPC_OFF_CORR_ID] |
+                       (parser->buf[IPC_OFF_CORR_ID + 1] << IPC_BYTE_BITS));
         frame.payload = &parser->buf[IPC_HEADER_LEN];
         frame.payload_len = payload_len;
 
         parser->stats.frames++;
         accepted++;
 
-        if (cb != NULL) {
-            cb(arg, &frame);
+        if (callback != NULL) {
+            callback(arg, &frame);
         }
 
         ipc_discard(parser, total);
@@ -115,8 +121,8 @@ static unsigned int ipc_drain(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
  * Public Functions
  ****************************************************************************/
 
-unsigned int ipc_parser_timeout(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
-                                void *arg) {
+unsigned int ipc_parser_timeout(struct ipc_parser_s *parser,
+                                ipc_frame_cb_t callback, void *arg) {
     unsigned int accepted = 0;
 
     if (parser == NULL) {
@@ -129,7 +135,7 @@ unsigned int ipc_parser_timeout(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
      */
 
     while (parser->len > 0) {
-        accepted += ipc_drain(parser, cb, arg);
+        accepted += ipc_drain(parser, callback, arg);
 
         if (parser->len > 0) {
             ipc_resync(parser);
@@ -150,11 +156,11 @@ void ipc_parser_init(struct ipc_parser_s *parser) {
 }
 
 unsigned int ipc_parser_push(struct ipc_parser_s *parser, const void *data,
-                             size_t len, ipc_frame_cb_t cb, void *arg) {
-    const uint8_t *in = (const uint8_t *)data;
+                             size_t len, ipc_frame_cb_t callback, void *arg) {
+    const uint8_t *bytes = (const uint8_t *)data;
     unsigned int accepted = 0;
 
-    if (parser == NULL || (in == NULL && len > 0)) {
+    if (parser == NULL || (bytes == NULL && len > 0)) {
         return 0;
     }
 
@@ -172,12 +178,12 @@ unsigned int ipc_parser_push(struct ipc_parser_s *parser, const void *data,
         }
 
         take = (len < space) ? len : space;
-        memcpy(&parser->buf[parser->len], in, take);
+        memcpy(&parser->buf[parser->len], bytes, take);
         parser->len = (uint16_t)(parser->len + take);
-        in += take;
+        bytes += take;
         len -= take;
 
-        accepted += ipc_drain(parser, cb, arg);
+        accepted += ipc_drain(parser, callback, arg);
     }
 
     return accepted;
