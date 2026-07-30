@@ -211,8 +211,15 @@ an internal VBUS state, thus neither pin belongs to this peripheral here. The
 option `STM32_OTGFS_VBUS_CONTROL` must stay off: it calls for a GPIO that drives
 a power switch, and the module carries no such switch.
 
-Note: this build accepts a file name in the 8.3 form alone. `FAT_LFN` adds a
-long name, and NuttX flags that option with a patent notice.
+`FAT_LFN` gives the long name of a file, thus a drive that a person prepares on
+a computer keeps its names. One name holds 32 characters, which is the limit of
+`NAME_MAX` and the limit of SmartFS as well.
+
+Note: with that option a name matches by case. A name that another system wrote
+in the 8.3 form is upper case, thus a request in lower case reaches no file.
+
+Note: NuttX flags `FAT_LFN` with a patent notice from Microsoft. Refer to the
+`NOTICE` file of that project.
 
 ## IPC library
 

@@ -347,9 +347,13 @@ and the rest of the file tree therefore stay out of reach of the link.
 
 A path holds 64 characters at most.
 
-Note: the file system of the USB device is FAT, and this build carries no
-support for a long name. A name outside the 8.3 form gets a NACK with the code
-`0x05`.
+The file system of the USB device is FAT, and a name there holds 32 characters.
+A longer name gets a NACK with the code `0x05`.
+
+**A name on that device matches by case.** Thus a caller takes each name from
+the reply of `0x14` and gives it back unchanged. A name that another system
+wrote in the 8.3 form is upper case, and a request in lower case reaches no
+file.
 
 ### `0x0C` Write one part of a file
 

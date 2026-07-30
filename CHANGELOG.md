@@ -14,6 +14,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The edge MCU lists a directory, reads a file, removes an entry and creates a
   directory, on the flash of the board and on the USB device alike. Opcodes
   `0x14` to `0x17`.
+- Long file names on the USB device, up to 32 characters. A name there matches
+  by case.
 
 ### Fixed
 
