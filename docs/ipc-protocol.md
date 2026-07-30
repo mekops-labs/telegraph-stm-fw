@@ -461,10 +461,29 @@ reach it by path instead. Refer to [Storage](#storage).
 | Offset | Size | Field |
 | :--- | :--- | :--- |
 | 0 | 1 | The channel |
-| 1 | n | The data |
+| 1 | 1 | The sequence |
+| 2 | n | The data |
 
 The board adds nothing to the data. The reply is an ACK, or a NACK with the
 code `0x05` when the channel holds no device.
+
+**This is the one operation that a repeat does not leave unchanged.** A sender
+that takes no reply sends its request again, with the same correlation ID.
+Every other opcode sets a state, thus a second arrival of the same request
+gives the same result as the first. A write adds bytes to a stream instead, and
+a repeat would add them twice.
+
+The sequence closes that gap. A sender counts up for each new write, and every
+attempt of one write carries the same value. The board holds the value of the
+last write it took, thus it answers a repeat with an ACK and writes nothing.
+The count wraps at 256, which no repeat of one write can reach.
+
+The board also sends a `0x12` log line for each repeat it drops, thus an
+operator sees that the stream took the bytes one time.
+
+Note: the board forgets that value when a channel opens or closes. A sender
+therefore starts a new channel from any value, and a repeat that crosses a
+close reaches the stream as a new write.
 
 ### `0x34` Follow a channel, `0x33` what it holds
 
@@ -677,6 +696,17 @@ maximum, makes the parser discard one byte. The parser then finds the next
 
 Thus a payload byte with the value `0xAA` does not hide the frame that comes
 after it.
+
+### A request without a reply goes again
+
+A sender that takes no reply within its own limit sends the request a second
+time, and it keeps the correlation ID. Thus a reply that arrives late still
+reaches the caller that waited for it.
+
+A second arrival of the same request must therefore give the same result as the
+first. Every opcode of this protocol sets a state, which holds that property —
+except `0x32`, which adds bytes to a stream and carries a sequence for it.
+Refer to [`0x32` Write a channel](#0x32-write-a-channel).
 
 ### The idle timeout is necessary
 
