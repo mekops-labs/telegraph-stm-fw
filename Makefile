@@ -31,7 +31,7 @@ FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
-        flasher flasher-image flasher-ota lint-format format-fix
+        flasher flasher-image flasher-ota lint-format format-fix tidy cppcheck
 
 help:
 	@echo "Targets:"
@@ -49,6 +49,8 @@ help:
 	@echo "  test          build and run the host tests of the IPC library"
 	@echo "  lint-format   reject any clang-format drift in boards/ and ipc/"
 	@echo "  format-fix    reformat boards/ and ipc/ in place with clang-format"
+	@echo "  tidy          clang-tidy the host-buildable ipc/ sources"
+	@echo "  cppcheck      cppcheck boards/ and ipc/"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
 	@echo "  clean         remove the build output, keep the configuration"
@@ -179,6 +181,26 @@ lint-format:
 format-fix:
 	$(RUN) sh -c 'find $(FMT_DIRS) \( -name "*.c" -o -name "*.h" \) -print0 \
 	  | xargs -0 clang-format -i'
+
+# clang-tidy needs a real compile command. Only ipc/ compiles for the host
+# (the same way `make test` does); boards/ needs the ARM cross toolchain and
+# the full NuttX header tree, which clang-tidy cannot resolve without a
+# generated compilation database this repository does not yet produce.
+tidy:
+	$(RUN) clang-tidy --config-file=.clang-tidy --warnings-as-errors='*' \
+	  $(IPC_SRC) -- $(IPC_CF)
+
+# cppcheck parses source directly, so it needs no compile database. `configure`
+# gives it the generated nuttx/config.h and the arch/board/chip symlinks that
+# a NuttX source file's includes resolve through.
+cppcheck: configure
+	$(RUN) cppcheck --enable=warning,style,performance,portability \
+	  --suppress=missingIncludeSystem --suppress=normalCheckLevelMaxBranches \
+	  --suppress=toomanyconfigs --suppress='*:third_party/*' --quiet \
+	  --inline-suppr --error-exitcode=1 \
+	  -I$(NUTTX)/include -Iipc/include -I$(BOARD_DIR)/include \
+	  -I$(BOARD_DIR)/src \
+	  boards ipc
 
 menuconfig: configure
 	$(RUN) $(MAKE) -C $(NUTTX) menuconfig

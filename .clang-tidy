@@ -1,0 +1,32 @@
+# Static analysis check set for the Telegraph firmware, ported from
+# wanted-engine's .clang-tidy. Curated against that codebase to keep the
+# false-positive rate low on embedded C idioms (short identifiers like
+# fd/rc, single-line statements, feature-test macros, etc.).
+# HeaderFilterRegex restricts findings to first-party headers so vendored
+# NuttX (third_party/) never surfaces.
+Checks: >
+  clang-diagnostic-*,
+  bugprone-*,
+  cert-*,
+  misc-*,
+  readability-*,
+  -misc-include-cleaner,
+  -readability-identifier-length,
+  -readability-braces-around-statements,
+  -readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -bugprone-reserved-identifier,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-branch-clone,
+  -bugprone-narrowing-conversions,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -cert-err33-c
+
+HeaderFilterRegex: '.*(boards|ipc)/.*'
+ExcludeHeaderFilterRegex: '.*third_party/.*'
+
+WarningsAsErrors: ''
