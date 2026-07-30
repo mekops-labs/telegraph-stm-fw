@@ -186,8 +186,11 @@ format-fix:
 # (the same way `make test` does); boards/ needs the ARM cross toolchain and
 # the full NuttX header tree, which clang-tidy cannot resolve without a
 # generated compilation database this repository does not yet produce.
+# No --config-file: clang-tidy discovers the nearest .clang-tidy by walking
+# up from each source file, so ipc/.clang-tidy's stricter checks apply to
+# ipc/ and the root .clang-tidy applies to anything outside it.
 tidy:
-	$(RUN) clang-tidy --config-file=.clang-tidy --warnings-as-errors='*' \
+	$(RUN) clang-tidy --warnings-as-errors='*' \
 	  $(IPC_SRC) -- $(IPC_CF)
 
 # cppcheck parses source directly, so it needs no compile database. `configure`
