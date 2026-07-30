@@ -44,6 +44,15 @@ extern "C" {
 #define IPC_CRC_LEN 2u
 #define IPC_FRAME_OVERHEAD (IPC_HEADER_LEN + IPC_CRC_LEN)
 
+/* The offset of each header field, matching the table above. LEN and
+ * CORR_ID are 2 bytes each, low byte first.
+ */
+
+#define IPC_OFF_SOF 0u
+#define IPC_OFF_LEN 1u
+#define IPC_OFF_OPCODE 3u
+#define IPC_OFF_CORR_ID 4u
+
 /* The maximum payload. A larger value makes the parser buffer larger.
  *
  * Note: a build overrides this value with -DIPC_MAX_PAYLOAD=n. Both sides of
@@ -427,27 +436,33 @@ extern "C" {
  * Byte order
  ****************************************************************************/
 
+/* A byte holds this many bits, and this masks one out of a wider value. */
+
+#define IPC_BYTE_BITS 8u
+#define IPC_BYTE_MASK 0xffu
+
 /* These functions read and write the little-endian fields of a payload. */
 
-static inline uint16_t ipc_get_u16(const uint8_t *p) {
-    return (uint16_t)(p[0] | (p[1] << 8));
+static inline uint16_t ipc_get_u16(const uint8_t *bytes) {
+    return (uint16_t)(bytes[0] | (bytes[1] << IPC_BYTE_BITS));
 }
 
-static inline uint32_t ipc_get_u32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
+static inline uint32_t ipc_get_u32(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << IPC_BYTE_BITS) |
+           ((uint32_t)bytes[2] << (2 * IPC_BYTE_BITS)) |
+           ((uint32_t)bytes[3] << (3 * IPC_BYTE_BITS));
 }
 
-static inline void ipc_put_u16(uint8_t *p, uint16_t v) {
-    p[0] = (uint8_t)(v & 0xff);
-    p[1] = (uint8_t)(v >> 8);
+static inline void ipc_put_u16(uint8_t *bytes, uint16_t value) {
+    bytes[0] = (uint8_t)(value & IPC_BYTE_MASK);
+    bytes[1] = (uint8_t)(value >> IPC_BYTE_BITS);
 }
 
-static inline void ipc_put_u32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)(v & 0xff);
-    p[1] = (uint8_t)((v >> 8) & 0xff);
-    p[2] = (uint8_t)((v >> 16) & 0xff);
-    p[3] = (uint8_t)((v >> 24) & 0xff);
+static inline void ipc_put_u32(uint8_t *bytes, uint32_t value) {
+    bytes[0] = (uint8_t)(value & IPC_BYTE_MASK);
+    bytes[1] = (uint8_t)((value >> IPC_BYTE_BITS) & IPC_BYTE_MASK);
+    bytes[2] = (uint8_t)((value >> (2 * IPC_BYTE_BITS)) & IPC_BYTE_MASK);
+    bytes[3] = (uint8_t)((value >> (3 * IPC_BYTE_BITS)) & IPC_BYTE_MASK);
 }
 
 /****************************************************************************
@@ -566,7 +581,7 @@ void ipc_parser_init(struct ipc_parser_s *parser);
  *   Give received bytes to the parser. The bytes come in any quantity, and a
  *   frame divides across more than one call.
  *
- *   For each accepted frame, the parser calls cb one time.
+ *   For each accepted frame, the parser calls callback one time.
  *
  *   Note: an incorrect CRC, or a LEN above the maximum, makes the parser
  *   discard the first byte. The parser then finds the next SOF and tries
@@ -579,7 +594,7 @@ void ipc_parser_init(struct ipc_parser_s *parser);
  ****************************************************************************/
 
 unsigned int ipc_parser_push(struct ipc_parser_s *parser, const void *data,
-                             size_t len, ipc_frame_cb_t cb, void *arg);
+                             size_t len, ipc_frame_cb_t callback, void *arg);
 
 /****************************************************************************
  * Name: ipc_parser_timeout
@@ -600,8 +615,8 @@ unsigned int ipc_parser_push(struct ipc_parser_s *parser, const void *data,
  *
  ****************************************************************************/
 
-unsigned int ipc_parser_timeout(struct ipc_parser_s *parser, ipc_frame_cb_t cb,
-                                void *arg);
+unsigned int ipc_parser_timeout(struct ipc_parser_s *parser,
+                                ipc_frame_cb_t callback, void *arg);
 
 /****************************************************************************
  * Name: ipc_parser_pending

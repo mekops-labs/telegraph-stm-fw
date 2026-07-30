@@ -26,12 +26,12 @@ int ipc_encode(void *dst, size_t dstlen, uint8_t opcode, uint16_t corr_id,
         return IPC_ERR_SPACE;
     }
 
-    out[0] = IPC_SOF;
-    out[1] = (uint8_t)(payload_len & 0xff);
-    out[2] = (uint8_t)(payload_len >> 8);
-    out[3] = opcode;
-    out[4] = (uint8_t)(corr_id & 0xff);
-    out[5] = (uint8_t)(corr_id >> 8);
+    out[IPC_OFF_SOF] = IPC_SOF;
+    out[IPC_OFF_LEN] = (uint8_t)(payload_len & IPC_BYTE_MASK);
+    out[IPC_OFF_LEN + 1] = (uint8_t)(payload_len >> IPC_BYTE_BITS);
+    out[IPC_OFF_OPCODE] = opcode;
+    out[IPC_OFF_CORR_ID] = (uint8_t)(corr_id & IPC_BYTE_MASK);
+    out[IPC_OFF_CORR_ID + 1] = (uint8_t)(corr_id >> IPC_BYTE_BITS);
 
     if (payload_len > 0) {
         memcpy(&out[IPC_HEADER_LEN], payload, payload_len);
@@ -39,10 +39,10 @@ int ipc_encode(void *dst, size_t dstlen, uint8_t opcode, uint16_t corr_id,
 
     /* The CRC covers the bytes from LEN to the end of the payload. */
 
-    crc = ipc_crc16(&out[1], IPC_HEADER_LEN - 1 + payload_len);
+    crc = ipc_crc16(&out[IPC_OFF_LEN], IPC_HEADER_LEN - 1 + payload_len);
 
-    out[IPC_HEADER_LEN + payload_len] = (uint8_t)(crc & 0xff);
-    out[IPC_HEADER_LEN + payload_len + 1] = (uint8_t)(crc >> 8);
+    out[IPC_HEADER_LEN + payload_len] = (uint8_t)(crc & IPC_BYTE_MASK);
+    out[IPC_HEADER_LEN + payload_len + 1] = (uint8_t)(crc >> IPC_BYTE_BITS);
 
     return (int)total;
 }
