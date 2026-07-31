@@ -5,7 +5,7 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-31
 
 ### Added
 
@@ -47,6 +47,17 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A channel of the USB port no longer repeats a character. The class took one
   byte a second time whenever its receive buffer filled in the middle of a
   packet, and the fix is in the NuttX submodule.
+
+### Known limitations
+
+- A CDC/ACM channel loses the head of its first bytes after a device has
+  stayed quiet. A `help` reply of about 1230 bytes returns about 1150, and a
+  reply short enough to fit inside the lost head returns nothing at all. The
+  host is exonerated: the class driver hands the board every byte it takes
+  from the device, and the loss happens before that point, on the device
+  side. Confirmed against one device only (an M5NanoC6 console). The
+  investigation is shelved for this release, pending a second CDC/ACM device
+  to test against.
 
 ## [0.3.0] - 2026-07-30
 
@@ -262,6 +273,7 @@ hardware and answers a binary protocol on the edge MCU's UART.
 - The scan loop is CPU-driven, not DMA-driven.
 - The firmware has no animation support and reads no USB device.
 
+[0.4.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.4.0
 [0.3.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.3.0
 [0.2.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.2.0
 [0.1.1]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.1.1
