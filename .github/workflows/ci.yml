@@ -95,8 +95,29 @@ jobs:
       - name: Build the STM32 firmware
         run: make build
 
+  cppcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Init the NuttX submodules
+        run: git submodule update --init third_party/nuttx third_party/nuttx-apps
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Pull the toolchain image
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          podman pull "$TOOLCHAIN_IMAGE:latest"
+          podman tag "$TOOLCHAIN_IMAGE:latest" telegraph-fw
+
+      # stm32_ipc.c only compiles under the ipc configuration: it checks
+      # CONFIG_USART1_BAUD against IPC_BAUD, and only configs/ipc/defconfig
+      # sets CONFIG_USART1_BAUD. A separate job keeps this config from
+      # colliding with the build job's default (nsh) .config.
       - name: Run cppcheck
-        run: make cppcheck
+        run: make CONFIG=ipc cppcheck
 
   build-flasher:
     runs-on: ubuntu-latest
