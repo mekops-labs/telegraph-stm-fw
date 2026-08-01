@@ -137,7 +137,11 @@ flasher-image:
 
 # The whole repository is the mount, because the flasher compiles the shared
 # IPC sources through a relative path, and its version comes from git.
+#
+# Note: podman does not create a missing bind-mount source, thus this target
+# creates the PlatformIO cache directory first.
 flasher:
+	@mkdir -p "$(HOME)/.cache/$(FLASHER_IMAGE)"
 	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
 	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
 	  -w /src $(FLASHER_IMAGE) pio run -d $(FLASHER_DIR) -e $(FLASHER_ENV)
@@ -152,6 +156,7 @@ OTA_ADDR := -e PLATFORMIO_UPLOAD_PORT=$(UPLOAD_PORT)
 endif
 
 flasher-ota:
+	@mkdir -p "$(HOME)/.cache/$(FLASHER_IMAGE)"
 	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
 	  --network host $(OTA_ADDR) \
 	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
