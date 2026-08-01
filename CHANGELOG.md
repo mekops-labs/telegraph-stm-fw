@@ -5,6 +5,17 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A GitHub Actions workflow builds the STM32 firmware, builds the edge MCU
+  firmware, runs the IPC library's unit tests, and lints the codebase, on
+  every push and pull request. No job flashes a board.
+- A second workflow publishes the toolchain images to the GitHub Container
+  Registry on a push to main that changes a Containerfile. CI pulls the
+  published images instead of building them.
+
 ## [0.4.0] - 2026-07-31
 
 ### Added

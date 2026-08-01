@@ -1,0 +1,55 @@
+# Builds the two toolchain images and pushes them to the GitHub Container
+# Registry, tagged `latest`. CI (ci.yml) pulls them instead of building on
+# every run. Runs on a push to main that touches a Containerfile, and on
+# demand.
+
+name: Publish toolchain images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Containerfile
+      - tools/hazk-flasher/Containerfile
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load the hazk-flasher deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HAZK_FLASHER_DEPLOY_KEY }}
+
+      - name: Init the flasher submodule
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git submodule update --init tools/hazk-flasher
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Log in to the GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push the main toolchain image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/telegraph-fw
+        run: |
+          podman build -t "$IMAGE:latest" -f Containerfile .
+          podman push "$IMAGE:latest"
+
+      - name: Build and push the PlatformIO image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/hazk-pio
+        run: |
+          podman build -t "$IMAGE:latest" -f tools/hazk-flasher/Containerfile tools/hazk-flasher
+          podman push "$IMAGE:latest"

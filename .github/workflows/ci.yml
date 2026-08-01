@@ -1,0 +1,127 @@
+# Builds, tests, and lints the firmware. Every job runs a Makefile target
+# that stops short of a real board: `flasher` builds the edge MCU image
+# without uploading it, and no job runs `flasher-ota`.
+#
+# The toolchain images come from the GitHub Container Registry instead of a
+# local build (see publish-toolchain-images.yml). A pull request that
+# changes a Containerfile does not get a matching image until that change
+# reaches main and the publish workflow runs: CI still tests against the
+# previous image in the meantime.
+#
+# Requirements this workflow assumes but cannot verify from the repository
+# alone:
+#   - third_party/nuttx and third_party/nuttx-apps must be reachable with the
+#     default GITHUB_TOKEN. That token has no cross-repository access beyond
+#     this repository, so those submodules must be public, or the workflow
+#     needs a personal access token with read access to them.
+#   - tools/hazk-flasher is fetched over SSH (see .gitmodules). Add a deploy
+#     key with read access to mek-x/hazk-flasher as the repository secret
+#     HAZK_FLASHER_DEPLOY_KEY, or the build-flasher job fails at checkout.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CONTAINER: podman
+  TOOLCHAIN_IMAGE: ghcr.io/${{ github.repository }}/telegraph-fw
+  FLASHER_TOOLCHAIN_IMAGE: ghcr.io/${{ github.repository }}/hazk-pio
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Pull the toolchain image
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          podman pull "$TOOLCHAIN_IMAGE:latest"
+          podman tag "$TOOLCHAIN_IMAGE:latest" telegraph-fw
+
+      - name: Check the clang-format style
+        run: make lint-format
+
+      - name: Run clang-tidy on the IPC library
+        run: make tidy
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Init the Unity submodule
+        run: git submodule update --init third_party/unity
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Pull the toolchain image
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          podman pull "$TOOLCHAIN_IMAGE:latest"
+          podman tag "$TOOLCHAIN_IMAGE:latest" telegraph-fw
+
+      - name: Run the IPC unit tests
+        run: make test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Init the NuttX submodules
+        run: git submodule update --init third_party/nuttx third_party/nuttx-apps
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Pull the toolchain image
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          podman pull "$TOOLCHAIN_IMAGE:latest"
+          podman tag "$TOOLCHAIN_IMAGE:latest" telegraph-fw
+
+      - name: Build the STM32 firmware
+        run: make build
+
+      - name: Run cppcheck
+        run: make cppcheck
+
+  build-flasher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load the hazk-flasher deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HAZK_FLASHER_DEPLOY_KEY }}
+
+      - name: Init the flasher submodule
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git submodule update --init tools/hazk-flasher
+
+      - name: Check that podman is installed
+        run: command -v podman || (sudo apt-get update && sudo apt-get install -y podman)
+
+      - name: Pull the PlatformIO image
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          podman pull "$FLASHER_TOOLCHAIN_IMAGE:latest"
+          podman tag "$FLASHER_TOOLCHAIN_IMAGE:latest" hazk-pio
+
+      - name: Build the edge MCU firmware
+        run: make flasher
