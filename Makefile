@@ -69,7 +69,9 @@ image:
 ifdef INSIDE_CONTAINER
 RUN :=
 else
-RUN := $(CONTAINER) run --rm -it --userns=keep-id --security-opt label=disable \
+# -t needs a real terminal on stdin. CI has none, thus this keeps -i only there.
+TTY_FLAG := $(shell test -t 0 && echo -t)
+RUN := $(CONTAINER) run --rm -i $(TTY_FLAG) --userns=keep-id --security-opt label=disable \
        -v "$(CURDIR):/src" -w /src -e INSIDE_CONTAINER=1 $(IMAGE)
 endif
 
