@@ -5,7 +5,7 @@ CONFIG      := nsh
 NUTTX       := third_party/nuttx
 APPS        := third_party/nuttx-apps
 IMAGE       := telegraph-fw
-CONTAINER   ?= podman
+ENGINE      ?= podman
 
 # The board directory is outside the NuttX tree.
 #
@@ -61,7 +61,7 @@ help:
 	@echo "Select one with CONFIG=<name>. Do a distclean before a change."
 
 image:
-	$(CONTAINER) build -t $(IMAGE) -f Containerfile .
+	$(ENGINE) build -t $(IMAGE) -f Containerfile .
 
 # All targets below run in the container.
 #
@@ -71,7 +71,7 @@ RUN :=
 else
 # -t needs a real terminal on stdin. CI has none, thus this keeps -i only there.
 TTY_FLAG := $(shell test -t 0 && echo -t)
-RUN := $(CONTAINER) run --rm -i $(TTY_FLAG) --userns=keep-id --security-opt label=disable \
+RUN := $(ENGINE) run --rm -i $(TTY_FLAG) --userns=keep-id --security-opt label=disable \
        -v "$(CURDIR):/src" -w /src -e INSIDE_CONTAINER=1 $(IMAGE)
 endif
 
@@ -132,7 +132,7 @@ $(BUILD)/$$s.tgs)\" http://<address>/ipc"; done
 # The flasher has its own toolchain, thus it has its own image. Both of these
 # targets start a container, thus they run on the host only.
 flasher-image:
-	$(CONTAINER) build -t $(FLASHER_IMAGE) -f $(FLASHER_DIR)/Containerfile \
+	$(ENGINE) build -t $(FLASHER_IMAGE) -f $(FLASHER_DIR)/Containerfile \
 	  $(FLASHER_DIR)
 
 # The whole repository is the mount, because the flasher compiles the shared
@@ -142,7 +142,7 @@ flasher-image:
 # creates the PlatformIO cache directory first.
 flasher:
 	@mkdir -p "$(HOME)/.cache/$(FLASHER_IMAGE)"
-	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
+	$(ENGINE) run --rm --userns=keep-id --security-opt label=disable \
 	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
 	  -w /src $(FLASHER_IMAGE) pio run -d $(FLASHER_DIR) -e $(FLASHER_ENV)
 
@@ -157,7 +157,7 @@ endif
 
 flasher-ota:
 	@mkdir -p "$(HOME)/.cache/$(FLASHER_IMAGE)"
-	$(CONTAINER) run --rm --userns=keep-id --security-opt label=disable \
+	$(ENGINE) run --rm --userns=keep-id --security-opt label=disable \
 	  --network host $(OTA_ADDR) \
 	  -v "$(CURDIR):/src" -v "$(HOME)/.cache/$(FLASHER_IMAGE):/pio" \
 	  -w /src $(FLASHER_IMAGE) \
