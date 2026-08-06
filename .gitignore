@@ -27,3 +27,6 @@ credentials.ini
 .pio/
 __pycache__/
 *.pyc
+
+# The compiled wapps of the edge MCU
+wapps/*/*.wasm
