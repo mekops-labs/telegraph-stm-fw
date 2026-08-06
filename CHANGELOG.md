@@ -15,6 +15,18 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A second workflow publishes the toolchain images to the GitHub Container
   Registry on a push to main that changes a Containerfile. CI pulls the
   published images instead of building them.
+- The wapp `tg-broker` holds the serial port of the edge MCU and carries the
+  frames of every other wapp over the named pipes of the engine. It gives each
+  request an identifier of its own on the link, sends a reply back to the peer
+  that asked for it, repeats a request that no reply answers, and hands the
+  frames that no request asked for to the peers that follow their opcode.
+- Raw mode of the broker: a peer takes the line itself with another rate and
+  format, sends and receives bytes without a frame, and gives it back. The
+  bootloader of the STM32 needs this path.
+- The wapp `tg-probe` and `wapps/tests/roundtrip.sh` prove the broker against a
+  host build of the engine, a pty pair and a program that answers as the STM32
+  does. The targets `make wapps`, `make wapp-images` and `make wapp-test` build,
+  package and run them.
 
 ## [0.4.0] - 2026-07-31
 

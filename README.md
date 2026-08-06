@@ -332,6 +332,24 @@ host tests compile, so it is held to a stricter bar than the board-specific
 code in `boards/`. `make tidy` passes no `--config-file`, so clang-tidy finds
 the nearest `.clang-tidy` for each file on its own.
 
+## The wapps of the edge MCU
+
+The edge MCU runs the WANTED engine, and `wapps/` holds the wapps of this
+device. The wapp `tg-broker` holds the serial port and carries the frames of
+every other wapp over the named pipes of the engine. Refer to
+[the broker](docs/broker.md).
+
+```sh
+make wapps        # compile each wapp to wasm32-wasi
+make wapp-images  # package each of them for the registry of the engine
+make wapp-test WANTED=<path to a wanted-cli>
+```
+
+The compiler is the wapp SDK image of the engine. The test runs both wapps on a
+host build of the engine, against a pty pair and a program that answers as the
+STM32 does, thus it needs no hardware. That build needs
+`CONFIG_WANTED_VFS_UART=y`.
+
 ## License
 
 The license is Apache-2.0. Refer to [LICENSE](LICENSE) and [NOTICE](NOTICE).
