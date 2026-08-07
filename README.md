@@ -339,8 +339,14 @@ device. The wapp `tg-broker` holds the serial port and carries the frames of
 every other wapp over the named pipes of the engine. Refer to
 [the broker](docs/broker.md).
 
+The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
+its ROM. It carries the image in its own package and takes the line from the
+broker, thus a new firmware ships as a new version of that wapp. Refer to
+[the firmware over the air](docs/ota.md).
+
 ```sh
 make wapps        # compile each wapp to wasm32-wasi
+make ota-image    # stage the STM32 firmware into the wapp that writes it
 make wapp-images  # package each of them for the registry of the engine
 make wapp-test WANTED=<path to a wanted-cli>
 ```

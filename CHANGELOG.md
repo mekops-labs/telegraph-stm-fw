@@ -23,6 +23,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Raw mode of the broker: a peer takes the line itself with another rate and
   format, sends and receives bytes without a frame, and gives it back. The
   bootloader of the STM32 needs this path.
+- The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
+  its ROM: it carries the image in its own package, drives BOOT0 and NRST
+  through a `gpio` grant, and takes the line from the broker at 57600 8E1. It
+  compares the version of the running firmware first, thus a restart of the
+  wapp writes nothing.
+- The target `ota-image` stages the firmware of the current build and its
+  version into that wapp, and a wapp that carries data files holds them in its
+  own `root/` directory.
 - The wapp `tg-probe` and `wapps/tests/roundtrip.sh` prove the broker against a
   host build of the engine, a pty pair and a program that answers as the STM32
   does. The targets `make wapps`, `make wapp-images` and `make wapp-test` build,
