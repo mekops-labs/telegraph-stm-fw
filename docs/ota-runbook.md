@@ -64,13 +64,34 @@ make deploy REGISTRY=<host>:5000  # push the images, then the desired state
 
 Refer to [the broker](broker.md) for what each wapp is granted.
 
+## Reading the logs of a board with no console
+
+The wapp `tg-logs` takes a log mount of the engine and a listening socket, thus
+what any wapp printed is readable from the network:
+
+```sh
+curl http://<address>:8081/            # the wapps that have a log
+curl http://<address>:8081/supervisor  # what the supervisor printed
+```
+
+The supervisor's own diagnostics reach it because its launch config routes the
+`err` slot to `log` — `std.debug.print` writes there. **This wapp is seeded into
+the firmware**, not delivered from the registry: the questions it answers are
+the ones a board with a broken registry path raises.
+
+Note: a log is a ring of 2 KiB, and its node gives the whole ring in one read
+and then EOF. A reader that asks for less gets the oldest bytes alone, which
+looks like a log that never moves.
+
 ## When USB is the answer
 
 - **The supervisor cannot reach the control plane.** A supervisor that fails to
   fetch cannot be told about a new image, thus a change that breaks fetching
-  takes the cable back. This happened once: a heap 2 KiB short answered `fetch
-  skipped — out of heap for the response buffer`, and nothing on the device
-  could recover it.
+  takes the cable back. This has happened twice, both times as `fetch skipped —
+  out of heap for the response buffer`: once from a heap 2 KiB short, once when
+  the desired state grew and the fetch buffers no longer fit beside it. **There
+  is no remote recovery from it**, which is why the heap of the supervisor now
+  carries a deliberate margin.
 - **A bootloader or a partition table changed.** The image the control plane
   installs goes into an app slot, and nothing else.
 
