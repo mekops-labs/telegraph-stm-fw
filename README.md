@@ -339,6 +339,10 @@ device. The wapp `tg-broker` holds the serial port and carries the frames of
 every other wapp over the named pipes of the engine. Refer to
 [the broker](docs/broker.md).
 
+Both MCUs update without a cable: the engine image of the edge MCU comes from
+the control plane and carries its supervisor, and the STM32 firmware travels in
+the wapp that writes it. Refer to [the runbook](docs/ota-runbook.md).
+
 The wapp `tg-display` serves the panels, the digits and the clock over HTTP on
 a listening socket of the engine. Refer to
 [the display over HTTP](docs/display-http.md).
