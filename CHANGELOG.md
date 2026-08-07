@@ -31,6 +31,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The target `ota-image` stages the firmware of the current build and its
   version into that wapp, and a wapp that carries data files holds them in its
   own `root/` directory.
+- The wapp `tg-display` serves the display over HTTP on a listening socket of
+  the engine: the state of the board as JSON, text and a moving text on each
+  panel, the brightness, the clock, and a route that clears both panels. A
+  refusal of the board comes back as its code and its meaning.
+- The script `wapps/tests/http.sh` drives every route against a host build of
+  the engine and the same program that answers as the STM32 does.
 - The wapp `tg-probe` and `wapps/tests/roundtrip.sh` prove the broker against a
   host build of the engine, a pty pair and a program that answers as the STM32
   does. The targets `make wapps`, `make wapp-images` and `make wapp-test` build,

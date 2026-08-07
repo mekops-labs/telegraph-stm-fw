@@ -339,6 +339,10 @@ device. The wapp `tg-broker` holds the serial port and carries the frames of
 every other wapp over the named pipes of the engine. Refer to
 [the broker](docs/broker.md).
 
+The wapp `tg-display` serves the panels, the digits and the clock over HTTP on
+a listening socket of the engine. Refer to
+[the display over HTTP](docs/display-http.md).
+
 The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
 its ROM. It carries the image in its own package and takes the line from the
 broker, thus a new firmware ships as a new version of that wapp. Refer to
