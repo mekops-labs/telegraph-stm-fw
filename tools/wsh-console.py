@@ -22,6 +22,7 @@ Environment:
 import os
 import select
 import sys
+import termios
 import time
 
 PORT = os.environ.get("PORT", "/dev/ttyACM0")
@@ -33,8 +34,28 @@ TAIL = float(os.environ.get("TAIL", "10"))
 GAP = 1.5
 
 
+def raw(fd):
+    """Take the line discipline out of the way.
+
+    A fresh port echoes, thus every byte the board prints returns to it as a
+    command of its own.
+    """
+    mode = termios.tcgetattr(fd)
+    iflag, oflag, cflag, lflag, ispeed, ospeed, cc = mode
+    iflag &= ~(termios.IGNBRK | termios.BRKINT | termios.PARMRK |
+               termios.ISTRIP | termios.INLCR | termios.IGNCR |
+               termios.ICRNL | termios.IXON)
+    oflag &= ~termios.OPOST
+    lflag &= ~(termios.ECHO | termios.ECHONL | termios.ICANON |
+               termios.ISIG | termios.IEXTEN)
+    termios.tcsetattr(fd, termios.TCSANOW,
+                      [iflag, oflag, cflag, lflag, ispeed, ospeed, cc])
+    termios.tcflush(fd, termios.TCIFLUSH)
+
+
 def main(cmds):
     fd = os.open(PORT, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    raw(fd)
     started = time.time()
     sent = 0
     last = 0.0
