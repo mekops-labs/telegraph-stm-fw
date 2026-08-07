@@ -23,8 +23,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Raw mode of the broker: a peer takes the line itself with another rate and
   format, sends and receives bytes without a frame, and gives it back. The
   bootloader of the STM32 needs this path.
-- `docs/ota-runbook.md` gives the update path of both MCUs without a cable, and
-  the two cases that still need one.
+- The wapp `tg-logs` serves the log of every wapp over HTTP, from a log mount of
+  the engine and a listening socket. A board with no console answers questions
+  with it, thus it is seeded into the firmware rather than delivered.
+- `docs/ota-runbook.md` gives the update path of both MCUs without a cable, the
+  way to read the logs of a board that has no console, and the cases that still
+  need a cable.
 - The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
   its ROM: it carries the image in its own package, drives BOOT0 and NRST
   through a `gpio` grant, and takes the line from the broker at 57600 8E1. It
