@@ -98,6 +98,14 @@ the firmware. That build takes the path of this directory:
 OTA_PROFILE=s3-telegraph TELEGRAPH_WAPPS=<this repo>/wapps just build
 ```
 
+The shell of the engine takes its commands on the USB console, and
+`tools/wsh-console.py` sends them:
+
+```sh
+SETTLE=25 tools/wsh-console.py "create tg-broker" "set_config tg-broker {...}" \
+    "start tg-broker"
+```
+
 The launch config of the broker names the port and its pins:
 
 ```json
