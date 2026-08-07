@@ -113,6 +113,11 @@ The launch config of the broker names the port and its pins:
  "args":["probe:0x03"]}
 ```
 
+Note: wsh keeps no wapp across a reset of the edge MCU. The registry survives,
+thus the three commands above start the wapp again and nothing needs another
+flash. A board of a deployment runs the supervisor of the control plane
+instead, which starts its wapps by itself.
+
 Note: a full flash of the edge MCU erases the registry, thus a new build of a
 wapp reaches the board that way. A seed leaves a ref the registry already
 holds, and an erase of the flash is what removes it.
