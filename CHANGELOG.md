@@ -15,6 +15,38 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A second workflow publishes the toolchain images to the GitHub Container
   Registry on a push to main that changes a Containerfile. CI pulls the
   published images instead of building them.
+- The wapp `tg-broker` holds the serial port of the edge MCU and carries the
+  frames of every other wapp over the named pipes of the engine. It gives each
+  request an identifier of its own on the link, sends a reply back to the peer
+  that asked for it, repeats a request that no reply answers, and hands the
+  frames that no request asked for to the peers that follow their opcode.
+- Raw mode of the broker: a peer takes the line itself with another rate and
+  format, sends and receives bytes without a frame, and gives it back. The
+  bootloader of the STM32 needs this path.
+- The wapp `tg-logs` serves the log of every wapp over HTTP, from a log mount of
+  the engine and a listening socket. A board with no console answers questions
+  with it, thus it is seeded into the firmware rather than delivered.
+- `docs/ota-runbook.md` gives the update path of both MCUs without a cable, the
+  way to read the logs of a board that has no console, and the cases that still
+  need a cable.
+- The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
+  its ROM: it carries the image in its own package, drives BOOT0 and NRST
+  through a `gpio` grant, and takes the line from the broker at 57600 8E1. It
+  compares the version of the running firmware first, thus a restart of the
+  wapp writes nothing.
+- The target `ota-image` stages the firmware of the current build and its
+  version into that wapp, and a wapp that carries data files holds them in its
+  own `root/` directory.
+- The wapp `tg-display` serves the display over HTTP on a listening socket of
+  the engine: the state of the board as JSON, text and a moving text on each
+  panel, the brightness, the clock, and a route that clears both panels. A
+  refusal of the board comes back as its code and its meaning.
+- The script `wapps/tests/http.sh` drives every route against a host build of
+  the engine and the same program that answers as the STM32 does.
+- The wapp `tg-probe` and `wapps/tests/roundtrip.sh` prove the broker against a
+  host build of the engine, a pty pair and a program that answers as the STM32
+  does. The targets `make wapps`, `make wapp-images` and `make wapp-test` build,
+  package and run them.
 
 ## [0.4.0] - 2026-07-31
 

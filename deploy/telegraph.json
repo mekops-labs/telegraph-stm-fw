@@ -1,0 +1,47 @@
+{
+  "wapps": [
+    {
+      "name": "tg-broker",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-broker:VERSION",
+      "policy": {
+        "Drivers": [
+          {
+            "Name": "uart",
+            "Options": "port=1,tx=1,rx=2,baud=460800,format=8N1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tg-display",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-display:VERSION",
+      "policy": {
+        "Sockets": [
+          {
+            "Name": "http",
+            "Address": "tcp://0.0.0.0:8080",
+            "Role": "listen",
+            "Backlog": 2,
+            "MaxConns": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "tg-ota",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-ota:VERSION",
+      "restart": "never",
+      "policy": {
+        "Drivers": [
+          {
+            "Name": "gpio",
+            "Options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"
+          }
+        ]
+      }
+    }
+  ]
+}

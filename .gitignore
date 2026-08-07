@@ -27,3 +27,9 @@ credentials.ini
 .pio/
 __pycache__/
 *.pyc
+
+# The compiled wapps of the edge MCU
+wapps/*/*.wasm
+
+# The firmware that the OTA wapp carries is a build output
+wapps/*/root/
