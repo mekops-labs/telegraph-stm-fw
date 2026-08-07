@@ -87,11 +87,13 @@ looks like a log that never moves.
 
 - **The supervisor cannot reach the control plane.** A supervisor that fails to
   fetch cannot be told about a new image, thus a change that breaks fetching
-  takes the cable back. This has happened twice, both times as `fetch skipped —
-  out of heap for the response buffer`: once from a heap 2 KiB short, once when
-  the desired state grew and the fetch buffers no longer fit beside it. **There
-  is no remote recovery from it**, which is why the heap of the supervisor now
-  carries a deliberate margin.
+  takes the cable back. This has happened three times, each as `fetch skipped —
+  out of heap for the response buffer`: a heap 2 KiB short, a desired state that
+  grew until the fetch buffers no longer fit beside it, and a tick that stranded
+  a few hundred bytes every time it ran until hours of them filled the heap.
+  **There is no remote recovery from it**, which is why the heap carries a
+  deliberate margin, why a tick gives back every byte it takes, and why the
+  supervisor now exits after three such fetches so a fresh one takes over.
 - **A bootloader or a partition table changed.** The image the control plane
   installs goes into an app slot, and nothing else.
 
