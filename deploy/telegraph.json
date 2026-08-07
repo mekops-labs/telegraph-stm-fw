@@ -33,6 +33,7 @@
       "name": "tg-ota",
       "version": "VERSION",
       "image": "REGISTRY/tg-ota:VERSION",
+      "restart": "never",
       "policy": {
         "Drivers": [
           {
