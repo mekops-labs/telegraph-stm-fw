@@ -31,7 +31,9 @@ FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
-        flasher flasher-image flasher-ota lint-format format-fix tidy cppcheck
+        flasher flasher-image flasher-ota wapps wapp-images wapp-test \
+        ota-image wapp-push deploy \
+        lint-format format-fix tidy cppcheck
 
 help:
 	@echo "Targets:"
@@ -41,6 +43,12 @@ help:
 	@echo "  flasher       build the edge MCU firmware in $(FLASHER_DIR)"
 	@echo "  flasher-ota   send the edge MCU firmware over the air"
 	@echo "                (UPLOAD_PORT=<address> when mDNS does not resolve)"
+	@echo "  wapps         build the wapps of the edge MCU"
+	@echo "  wapp-images   package each wapp for the registry of the engine"
+	@echo "  wapp-push     push those images to an OCI registry (REGISTRY=host:port)"
+	@echo "  deploy        push the images, then the desired state of the device"
+	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
+	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
 	@echo "  font          build the extended font for the flash"
@@ -165,6 +173,70 @@ flasher-ota:
 
 all: build flasher
 
+# The wapps of the edge MCU. They compile to wasm32-wasi in the wapp SDK image
+# of the engine, and each of them packages as a ustar of app.wasm.
+WAPP_IMAGE ?= registry.gitlab.com/mekops/wanted/wanted-engine/wapp-sdk
+WAPP_DIR   := wapps
+WAPP_NAMES := $(patsubst $(WAPP_DIR)/%/Makefile,%,$(wildcard $(WAPP_DIR)/*/Makefile))
+WAPP_OUT   := $(BUILD)/wapps
+
+WAPP_RUN := $(ENGINE) run --rm --userns=keep-id --security-opt label=disable \
+            -v "$(CURDIR):/src" -w /src --entrypoint=/bin/sh $(WAPP_IMAGE) -c
+
+wapps:
+	$(WAPP_RUN) 'make -C $(WAPP_DIR)'
+
+# The round trip of the broker on a host build of the engine. That build needs
+# CONFIG_WANTED_VFS_UART=y, and WANTED gives the path of its wanted-cli.
+wapp-test: wapps
+	WANTED="$(WANTED)" $(WAPP_DIR)/tests/roundtrip.sh
+
+# The registry takes the name and the version from the filename of the image.
+# A wapp that carries data files holds them in its own root/ directory.
+wapp-images: wapps
+	@mkdir -p $(WAPP_OUT)
+	@v=$$(sh tools/wappversion.sh); \
+	for w in $(WAPP_NAMES); do \
+	  s=$$(mktemp -d); cp $(WAPP_DIR)/$$w/$$w.wasm $$s/app.wasm; \
+	  if [ -d $(WAPP_DIR)/$$w/root ]; then \
+	    cp -r $(WAPP_DIR)/$$w/root/. $$s/; fi; \
+	  tar --format=ustar -C $$s -cf $(WAPP_OUT)/$$w@$$v-1.wapp .; \
+	  rm -rf $$s; echo "$(WAPP_OUT)/$$w@$$v-1.wapp"; \
+	done
+
+# The control plane hands the device an image reference, thus the images go to
+# an OCI registry. One wapp is one layer.
+REGISTRY ?= 192.168.6.4:5000
+
+wapp-push: wapp-images
+	@python3 tools/wapppush.py $(REGISTRY) $(WAPP_OUT)/*.wapp
+
+# The desired state of the device: which wapps it runs and what each of them is
+# granted. The template carries the registry and the version of the build.
+DEPLOY_SPEC := deploy/telegraph.json
+DEPLOY_OUT  := $(BUILD)/telegraph-desired.json
+DEVICE      ?= urn:wanted:telegraph-01
+
+$(DEPLOY_OUT): $(DEPLOY_SPEC)
+	@mkdir -p $(BUILD)
+	@sed -e "s|REGISTRY|$(REGISTRY)|g" \
+	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
+
+deploy: wapp-push $(DEPLOY_OUT)
+	deputy device desired-state push $(DEVICE) --file $(DEPLOY_OUT)
+
+# The firmware of the STM32 is a file of the wapp that writes it, thus a new
+# firmware ships as a new version of that wapp.
+OTA_ROOT := $(WAPP_DIR)/tg-ota/root
+
+ota-image: build
+	@mkdir -p $(OTA_ROOT)
+	@cp $(NUTTX)/nuttx.bin $(OTA_ROOT)/firmware.bin
+	@sed -n 's/.*HAZK03_VERSION "\(.*\)".*/\1/p' $(VERSION_H) \
+	  > $(OTA_ROOT)/firmware.version
+	@echo "$(OTA_ROOT): $$(cat $(OTA_ROOT)/firmware.version), \
+$$(stat -c%s $(OTA_ROOT)/firmware.bin) bytes"
+
 # The IPC library is portable C99. Thus the host compiler builds it, and the
 # tests run without the hardware.
 IPC_SRC   := $(wildcard ipc/src/*.c)
@@ -179,7 +251,7 @@ test:
 # The formatter covers this repository's own C sources only: boards/ is the
 # board port, ipc/ is the shared framing library. third_party/ is vendored
 # NuttX and stays as upstream ships it.
-FMT_DIRS  := boards ipc
+FMT_DIRS  := boards ipc wapps
 
 lint-format:
 	$(RUN) sh -c 'find $(FMT_DIRS) \( -name "*.c" -o -name "*.h" \) -print0 \
