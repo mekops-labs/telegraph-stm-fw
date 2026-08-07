@@ -55,6 +55,20 @@
 
 #define PUSH_MAX 4u
 
+/* The peers of the device, and the frames each of them follows.
+ *
+ * Note: the desired state of the control plane carries no arguments, thus a
+ * launch that names none takes this set. The device has a fixed set of wapps,
+ * and this is it.
+ */
+
+static const char *const g_defaultPeers[] = {
+    "display",
+    "ota",
+    "usb:0x33",
+    "probe:0x03",
+};
+
 #define READ_CHUNK 256u
 
 /* A pipe holds 4096 bytes. A write that finds it full waits this many times
@@ -561,8 +575,12 @@ int main(int argc, char **argv) {
     }
 
     if (g_npeers == 0) {
-        emit("broker: the launch config names no peer\n");
-        return 1;
+        size_t d;
+
+        for (d = 0; d < sizeof(g_defaultPeers) / sizeof(g_defaultPeers[0]);
+             d++) {
+            add_peer(g_defaultPeers[d]);
+        }
     }
 
     snprintf(path, sizeof(path), UART_DATA, g_port);

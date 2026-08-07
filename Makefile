@@ -32,7 +32,7 @@ FLASHER_ENV   := xiao_esp32s3
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
-        ota-image \
+        ota-image wapp-push deploy \
         lint-format format-fix tidy cppcheck
 
 help:
@@ -45,6 +45,8 @@ help:
 	@echo "                (UPLOAD_PORT=<address> when mDNS does not resolve)"
 	@echo "  wapps         build the wapps of the edge MCU"
 	@echo "  wapp-images   package each wapp for the registry of the engine"
+	@echo "  wapp-push     push those images to an OCI registry (REGISTRY=host:port)"
+	@echo "  deploy        push the images, then the desired state of the device"
 	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
 	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
@@ -201,6 +203,27 @@ wapp-images: wapps
 	  tar --format=ustar -C $$s -cf $(WAPP_OUT)/$$w@$$v-1.wapp .; \
 	  rm -rf $$s; echo "$(WAPP_OUT)/$$w@$$v-1.wapp"; \
 	done
+
+# The control plane hands the device an image reference, thus the images go to
+# an OCI registry. One wapp is one layer.
+REGISTRY ?= 192.168.6.4:5000
+
+wapp-push: wapp-images
+	@python3 tools/wapppush.py $(REGISTRY) $(WAPP_OUT)/*.wapp
+
+# The desired state of the device: which wapps it runs and what each of them is
+# granted. The template carries the registry and the version of the build.
+DEPLOY_SPEC := deploy/telegraph.json
+DEPLOY_OUT  := $(BUILD)/telegraph-desired.json
+DEVICE      ?= urn:wanted:telegraph-01
+
+$(DEPLOY_OUT): $(DEPLOY_SPEC)
+	@mkdir -p $(BUILD)
+	@sed -e "s|REGISTRY|$(REGISTRY)|g" \
+	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
+
+deploy: wapp-push $(DEPLOY_OUT)
+	deputy device desired-state push $(DEVICE) --file $(DEPLOY_OUT)
 
 # The firmware of the STM32 is a file of the wapp that writes it, thus a new
 # firmware ships as a new version of that wapp.
