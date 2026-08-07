@@ -32,6 +32,7 @@ FLASHER_ENV   := xiao_esp32s3
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
+        ota-image \
         lint-format format-fix tidy cppcheck
 
 help:
@@ -45,6 +46,7 @@ help:
 	@echo "  wapps         build the wapps of the edge MCU"
 	@echo "  wapp-images   package each wapp for the registry of the engine"
 	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
+	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
 	@echo "  font          build the extended font for the flash"
@@ -188,14 +190,29 @@ wapp-test: wapps
 	WANTED="$(WANTED)" $(WAPP_DIR)/tests/roundtrip.sh
 
 # The registry takes the name and the version from the filename of the image.
+# A wapp that carries data files holds them in its own root/ directory.
 wapp-images: wapps
 	@mkdir -p $(WAPP_OUT)
 	@v=$$(sh tools/wappversion.sh); \
 	for w in $(WAPP_NAMES); do \
 	  s=$$(mktemp -d); cp $(WAPP_DIR)/$$w/$$w.wasm $$s/app.wasm; \
-	  tar --format=ustar -C $$s -cf $(WAPP_OUT)/$$w@$$v-1.wapp app.wasm; \
+	  if [ -d $(WAPP_DIR)/$$w/root ]; then \
+	    cp -r $(WAPP_DIR)/$$w/root/. $$s/; fi; \
+	  tar --format=ustar -C $$s -cf $(WAPP_OUT)/$$w@$$v-1.wapp .; \
 	  rm -rf $$s; echo "$(WAPP_OUT)/$$w@$$v-1.wapp"; \
 	done
+
+# The firmware of the STM32 is a file of the wapp that writes it, thus a new
+# firmware ships as a new version of that wapp.
+OTA_ROOT := $(WAPP_DIR)/tg-ota/root
+
+ota-image: build
+	@mkdir -p $(OTA_ROOT)
+	@cp $(NUTTX)/nuttx.bin $(OTA_ROOT)/firmware.bin
+	@sed -n 's/.*HAZK03_VERSION "\(.*\)".*/\1/p' $(VERSION_H) \
+	  > $(OTA_ROOT)/firmware.version
+	@echo "$(OTA_ROOT): $$(cat $(OTA_ROOT)/firmware.version), \
+$$(stat -c%s $(OTA_ROOT)/firmware.bin) bytes"
 
 # The IPC library is portable C99. Thus the host compiler builds it, and the
 # tests run without the hardware.
