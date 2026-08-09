@@ -397,7 +397,6 @@ static void serve(int fd) {
     size_t hlen = 0;
     size_t blen = 0;
     const char *body = "";
-    const char *sep;
     const char *sp1;
     const char *sp2;
 
@@ -411,7 +410,7 @@ static void serve(int fd) {
         len += (size_t)n;
         buf[len] = '\0';
 
-        sep = strstr(buf, "\r\n\r\n");
+        const char *sep = strstr(buf, "\r\n\r\n");
         if (sep == NULL) {
             if (len == REQUEST_MAX) {
                 break;
@@ -449,6 +448,8 @@ static void serve(int fd) {
     path[sp2 - sp1 - 1] = '\0';
 
     body = &buf[hlen];
+    /* cppcheck-suppress unreadVariable ; terminates `body`, which the
+     * brightness and clock routes scan with sscanf */
     buf[hlen + blen] = '\0';
 
     route(fd, path, method, body, blen);

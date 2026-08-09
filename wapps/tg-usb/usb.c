@@ -153,19 +153,19 @@ static void on_frame(void *arg, const struct ipc_frame_s *frame) {
      */
 
     if (frame->corr_id == IPC_CORR_ID_PUSH) {
-        uint8_t index;
+        uint8_t chan;
 
         if (frame->opcode != IPC_OP_USB_DATA ||
             frame->payload_len <= IPC_USB_PUSH_DATA) {
             return;
         }
 
-        index = frame->payload[IPC_USB_CHANNEL];
-        if (index >= IPC_USB_CHANNELS) {
+        chan = frame->payload[IPC_USB_CHANNEL];
+        if (chan >= IPC_USB_CHANNELS) {
             return;
         }
 
-        channel_fill(index, &frame->payload[IPC_USB_PUSH_DATA],
+        channel_fill(chan, &frame->payload[IPC_USB_PUSH_DATA],
                      frame->payload_len - IPC_USB_PUSH_DATA);
         return;
     }
@@ -772,7 +772,6 @@ static void serve(int fd) {
     size_t hlen = 0;
     size_t blen = 0;
     const char *body = "";
-    const char *sep;
     const char *sp1;
     const char *sp2;
 
@@ -786,7 +785,7 @@ static void serve(int fd) {
         len += (size_t)n;
         g_request[len] = '\0';
 
-        sep = strstr(g_request, "\r\n\r\n");
+        const char *sep = strstr(g_request, "\r\n\r\n");
         if (sep == NULL) {
             if (len == REQUEST_MAX) {
                 break;

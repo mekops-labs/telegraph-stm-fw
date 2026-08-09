@@ -85,7 +85,7 @@ static void head(int fd, const char *status, const char *type) {
 
 static void route_index(int fd) {
     DIR *dir = opendir(g_mount);
-    struct dirent *e;
+    const struct dirent *e;
     bool first = true;
 
     if (dir == NULL) {
@@ -152,7 +152,6 @@ static void route_log(int fd, const char *name) {
 static void serve(int fd) {
     char *buf = g_request;
     size_t len = 0;
-    const char *sep;
     const char *sp1;
     const char *sp2;
     char path[NAME_MAX_LEN + 2];
@@ -166,7 +165,7 @@ static void serve(int fd) {
 
         len += (size_t)n;
         buf[len] = '\0';
-        sep = strstr(buf, "\r\n\r\n");
+        const char *sep = strstr(buf, "\r\n\r\n");
         if (sep != NULL || len == REQUEST_MAX) {
             break;
         }
