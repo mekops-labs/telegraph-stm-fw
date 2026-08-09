@@ -16,6 +16,14 @@ def encode(opcode, corr, payload=b""):
     body = struct.pack("<HBH", len(payload), opcode, corr) + payload
     return bytes([SOF]) + body + struct.pack("<H", crc16(body))
 
+def entry(kind, size, name):
+    """One record of an FS_LIST reply."""
+    return bytes([kind]) + struct.pack("<I", size) + bytes([len(name)]) + name
+
+def usbdev(channel, kind, name):
+    """One record of a USB_DEVS reply."""
+    return bytes([channel, kind, len(name)]) + name
+
 def main(dev):
     fd = os.open(dev, os.O_RDWR | os.O_NOCTTY)
     buf = b""
@@ -51,6 +59,21 @@ def main(dev):
                 continue
             if op == 0x01:  # GET_STATE -> STATE
                 os.write(fd, encode(0x02, corr, b"\x01" + b"\x00" * 11 + b"v0.0.0-stub"))
+            elif op == 0x20:  # FS_LIST -> one file and one directory
+                entries = entry(0x00, 12, b"backup.bin") + entry(0x01, 0, b"logs")
+                os.write(fd, encode(0x20, corr, struct.pack("<H", 0xFFFF) + entries))
+            elif op == 0x21:  # FS_READ -> the part at the requested offset
+                offset = struct.unpack("<I", frame[6:10])[0]
+                data = b"BACKUP-BYTES"[offset:]
+                os.write(fd, encode(0x21, corr, struct.pack("<I", offset) + data))
+            elif op == 0x30:  # USB_LIST -> USB_DEVS
+                devs = usbdev(0, 0x00, b"ttyACM0") + usbdev(0xFF, 0x01, b"sda1")
+                os.write(fd, encode(0x31, corr, devs))
+            elif op == 0x34:  # USB_SUB -> ACK, then the device speaks
+                os.write(fd, encode(0xF0, corr, bytes([8])))
+                if frame[7]:
+                    time.sleep(0.05)
+                    os.write(fd, encode(0x33, 0x0000, b"\x00" + b"device says hello"))
             else:
                 os.write(fd, encode(0xF0, corr, bytes([8])))  # ACK, credits
             if not pushed:
