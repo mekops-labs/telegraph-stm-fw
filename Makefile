@@ -221,11 +221,15 @@ DEPLOY_SPEC := deploy/telegraph.json
 DEPLOY_OUT  := $(BUILD)/telegraph-desired.json
 DEVICE      ?= telegraph-01
 
-$(DEPLOY_OUT): $(DEPLOY_SPEC)
+# FORCE, because the version comes from the tree and not from the spec: a
+# commit changes what this file must hold while the spec stays untouched.
+$(DEPLOY_OUT): $(DEPLOY_SPEC) FORCE
 	@mkdir -p $(BUILD)
 	@$(MAKE) --no-print-directory require-registry
 	@sed -e "s|REGISTRY|$(REGISTRY)|g" \
 	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
+
+FORCE:
 
 deploy: wapp-push $(DEPLOY_OUT)
 	deputy device desired-state push --file=$(DEPLOY_OUT) $(DEVICE)
