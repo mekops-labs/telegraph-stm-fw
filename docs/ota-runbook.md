@@ -106,3 +106,29 @@ esptool.py -c esp32s3 -p /dev/ttyACM0 -b 460800 \
 Note: a full flash keeps `/data`, thus the Wi-Fi credentials and the state of
 the supervisor survive it. `erase_flash` first is what removes them, and it
 also empties the registry of its wapps.
+
+## A flash that moves a partition
+
+The merged image covers `0x0` up to the start of `persist`. A flash writes that
+range only, thus `persist` and `wapps` keep what they hold.
+
+A change to the size of an app slot moves `persist` and `wapps` to new offsets.
+The filesystem written at the old offset stays in flash. LittleFS mounts what
+it finds at the new offset and gives no indication of the move.
+
+Erase both partitions after a flash that moves them.
+
+Take the offsets from the partition table of the build. The values below are
+the layout of 1792 KiB app slots on 8 MB flash.
+
+```sh
+esptool.py -c esp32s3 -p /dev/ttyACM0 erase_region 0x392000 0x16E000  # persist
+esptool.py -c esp32s3 -p /dev/ttyACM0 erase_region 0x500000 0x300000  # wapps
+```
+
+Erase `persist` and `wapps` together. The registry holds its images in `wapps`
+and its index at `/data/registry` on `persist`. An index that names images
+which are gone holds every slot, and each install then fails for no space.
+
+Note: an erase of `persist` removes the Wi-Fi credentials with the state of the
+supervisor. The board asks for the credentials on the console at the next boot.
