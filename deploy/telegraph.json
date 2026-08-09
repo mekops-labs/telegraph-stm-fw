@@ -11,7 +11,12 @@
             "Options": "port=1,tx=1,rx=2,baud=460800,format=8N1"
           }
         ]
-      }
+      },
+      "args": [
+        "display",
+        "ota",
+        "usb:0x33"
+      ]
     },
     {
       "name": "tg-display",
@@ -39,6 +44,44 @@
           {
             "Name": "gpio",
             "Options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tg-usb",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-usb:VERSION",
+      "policy": {
+        "Sockets": [
+          {
+            "Name": "http",
+            "Address": "tcp://0.0.0.0:8081",
+            "Role": "listen",
+            "Backlog": 2,
+            "MaxConns": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "tg-logs",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-logs:VERSION",
+      "policy": {
+        "Drivers": [
+          {
+            "Name": "log",
+            "Path": "/logs"
+          }
+        ],
+        "Sockets": [
+          {
+            "Name": "http",
+            "Address": "tcp://0.0.0.0:8082",
+            "Role": "listen",
+            "Backlog": 2,
+            "MaxConns": 2
           }
         ]
       }
