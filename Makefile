@@ -58,7 +58,7 @@ help:
 	@echo "  lint-format   reject any clang-format drift in boards/ and ipc/"
 	@echo "  format-fix    reformat boards/ and ipc/ in place with clang-format"
 	@echo "  tidy          clang-tidy the host-buildable ipc/ sources"
-	@echo "  cppcheck      cppcheck boards/ and ipc/"
+	@echo "  cppcheck      cppcheck boards/, ipc/ and wapps/"
 	@echo "  menuconfig    start the NuttX configuration program"
 	@echo "  savedefconfig write the configuration to the board defconfig"
 	@echo "  clean         remove the build output, keep the configuration"
@@ -286,8 +286,8 @@ cppcheck: configure
 	  --suppress=toomanyconfigs --suppress='*:third_party/*' --quiet \
 	  --inline-suppr --error-exitcode=1 \
 	  -I$(NUTTX)/include -Iipc/include -I$(BOARD_DIR)/include \
-	  -I$(BOARD_DIR)/src \
-	  boards ipc
+	  -I$(BOARD_DIR)/src -Iwapps/include \
+	  boards ipc wapps
 
 menuconfig: configure
 	$(RUN) $(MAKE) -C $(NUTTX) menuconfig
