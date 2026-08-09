@@ -56,6 +56,14 @@
 #define AN_ACK 0x79u
 #define AN_NACK 0x1fu
 #define AN_SYNC 0x7fu
+
+/* The bootloader auto-bauds on the sync byte, and the first one after a reset
+ * is lost often enough that a single attempt is not a test of whether the
+ * bootloader is there.
+ */
+
+#define AN_SYNC_TRIES 8u
+#define AN_SYNC_GAP_MS 50u
 #define AN_GET_ID 0x02u
 #define AN_ERASE 0x43u
 #define AN_WRITE 0x31u
@@ -280,7 +288,9 @@ static int line_write(const void *data, uint16_t len) {
  * which a reset leaves behind.
  */
 
-static int wait_ack(void) {
+/* The first ACK or NACK the line gives, or -1 when none arrives in time. */
+
+static int wait_byte(void) {
     uint64_t deadline = now_ms() + REPLY_MS;
 
     for (;;) {
@@ -288,12 +298,8 @@ static int wait_ack(void) {
             uint8_t b = g_line[0];
 
             memmove(g_line, &g_line[1], --g_lineLen);
-            if (b == AN_ACK) {
-                return 0;
-            }
-
-            if (b == AN_NACK) {
-                return -1;
+            if (b == AN_ACK || b == AN_NACK) {
+                return (int)b;
             }
         }
 
@@ -305,6 +311,8 @@ static int wait_ack(void) {
         nap();
     }
 }
+
+static int wait_ack(void) { return wait_byte() == AN_ACK ? 0 : -1; }
 
 /* Take one byte of the line. */
 
@@ -336,14 +344,30 @@ static int an_command(uint8_t cmd) {
 }
 
 static int an_sync(void) {
-    uint8_t byte = AN_SYNC;
+    unsigned int i;
 
-    g_lineLen = 0;
-    if (line_write(&byte, 1) < 0) {
-        return -1;
+    for (i = 0; i < AN_SYNC_TRIES; i++) {
+        uint8_t byte = AN_SYNC;
+        int reply;
+
+        g_lineLen = 0;
+        if (line_write(&byte, 1) < 0) {
+            return -1;
+        }
+
+        /* A bootloader already initialised answers NACK to a second sync,
+         * which is still a bootloader that is listening.
+         */
+
+        reply = wait_byte();
+        if (reply == AN_ACK || reply == AN_NACK) {
+            return 0;
+        }
+
+        delay_ms(AN_SYNC_GAP_MS);
     }
 
-    return wait_ack();
+    return -1;
 }
 
 /* The identifier of the part, which proves the bootloader answers. */
@@ -500,13 +524,9 @@ static int open_pipes(void) {
  * memory, thus a buffer of the whole firmware would not fit beside it.
  */
 
-static int flash(int fd, size_t len) {
+static int write_image(int fd, size_t len) {
     uint16_t pid = 0;
     size_t off = 0;
-
-    if (raw_enter() < 0) {
-        return -1;
-    }
 
     if (reset_target(true) < 0) {
         emit("ota: the pins of the target are out of reach\n");
@@ -560,7 +580,29 @@ static int flash(int fd, size_t len) {
     }
 
     emitf("ota: %u bytes written\n", (unsigned)len);
-    return reset_target(false);
+    return 0;
+}
+
+/* Write the image, and leave the target running its own firmware either way.
+ * A failure that returned with BOOT0 still high left the board in the ROM
+ * bootloader, where nothing on the link answers and the display stays dark.
+ */
+
+static int flash(int fd, size_t len) {
+    int rc;
+
+    if (raw_enter() < 0) {
+        return -1;
+    }
+
+    rc = write_image(fd, len);
+
+    if (reset_target(false) < 0) {
+        emit("ota: the target was not restored\n");
+        return -1;
+    }
+
+    return rc;
 }
 
 /* The length of a file of the root of this wapp. */

@@ -5,6 +5,15 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `tg-ota` left the target in the ROM bootloader when a flash failed, where
+  nothing on the link answers and the display stays dark.
+- `tg-ota` sent the bootloader sync byte once. The first byte after a reset is
+  lost often enough that one attempt does not test whether it is there.
+
 ## [0.5.0] - 2026-08-09
 
 ### Added
