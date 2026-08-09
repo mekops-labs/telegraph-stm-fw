@@ -35,10 +35,10 @@ deputy device firmware push \
     --version "$(strings /srv/wanted.bin | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\+g[0-9a-f]+\.[0-9]+' | head -1)" \
     --digest "sha256:$(sha256sum /srv/wanted.bin | cut -d' ' -f1)" \
     --source "http://<host>:8000/wanted.bin" \
-    urn:wanted:telegraph-01
+    telegraph-01
 
 # 4. watch it land
-deputy device show urn:wanted:telegraph-01      # Engine.OTAStatus and Engine.Version
+deputy device show telegraph-01      # Engine.OTAStatus and Engine.Version
 ```
 
 `OTAStatus` reads 1 while the image comes down, 2 once it is staged, and 3 when

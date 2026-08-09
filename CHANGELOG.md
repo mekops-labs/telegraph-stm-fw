@@ -43,6 +43,10 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   refusal of the board comes back as its code and its meaning.
 - The script `wapps/tests/http.sh` drives every route against a host build of
   the engine and the same program that answers as the STM32 does.
+- The wapp `tg-usb` serves the USB port over HTTP: the devices it holds, a
+  serial channel to write, subscribe and read, and the files under `/media`.
+- The script `wapps/tests/usb.sh` drives every route of `tg-usb` against the
+  same stand-in for the STM32 that `http.sh` uses.
 - The wapp `tg-probe` and `wapps/tests/roundtrip.sh` prove the broker against a
   host build of the engine, a pty pair and a program that answers as the STM32
   does. The targets `make wapps`, `make wapp-images` and `make wapp-test` build,

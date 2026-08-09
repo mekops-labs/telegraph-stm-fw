@@ -347,6 +347,10 @@ The wapp `tg-display` serves the panels, the digits and the clock over HTTP on
 a listening socket of the engine. Refer to
 [the display over HTTP](docs/display-http.md).
 
+The wapp `tg-usb` serves the USB port over HTTP: the devices the port holds,
+the channel of a serial device, and the files of a mass storage device. Refer
+to [the USB port over HTTP](docs/usb-http.md).
+
 The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
 its ROM. It carries the image in its own package and takes the line from the
 broker, thus a new firmware ships as a new version of that wapp. Refer to
