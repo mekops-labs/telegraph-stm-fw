@@ -219,7 +219,7 @@ wapp-push: require-registry wapp-images
 # granted. The template carries the registry and the version of the build.
 DEPLOY_SPEC := deploy/telegraph.json
 DEPLOY_OUT  := $(BUILD)/telegraph-desired.json
-DEVICE      ?= urn:wanted:telegraph-01
+DEVICE      ?= telegraph-01
 
 $(DEPLOY_OUT): $(DEPLOY_SPEC)
 	@mkdir -p $(BUILD)
@@ -228,7 +228,7 @@ $(DEPLOY_OUT): $(DEPLOY_SPEC)
 	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
 
 deploy: wapp-push $(DEPLOY_OUT)
-	deputy device desired-state push $(DEVICE) --file $(DEPLOY_OUT)
+	deputy device desired-state push --file=$(DEPLOY_OUT) $(DEVICE)
 
 # The firmware of the STM32 is a file of the wapp that writes it, thus a new
 # firmware ships as a new version of that wapp.
