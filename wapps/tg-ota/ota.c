@@ -85,6 +85,13 @@
 #define VERSION_TRIES 10u
 #define VERSION_RETRY_MS 1000u
 
+/* The whole budget of one exchange with the board. The broker refuses a
+ * request while it holds another, thus this covers a link in use by the
+ * wapps that start beside this one.
+ */
+
+#define ASK_TOTAL_MS 20000u
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -209,19 +216,25 @@ static int send(uint8_t opcode, uint16_t corr_id, const void *payload,
     return 0;
 }
 
-/* Send a request and wait for the reply that carries its identifier. */
+/* Give a request the next identifier and send it. */
 
-static int request(uint8_t opcode, const void *payload, uint16_t len,
-                   unsigned int wait_ms) {
-    uint64_t deadline;
-
+static int send_request(uint8_t opcode, const void *payload, uint16_t len) {
     if (++g_corr == IPC_CORR_ID_PUSH) {
         g_corr = 1;
     }
 
     g_inflight = g_corr;
     g_gotReply = false;
-    if (send(opcode, g_inflight, payload, len) < 0) {
+    return send(opcode, g_inflight, payload, len);
+}
+
+/* Send a request and wait for the reply that carries its identifier. */
+
+static int request(uint8_t opcode, const void *payload, uint16_t len,
+                   unsigned int wait_ms) {
+    uint64_t deadline;
+
+    if (send_request(opcode, payload, len) < 0) {
         return -1;
     }
 
@@ -234,6 +247,49 @@ static int request(uint8_t opcode, const void *payload, uint16_t len,
     }
 
     return g_gotReply ? 0 : -1;
+}
+
+/* Send a request, and keep asking while the broker answers that its line is
+ * in use. A request that goes unanswered is waited for and not sent again: a
+ * second frame in the pipe of this peer takes a NACK of its own.
+ *
+ * Returns 0 with the reply in g_reply, or -1 when the budget ran out.
+ */
+
+static int ask_until(uint8_t opcode, const void *payload, uint16_t len,
+                     unsigned int total_ms) {
+    uint64_t deadline = now_ms() + total_ms;
+    unsigned int asks = 0;
+
+    while (now_ms() < deadline) {
+        asks++;
+        if (send_request(opcode, payload, len) < 0) {
+            return -1;
+        }
+
+        while (!g_gotReply && now_ms() < deadline) {
+            pump();
+            if (!g_gotReply) {
+                nap();
+            }
+        }
+
+        if (!g_gotReply) {
+            emitf("ota: no answer to 0x%02x after %u ask(s)\n", opcode, asks);
+            return -1;
+        }
+
+        if (g_replyOp != IPC_OP_NACK || g_replyLen == 0 ||
+            g_reply[0] != IPC_ERR_BUSY) {
+            return 0;
+        }
+
+        delay_ms(VERSION_RETRY_MS);
+    }
+
+    emitf("ota: the line stayed in use for 0x%02x after %u ask(s)\n", opcode,
+          asks);
+    return -1;
 }
 
 /****************************************************************************
@@ -289,7 +345,8 @@ static int raw_enter(void) {
     settings[TG_BRK_RAW_PARITY] = BOOT_PARITY;
     settings[TG_BRK_RAW_STOPBITS] = BOOT_STOPBITS;
 
-    if (request(TG_BRK_OP_RAW, settings, sizeof(settings), RAW_MS) < 0 ||
+    if (ask_until(TG_BRK_OP_RAW, settings, sizeof(settings), ASK_TOTAL_MS) <
+            0 ||
         g_replyOp != IPC_OP_ACK) {
         emit("ota: the broker kept the line\n");
         return -1;
@@ -514,33 +571,22 @@ static int version_from_state(char *out, size_t cap) {
  */
 
 static int running_version(char *out, size_t cap) {
-    unsigned int tries;
-
-    for (tries = 0; tries < VERSION_TRIES; tries++) {
-        if (tries > 0) {
-            delay_ms(VERSION_RETRY_MS);
-        }
-
-        if (request(IPC_OP_GET_STATE, NULL, 0, RAW_MS) < 0) {
-            continue; /* no reply in time */
-        }
-
-        if (g_replyOp == IPC_OP_STATE) {
-            /* A state without a version is an answer, not a busy link. */
-
-            return g_replyLen > IPC_STATE_FWVER ? version_from_state(out, cap)
-                                                : -1;
-        }
-
-        /* Only a busy broker is worth asking again. */
-
-        if (g_replyOp == IPC_OP_NACK &&
-            (g_replyLen == 0 || g_reply[0] != IPC_ERR_BUSY)) {
-            return -1;
-        }
+    if (ask_until(IPC_OP_GET_STATE, NULL, 0, ASK_TOTAL_MS) < 0) {
+        return -1;
     }
 
-    return -1;
+    if (g_replyOp != IPC_OP_STATE) {
+        emitf("ota: the state was refused (op 0x%02x, code %u)\n", g_replyOp,
+              g_replyLen > 0 ? g_reply[0] : 0);
+        return -1;
+    }
+
+    if (g_replyLen <= IPC_STATE_FWVER) {
+        emit("ota: the board answered with a state that carries no version\n");
+        return -1;
+    }
+
+    return version_from_state(out, cap);
 }
 
 /****************************************************************************
