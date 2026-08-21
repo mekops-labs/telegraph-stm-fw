@@ -30,8 +30,13 @@
 
 #define BODY_MAX 512u
 #define REPLY_MS 3000u
+
+/* A sleep below one tick of the scheduler busy-waits on the edge MCU, which
+ * starves the idle task and resets the board. One tick is 10 ms.
+ */
+
 #define POLL_US 10000u
-#define IDLE_SLEEP_US 5000u
+#define IDLE_SLEEP_US 10000u
 
 /* A full pipe waits this many times before the display drops the reply. */
 

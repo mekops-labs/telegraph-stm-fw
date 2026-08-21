@@ -13,7 +13,12 @@
 /* The timeout of the display towards the board, with room for the pipe. */
 
 #define REPLY_MS 4000u
-#define POLL_US 5000u
+
+/* A sleep below one tick of the scheduler busy-waits on the edge MCU, which
+ * starves the idle task and resets the board. One tick is 10 ms.
+ */
+
+#define POLL_US 10000u
 
 static uint64_t now_ms(void) {
     struct timespec ts;
