@@ -78,6 +78,13 @@
 
 #define POLL_US 10000u
 
+/* The board answers the version query while another peer holds the broker,
+ * thus a single NACK says nothing about the firmware that runs.
+ */
+
+#define VERSION_TRIES 4u
+#define VERSION_RETRY_MS 500u
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -472,11 +479,27 @@ static int read_file(const char *path, uint8_t *buf, size_t cap, size_t *len) {
     return 0;
 }
 
-/* The version the running firmware reports, through the broker. */
+/* The version the running firmware reports, through the broker.
+ *
+ * Note: a busy broker answers a NACK, and this decides whether the flash is
+ * written. Thus a version that does not arrive is asked for again.
+ */
 
 static int running_version(char *out, size_t cap) {
-    if (request(IPC_OP_GET_STATE, 0x0e10, NULL, 0, RAW_MS) < 0 ||
-        g_replyOp != IPC_OP_STATE || g_replyLen <= IPC_STATE_FWVER) {
+    unsigned int tries;
+
+    for (tries = 0; tries < VERSION_TRIES; tries++) {
+        if (tries > 0) {
+            delay_ms(VERSION_RETRY_MS);
+        }
+
+        if (request(IPC_OP_GET_STATE, 0x0e10, NULL, 0, RAW_MS) == 0 &&
+            g_replyOp == IPC_OP_STATE && g_replyLen > IPC_STATE_FWVER) {
+            break;
+        }
+    }
+
+    if (tries == VERSION_TRIES) {
         return -1;
     }
 
