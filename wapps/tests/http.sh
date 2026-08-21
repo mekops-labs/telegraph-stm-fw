@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Prove the HTTP surface of the display on a host build of the WANTED engine.
+# The surface belongs to tg-rest, which reaches tg-display over a pipe pair.
 # A pty pair carries the link and stm32stub.py answers as the STM32 does, thus
 # the routes run without the hardware.
 #
 # Usage: WANTED=<path to wanted-cli> wapps/tests/http.sh
 #
-# Note: the engine of that build needs CONFIG_WANTED_VFS_UART=y and
-# CONFIG_WANTED_VFS_SOCKET_LISTEN=y.
+# Note: the engine of that build needs CONFIG_WANTED_VFS_UART=y,
+# CONFIG_WANTED_VFS_SOCKET_LISTEN=y and four wapp slots.
 
 set -u
 
@@ -29,7 +30,7 @@ pkill -x wanted-cli >/dev/null 2>&1
 rm -rf "$WORK"
 mkdir -p "$WORK/registry"
 
-for w in tg-broker tg-display; do
+for w in tg-broker tg-display tg-rest; do
     if [ ! -f "$REPO/wapps/$w/$w.wasm" ]; then
         echo "FAIL: $w is not built (run 'make wapps')"
         exit 1
@@ -68,7 +69,8 @@ stub_pid=$!
 sleep 1
 
 BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["display"]}'
-DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
+DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"args":["rest"]}'
+RCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
 
 {
   sleep 1; echo "create tg-broker"
@@ -77,12 +79,15 @@ DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"
   sleep 2; echo "create tg-display"
   sleep 1; echo "set_config tg-display $DCFG"
   sleep 1; echo "start tg-display"
+  sleep 2; echo "create tg-rest"
+  sleep 1; echo "set_config tg-rest $RCFG"
+  sleep 1; echo "start tg-rest"
   sleep 12
-} | timeout 45 "$WANTED" config.json > "$WORK/engine.log" 2>&1 &
+} | timeout 60 "$WANTED" config.json > "$WORK/engine.log" 2>&1 &
 engine_pid=$!
 
 # The wapps need a moment before the port answers.
-sleep 9
+sleep 13
 
 pass=0
 fail=0
@@ -130,7 +135,7 @@ kill "$stub_pid" "$socat_pid" >/dev/null 2>&1
 pkill -x wanted-cli >/dev/null 2>&1
 
 echo "--- the engine"
-grep -aE "display:|broker:" "$WORK/engine.log" | tail -5
+grep -aE "display:|broker:|rest:" "$WORK/engine.log" | tail -5
 
 if [ "$fail" -eq 0 ]; then
     echo "PASS: $pass routes"

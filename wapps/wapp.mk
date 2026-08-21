@@ -18,7 +18,9 @@ LDFLAGS = -Wl,-export-dynamic -Wl,--initial-memory=65536 \
 CFLAGS = --target=wasm32-wasip1 -Os -std=c99 -D_POSIX_C_SOURCE=200809L \
          -Wall -Wextra -Werror -I../include -I$(IPC)/include
 
-SRCS := $(wildcard *.c) $(wildcard $(IPC)/src/*.c)
+# A wapp names shared sources of ../lib in EXTRA_SRCS, as bare file names.
+SRCS := $(wildcard *.c) $(wildcard $(IPC)/src/*.c) \
+        $(addprefix ../lib/,$(EXTRA_SRCS))
 
 .PHONY: all clean
 

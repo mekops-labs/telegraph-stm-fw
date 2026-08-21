@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The display over HTTP.
+/* The display of the board: the composition, the digits and the clock.
  *
- * Note: a client reaches the panels, the digits and the clock of the STM32
- * through this wapp, and this wapp reaches them through the broker.
+ * Note: it reaches the STM32 through the broker, and serves its clients the
+ * request set of telegraph/display.h over a pipe pair each.
  */
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -14,28 +13,47 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
 #include <telegraph/broker.h>
+#include <telegraph/display.h>
 
 /****************************************************************************
  * Definitions
  ****************************************************************************/
 
+/* The name this wapp carries as a peer of the broker. */
+
 #define PEER_ENV "TELEGRAPH_PEER"
 #define PEER_DEFAULT "display"
 
-/* The name of the listening socket the launch config grants. */
-
-#define SOCKET_ENV "TELEGRAPH_SOCKET"
-#define SOCKET_DEFAULT "http"
-
-#define REQUEST_MAX 1024u
 #define BODY_MAX 512u
 #define REPLY_MS 3000u
 #define POLL_US 10000u
+#define IDLE_SLEEP_US 5000u
+
+/* A full pipe waits this many times before the display drops the reply. */
+
+#define PIPE_RETRIES 200u
+#define PIPE_RETRY_US 1000u
+
+/* The panels in pixels. A movement is as wide as its panel. */
+
+#define PANEL_MAIN_W 70u
+#define PANEL_SUB_W 21u
+#define PANEL_H 14u
+
+/****************************************************************************
+ * Private Types
+ ****************************************************************************/
+
+struct client_s {
+    char name[TG_DSP_NAME_MAX + 1];
+    int req_fd;
+    int rsp_fd;
+    struct ipc_parser_s parser;
+};
 
 /****************************************************************************
  * Private Data
@@ -54,6 +72,16 @@ static uint8_t g_replyOp;
 static bool g_gotReply;
 
 static uint16_t g_corr = 1;
+
+static struct client_s g_clients[TG_DSP_MAX_CLIENTS];
+static unsigned int g_nclients;
+
+/* What a launch config that names no client gets. */
+
+static const char *const g_defaultClients[] = {
+    "rest",
+    "hass",
+};
 
 /****************************************************************************
  * Private Functions
@@ -78,11 +106,13 @@ static uint64_t now_ms(void) {
     return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000);
 }
 
-static void nap(void) {
-    struct timespec ts = {.tv_sec = 0, .tv_nsec = POLL_US * 1000};
+static void nap_us(unsigned int us) {
+    struct timespec ts = {.tv_sec = 0, .tv_nsec = (long)us * 1000};
 
     nanosleep(&ts, NULL);
 }
+
+static void nap(void) { nap_us(POLL_US); }
 
 /****************************************************************************
  * The broker
@@ -140,319 +170,323 @@ static int ask(uint8_t opcode, const void *payload, uint16_t len) {
 }
 
 /****************************************************************************
- * HTTP
+ * The clients
  ****************************************************************************/
 
-static void reply(int fd, const char *status, const char *body) {
-    char head[128];
-    int n = snprintf(head, sizeof(head),
-                     "HTTP/1.1 %s\r\nContent-Type: application/json\r\n"
-                     "Content-Length: %u\r\nConnection: close\r\n\r\n",
-                     status, (unsigned)strlen(body));
+/* One frame to a client. A pipe that stays full costs the reply. */
 
-    if (n > 0) {
-        write(fd, head, (size_t)n);
+static void to_client(struct client_s *client, uint8_t opcode, uint16_t corr,
+                      const void *payload, uint16_t len) {
+    uint8_t frame[IPC_FRAME_MAX];
+    int n = ipc_encode(frame, sizeof(frame), opcode, corr, payload, len);
+    unsigned int tries;
+
+    if (n < 0 || client->rsp_fd < 0) {
+        return;
     }
 
-    write(fd, body, strlen(body));
-}
+    for (tries = 0; tries < PIPE_RETRIES; tries++) {
+        if (write(client->rsp_fd, frame, (size_t)n) == n) {
+            return;
+        }
 
-/* What the board means by a NACK code. A text that does not fit the source of
- * a panel is the one a caller meets in practice.
- */
-
-static const char *nack_name(uint8_t code) {
-    switch (code) {
-    case IPC_ERR_BAD_OPCODE:
-        return "the board has no such operation";
-    case IPC_ERR_BAD_LENGTH:
-        return "too long for this panel";
-    case IPC_ERR_BAD_PAYLOAD:
-        return "a value is out of range";
-    case IPC_ERR_BUSY:
-        return "the board cannot take it now";
-    case IPC_ERR_FAILED:
-        return "the operation failed";
-    case IPC_ERR_UNSUPPORTED:
-        return "this build of the board has no support for it";
-    default:
-        return "unknown";
+        nap_us(PIPE_RETRY_US);
     }
+
+    emitf("display: %s took no reply\n", client->name);
 }
 
-/* The reply of a request that reached the board. */
+static void ack_client(struct client_s *client, uint16_t corr) {
+    to_client(client, IPC_OP_ACK, corr, NULL, 0);
+}
 
-static void reply_result(int fd, int rc) {
+static void nack_client(struct client_s *client, uint16_t corr, uint8_t code) {
+    to_client(client, IPC_OP_NACK, corr, &code, 1);
+}
+
+/* A board that gave no reply is IPC_ERR_BUSY. */
+
+static void result_to_client(struct client_s *client, uint16_t corr, int rc) {
     if (rc == 0) {
-        reply(fd, "200 OK", "{\"ok\":true}\n");
+        ack_client(client, corr);
     } else if (rc == -2) {
-        char body[128];
-        uint8_t code = g_replyLen > 0 ? g_reply[0] : 0;
-
-        snprintf(body, sizeof(body),
-                 "{\"ok\":false,\"nack\":%u,\"error\":\"%s\"}\n", code,
-                 nack_name(code));
-        reply(fd, "409 Conflict", body);
+        nack_client(client, corr, g_replyLen > 0 ? g_reply[0] : IPC_ERR_FAILED);
     } else {
-        reply(fd, "504 Gateway Timeout",
-              "{\"ok\":false,\"error\":\"no reply\"}\n");
+        nack_client(client, corr, IPC_ERR_BUSY);
     }
 }
 
-/* The state of the board as JSON. */
+static bool panel_ok(uint8_t panel) {
+    return panel == TG_DSP_PANEL_MAIN || panel == TG_DSP_PANEL_SUB;
+}
 
-static void route_state(int fd) {
-    char body[256];
+/****************************************************************************
+ * The requests
+ ****************************************************************************/
+
+/* The state of the board, forwarded as the board gave it. */
+
+static void do_state(struct client_s *client, uint16_t corr) {
     int rc = ask(IPC_OP_GET_STATE, NULL, 0);
 
-    if (rc != 0 || g_replyOp != IPC_OP_STATE || g_replyLen < IPC_STATE_LEN) {
-        reply_result(fd, rc != 0 ? rc : -1);
+    if (rc != 0) {
+        result_to_client(client, corr, rc);
         return;
     }
 
-    unsigned int vlen =
-        g_replyLen > IPC_STATE_FWVER ? g_replyLen - IPC_STATE_FWVER : 0;
-    int temp = (int16_t)ipc_get_u16(&g_reply[IPC_STATE_TEMP]);
-
-    snprintf(
-        body, sizeof(body),
-        "{\"time\":%u,\"temperature\":%d.%d,\"frames\":%u,"
-        "\"crc_errors\":%u,\"resyncs\":%u,\"firmware\":\"%.*s\"}\n",
-        (unsigned)ipc_get_u32(&g_reply[IPC_STATE_TIME]), temp / 10,
-        (temp < 0 ? -temp : temp) % 10, ipc_get_u16(&g_reply[IPC_STATE_FRAMES]),
-        ipc_get_u16(&g_reply[IPC_STATE_CRC_ERR]), g_reply[IPC_STATE_RESYNC],
-        (int)vlen, (const char *)&g_reply[IPC_STATE_FWVER]);
-    reply(fd, "200 OK", body);
-}
-
-/* Text on a panel. An empty body clears that panel. */
-
-static void route_text(int fd, uint8_t panel, const char *body, size_t len) {
-    uint8_t payload[BODY_MAX + IPC_TEXT_BODY];
-
-    if (len > BODY_MAX) {
-        len = BODY_MAX;
+    if (g_replyOp != IPC_OP_STATE || g_replyLen < IPC_STATE_LEN) {
+        nack_client(client, corr, IPC_ERR_FAILED);
+        return;
     }
 
-    payload[IPC_TEXT_PANEL] = panel;
-    payload[IPC_TEXT_ATTRS] = IPC_ALIGN_CENTRE;
-    memcpy(&payload[IPC_TEXT_BODY], body, len);
-    reply_result(
-        fd, ask(IPC_OP_SET_TEXT, payload, (uint16_t)(IPC_TEXT_BODY + len)));
+    to_client(client, TG_DSP_OP_STATE, corr, g_reply, (uint16_t)g_replyLen);
 }
 
-/* A text that moves across a panel, drawn by the board itself. */
+/* Text on a panel: the request has the layout the board takes. */
 
-static void route_scroll(int fd, uint8_t panel, const char *body, size_t len,
-                         unsigned int width, unsigned int period,
-                         unsigned int step) {
-    uint8_t payload[BODY_MAX + IPC_ANIM_BODY];
+static void do_text(struct client_s *client, uint16_t corr,
+                    const uint8_t *payload, uint16_t len) {
+    uint8_t frame[BODY_MAX + IPC_TEXT_BODY];
+    uint16_t body;
 
-    if (len > BODY_MAX) {
-        len = BODY_MAX;
+    if (len < TG_DSP_TEXT_BODY) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
+        return;
     }
 
-    memset(payload, 0, IPC_ANIM_BODY);
-    payload[IPC_ANIM_PANEL] = panel;
-    payload[IPC_ANIM_W] = (uint8_t)width;
-    payload[IPC_ANIM_H] = 14;
-    payload[IPC_ANIM_FLAGS] = IPC_ANIM_TEXT;
-    ipc_put_u16(&payload[IPC_ANIM_PERIOD], (uint16_t)period);
-    payload[IPC_ANIM_STEP] = (uint8_t)step;
-    memcpy(&payload[IPC_ANIM_BODY], body, len);
-    reply_result(
-        fd, ask(IPC_OP_SET_ANIM, payload, (uint16_t)(IPC_ANIM_BODY + len)));
+    body = (uint16_t)(len - TG_DSP_TEXT_BODY);
+
+    if (!panel_ok(payload[TG_DSP_TEXT_PANEL]) ||
+        (payload[TG_DSP_TEXT_ATTRS] & ~IPC_TEXT_ATTR_MASK) != 0) {
+        nack_client(client, corr, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    if (body > BODY_MAX) {
+        body = BODY_MAX;
+    }
+
+    frame[IPC_TEXT_PANEL] = payload[TG_DSP_TEXT_PANEL];
+    frame[IPC_TEXT_ATTRS] = payload[TG_DSP_TEXT_ATTRS];
+    memcpy(&frame[IPC_TEXT_BODY], &payload[TG_DSP_TEXT_BODY], body);
+    result_to_client(
+        client, corr,
+        ask(IPC_OP_SET_TEXT, frame, (uint16_t)(IPC_TEXT_BODY + body)));
 }
 
-/* The brightness of the digits and of the panels. */
+/* A text that moves, drawn by the board. The width belongs to this wapp. */
 
-static void route_brightness(int fd, const char *body) {
+static void do_scroll(struct client_s *client, uint16_t corr,
+                      const uint8_t *payload, uint16_t len) {
+    uint8_t frame[BODY_MAX + IPC_ANIM_BODY];
+    unsigned int width;
+    unsigned int period;
+    unsigned int step;
+    uint16_t body;
+
+    if (len < TG_DSP_SCROLL_BODY) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    body = (uint16_t)(len - TG_DSP_SCROLL_BODY);
+
+    if (!panel_ok(payload[TG_DSP_SCROLL_PANEL])) {
+        nack_client(client, corr, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    width = payload[TG_DSP_SCROLL_PANEL] == TG_DSP_PANEL_MAIN ? PANEL_MAIN_W
+                                                              : PANEL_SUB_W;
+    period = ipc_get_u16(&payload[TG_DSP_SCROLL_PERIOD]);
+    step = payload[TG_DSP_SCROLL_STEP];
+    if (period == 0) {
+        period = TG_DSP_SCROLL_PERIOD_DEFAULT;
+    }
+
+    if (step == 0) {
+        step = TG_DSP_SCROLL_STEP_DEFAULT;
+    }
+
+    if (step > width) {
+        step = width;
+    }
+
+    if (body > BODY_MAX) {
+        body = BODY_MAX;
+    }
+
+    memset(frame, 0, IPC_ANIM_BODY);
+    frame[IPC_ANIM_PANEL] = payload[TG_DSP_SCROLL_PANEL];
+    frame[IPC_ANIM_W] = (uint8_t)width;
+    frame[IPC_ANIM_H] = PANEL_H;
+    frame[IPC_ANIM_FLAGS] = IPC_ANIM_TEXT;
+    ipc_put_u16(&frame[IPC_ANIM_PERIOD], (uint16_t)period);
+    frame[IPC_ANIM_STEP] = (uint8_t)step;
+    memcpy(&frame[IPC_ANIM_BODY], &payload[TG_DSP_SCROLL_BODY], body);
+    result_to_client(
+        client, corr,
+        ask(IPC_OP_SET_ANIM, frame, (uint16_t)(IPC_ANIM_BODY + body)));
+}
+
+/* The brightness of the digits and of the panels. One byte sets both. */
+
+static void do_bright(struct client_s *client, uint16_t corr,
+                      const uint8_t *payload, uint16_t len) {
     uint8_t levels[2];
-    unsigned int digits = 0;
-    unsigned int panels = 0;
-    int fields = sscanf(body, "%u %u", &digits, &panels);
 
-    if (fields < 1 || digits > IPC_BRIGHT_MAX || panels > IPC_BRIGHT_MAX) {
-        reply(fd, "400 Bad Request", "{\"ok\":false,\"error\":\"level\"}\n");
+    if (len < TG_DSP_BRIGHT_LEN) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
         return;
     }
 
-    levels[0] = (uint8_t)digits;
-    levels[1] = (uint8_t)(fields > 1 ? panels : digits);
-    reply_result(fd, ask(IPC_OP_SET_BRIGHT, levels, sizeof(levels)));
+    levels[0] = payload[TG_DSP_BRIGHT_DIGITS];
+    levels[1] = len >= TG_DSP_BRIGHT2_LEN ? payload[TG_DSP_BRIGHT_PANELS]
+                                          : payload[TG_DSP_BRIGHT_DIGITS];
+    if (levels[0] > IPC_BRIGHT_MAX || levels[1] > IPC_BRIGHT_MAX) {
+        nack_client(client, corr, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    result_to_client(client, corr,
+                     ask(IPC_OP_SET_BRIGHT, levels, sizeof(levels)));
 }
 
 /* The clock of the board. The RTC keeps UTC, and the offset is in minutes. */
 
-static void route_clock(int fd, const char *body) {
-    uint8_t payload[IPC_SET_TIME_TZ_LEN];
-    unsigned long epoch = 0;
-    long offset = 0;
-    int fields = sscanf(body, "%lu %ld", &epoch, &offset);
+static void do_time(struct client_s *client, uint16_t corr,
+                    const uint8_t *payload, uint16_t len) {
+    uint8_t frame[IPC_SET_TIME_TZ_LEN];
+    uint32_t epoch;
+    uint16_t offset = 0;
 
-    if (fields < 1 || epoch == 0) {
-        epoch = (unsigned long)time(NULL);
-    }
-
-    ipc_put_u32(&payload[0], (uint32_t)epoch);
-    ipc_put_u16(&payload[IPC_SET_TIME_LEN], (uint16_t)(int16_t)offset);
-    reply_result(fd, ask(IPC_OP_SET_TIME, payload, sizeof(payload)));
-}
-
-static void route_clear(int fd) {
-    reply_result(fd, ask(IPC_OP_CLEAR, NULL, 0));
-}
-
-/* The value of one key of a query, or the fallback. */
-
-static unsigned int query_value(const char *query, const char *key,
-                                unsigned int fallback) {
-    size_t klen = strlen(key);
-
-    for (const char *p = query; p != NULL && *p != '\0';) {
-        if (strncmp(p, key, klen) == 0 && p[klen] == '=') {
-            return (unsigned int)strtoul(&p[klen + 1], NULL, 10);
-        }
-
-        p = strchr(p, '&');
-        if (p != NULL) {
-            p++;
-        }
-    }
-
-    return fallback;
-}
-
-/* One request, already read whole. */
-
-static void route(int fd, char *target, const char *method, const char *body,
-                  size_t blen) {
-    bool put = strcmp(method, "PUT") == 0 || strcmp(method, "POST") == 0;
-    char *query = strchr(target, '?');
-    const char *path = target;
-    unsigned int period;
-    unsigned int step;
-
-    if (query != NULL) {
-        *query++ = '\0';
-    }
-
-    period = query_value(query, "period", 60);
-    step = query_value(query, "step", 1);
-    if (period == 0 || step == 0 || step > 70) {
-        reply(fd, "400 Bad Request", "{\"ok\":false,\"error\":\"query\"}\n");
+    if (len < TG_DSP_TIME_LEN) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
         return;
     }
 
-    if (strcmp(method, "GET") == 0 && strcmp(path, "/state") == 0) {
-        route_state(fd);
-    } else if (put && strcmp(path, "/display/main") == 0) {
-        route_text(fd, IPC_PANEL_MAIN, body, blen);
-    } else if (put && strcmp(path, "/display/sub") == 0) {
-        route_text(fd, IPC_PANEL_SUB, body, blen);
-    } else if (put && strcmp(path, "/display/main/scroll") == 0) {
-        route_scroll(fd, IPC_PANEL_MAIN, body, blen, 70, period, step);
-    } else if (put && strcmp(path, "/display/sub/scroll") == 0) {
-        route_scroll(fd, IPC_PANEL_SUB, body, blen, 21, period, step);
-    } else if (put && strcmp(path, "/brightness") == 0) {
-        route_brightness(fd, body);
-    } else if (put && strcmp(path, "/clock") == 0) {
-        route_clock(fd, body);
-    } else if (strcmp(method, "DELETE") == 0 && strcmp(path, "/display") == 0) {
-        route_clear(fd);
-    } else {
-        reply(fd, "404 Not Found", "{\"ok\":false,\"error\":\"no route\"}\n");
+    epoch = ipc_get_u32(&payload[TG_DSP_TIME_EPOCH]);
+    if (epoch == 0) {
+        epoch = (uint32_t)time(NULL);
+    }
+
+    if (len >= TG_DSP_TIME_TZ_LEN) {
+        offset = ipc_get_u16(&payload[TG_DSP_TIME_OFFSET]);
+    }
+
+    ipc_put_u32(&frame[0], epoch);
+    ipc_put_u16(&frame[IPC_SET_TIME_LEN], offset);
+    result_to_client(client, corr, ask(IPC_OP_SET_TIME, frame, sizeof(frame)));
+}
+
+static void do_clear(struct client_s *client, uint16_t corr) {
+    result_to_client(client, corr, ask(IPC_OP_CLEAR, NULL, 0));
+}
+
+static void on_client_frame(void *arg, const struct ipc_frame_s *frame) {
+    struct client_s *client = arg;
+
+    switch (frame->opcode) {
+    case TG_DSP_OP_GET_STATE:
+        do_state(client, frame->corr_id);
+        break;
+
+    case TG_DSP_OP_TEXT:
+        do_text(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_SCROLL:
+        do_scroll(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_BRIGHT:
+        do_bright(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_TIME:
+        do_time(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_CLEAR:
+        do_clear(client, frame->corr_id);
+        break;
+
+    default:
+        nack_client(client, frame->corr_id, IPC_ERR_BAD_OPCODE);
+        break;
     }
 }
 
-/* The value of Content-Length, or 0. The header names are not case-sensitive,
- * thus this walks the head itself.
- */
+/* Take one client from an argument of the launch config. */
 
-static long content_length(const char *head) {
-    static const char key[] = "content-length:";
+static int add_client(const char *name) {
+    struct client_s *client;
+    size_t len = strlen(name);
 
-    for (const char *p = head; *p != '\0'; p++) {
-        size_t i = 0;
-
-        while (key[i] != '\0' && p[i] != '\0' && (p[i] | 0x20) == key[i]) {
-            i++;
-        }
-
-        if (key[i] == '\0') {
-            return strtol(&p[i], NULL, 10);
-        }
+    if (g_nclients >= TG_DSP_MAX_CLIENTS) {
+        emitf("display: %s does not fit, the display holds %u clients\n", name,
+              (unsigned int)TG_DSP_MAX_CLIENTS);
+        return -1;
     }
 
+    if (len == 0 || len > TG_DSP_NAME_MAX) {
+        emitf("display: %s carries no usable name\n", name);
+        return -1;
+    }
+
+    client = &g_clients[g_nclients];
+    memcpy(client->name, name, len + 1);
+    client->req_fd = -1;
+    client->rsp_fd = -1;
+    ipc_parser_init(&client->parser);
+    g_nclients++;
     return 0;
 }
 
-/* Read a whole request: the head, then as much body as its length names. */
+/* A pipe no client opened yet fails, thus this runs at every pass. */
 
-static void serve(int fd) {
-    char buf[REQUEST_MAX + 1];
-    char method[8];
+static void open_client_pipes(struct client_s *client) {
     char path[64];
-    size_t len = 0;
-    size_t hlen = 0;
-    size_t blen = 0;
-    const char *body = "";
-    const char *sp1;
-    const char *sp2;
 
-    for (;;) {
-        ssize_t n = read(fd, &buf[len], REQUEST_MAX - len);
+    if (client->req_fd < 0) {
+        snprintf(path, sizeof(path), TG_DSP_PIPE_REQ, client->name);
+        client->req_fd = open(path, O_RDONLY | O_NONBLOCK);
+    }
 
-        if (n <= 0) {
-            break;
-        }
+    if (client->rsp_fd < 0) {
+        snprintf(path, sizeof(path), TG_DSP_PIPE_RSP, client->name);
+        client->rsp_fd = open(path, O_WRONLY | O_NONBLOCK);
+    }
+}
 
-        len += (size_t)n;
-        buf[len] = '\0';
+/* One request runs to its reply before the next client is read, thus the
+ * requests behind it wait in the pipes of their own clients.
+ */
 
-        const char *sep = strstr(buf, "\r\n\r\n");
-        if (sep == NULL) {
-            if (len == REQUEST_MAX) {
-                break;
-            }
+static bool pump_clients(void) {
+    bool worked = false;
+    unsigned int i;
 
+    for (i = 0; i < g_nclients; i++) {
+        uint8_t buf[256];
+        ssize_t n;
+
+        open_client_pipes(&g_clients[i]);
+        if (g_clients[i].req_fd < 0) {
             continue;
         }
 
-        hlen = (size_t)(sep - buf) + 4;
-        blen = len - hlen;
-        if ((long)blen >= content_length(buf) || len == REQUEST_MAX) {
-            break;
+        n = read(g_clients[i].req_fd, buf, sizeof(buf));
+        if (n <= 0) {
+            continue;
         }
+
+        worked = true;
+        ipc_parser_push(&g_clients[i].parser, buf, (size_t)n, on_client_frame,
+                        &g_clients[i]);
     }
 
-    if (hlen == 0) {
-        reply(fd, "400 Bad Request", "{\"ok\":false,\"error\":\"request\"}\n");
-        return;
-    }
-
-    /* The request line is "<method> <path> HTTP/1.1". */
-
-    sp1 = memchr(buf, ' ', hlen);
-    sp2 = (sp1 != NULL) ? memchr(sp1 + 1, ' ', hlen - (size_t)(sp1 + 1 - buf))
-                        : NULL;
-    if (sp1 == NULL || sp2 == NULL || (size_t)(sp1 - buf) >= sizeof(method) ||
-        (size_t)(sp2 - sp1) >= sizeof(path)) {
-        reply(fd, "400 Bad Request", "{\"ok\":false,\"error\":\"request\"}\n");
-        return;
-    }
-
-    memcpy(method, buf, (size_t)(sp1 - buf));
-    method[sp1 - buf] = '\0';
-    memcpy(path, sp1 + 1, (size_t)(sp2 - sp1 - 1));
-    path[sp2 - sp1 - 1] = '\0';
-
-    body = &buf[hlen];
-    /* cppcheck-suppress unreadVariable ; terminates `body`, which the
-     * brightness and clock routes scan with sscanf */
-    buf[hlen + blen] = '\0';
-
-    route(fd, path, method, body, blen);
+    return worked;
 }
 
 /****************************************************************************
@@ -482,14 +516,25 @@ static int open_pipes(void) {
     return (g_req < 0 || g_rsp < 0) ? -1 : 0;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     const char *name = getenv(PEER_ENV);
-    const char *sock = getenv(SOCKET_ENV);
-    char path[64];
-    int lfd;
+    int i;
 
     if (name != NULL && name[0] != '\0') {
         snprintf(g_name, sizeof(g_name), "%s", name);
+    }
+
+    for (i = 1; i < argc; i++) {
+        add_client(argv[i]);
+    }
+
+    if (g_nclients == 0) {
+        size_t d;
+
+        for (d = 0; d < sizeof(g_defaultClients) / sizeof(g_defaultClients[0]);
+             d++) {
+            add_client(g_defaultClients[d]);
+        }
     }
 
     ipc_parser_init(&g_parser);
@@ -499,25 +544,11 @@ int main(void) {
         return 1;
     }
 
-    snprintf(path, sizeof(path), "/net/%s",
-             (sock != NULL && sock[0] != '\0') ? sock : SOCKET_DEFAULT);
-    lfd = open(path, O_RDWR);
-    if (lfd < 0) {
-        emitf("display: %s is out of reach\n", path);
-        return 1;
-    }
-
-    emitf("display: serving on %s for the peer %s\n", path, g_name);
+    emitf("display: the peer %s serves %u clients\n", g_name, g_nclients);
 
     for (;;) {
-        int cfd = accept(lfd, NULL, NULL);
-
-        if (cfd < 0) {
-            nap();
-            continue;
+        if (!pump_clients()) {
+            nap_us(IDLE_SLEEP_US);
         }
-
-        serve(cfd);
-        close(cfd);
     }
 }

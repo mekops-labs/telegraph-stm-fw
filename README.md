@@ -343,8 +343,12 @@ Both MCUs update without a cable: the engine image of the edge MCU comes from
 the control plane and carries its supervisor, and the STM32 firmware travels in
 the wapp that writes it. Refer to [the runbook](docs/ota-runbook.md).
 
-The wapp `tg-display` serves the panels, the digits and the clock over HTTP on
-a listening socket of the engine. Refer to
+The wapp `tg-display` owns the panels, the digits and the clock. It serves
+them as a request set of its own, over a pipe pair for each client, thus a wapp
+that speaks a protocol of the outside world translates that protocol and holds
+no grant of the hardware. The wapp `tg-rest` is the first such adapter, and it
+holds the listening socket. Refer to
+[the request set of the display](docs/display.md) and
 [the display over HTTP](docs/display-http.md).
 
 The wapp `tg-usb` serves the USB port over HTTP: the devices the port holds,
@@ -363,10 +367,11 @@ make wapp-images  # package each of them for the registry of the engine
 make wapp-test WANTED=<path to a wanted-cli>
 ```
 
-The compiler is the wapp SDK image of the engine. The test runs both wapps on a
+The compiler is the wapp SDK image of the engine. The test runs the wapps on a
 host build of the engine, against a pty pair and a program that answers as the
 STM32 does, thus it needs no hardware. That build needs
-`CONFIG_WANTED_VFS_UART=y`.
+`CONFIG_WANTED_VFS_UART=y`, and `wapps/tests/http.sh` also needs
+`CONFIG_WANTED_VFS_SOCKET_LISTEN=y` and four wapp slots.
 
 ## License
 

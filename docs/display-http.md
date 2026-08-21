@@ -1,17 +1,21 @@
 # The display over HTTP
 
-The wapp `tg-display` serves the panels, the digits and the clock of the STM32
-on a listening socket of the engine. It holds no hardware grant of its own: it
-reaches the board through [the broker](broker.md), and the engine binds the
-port for it.
+The wapp `tg-rest` serves the panels, the digits and the clock of the STM32 on
+a listening socket of the engine. It reaches neither the broker nor the board:
+it translates HTTP into [the request set of the display](display.md), which
+`tg-display` answers.
 
 ```json
 {"sockets": [{"name": "http", "address": "tcp://0.0.0.0:8080",
               "role": "listen", "backlog": 2, "max_conns": 2}]}
 ```
 
-The launch config of the broker names this wapp as one of its peers, thus
-`"args": ["display"]`.
+The launch config of the broker names `tg-display` as one of its peers
+(`"args": ["display"]`), and the launch config of `tg-display` names `tg-rest`
+as one of its clients (`"args": ["rest"]`).
+
+Dropping this wapp from the desired state removes the HTTP surface and leaves
+the display, the STM32 and every other wapp running.
 
 ## The routes
 

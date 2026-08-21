@@ -22,6 +22,14 @@
       "name": "tg-display",
       "version": "VERSION",
       "image": "REGISTRY/tg-display:VERSION",
+      "args": [
+        "rest"
+      ]
+    },
+    {
+      "name": "tg-rest",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-rest:VERSION",
       "policy": {
         "Sockets": [
           {
