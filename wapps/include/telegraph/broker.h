@@ -24,7 +24,10 @@
 #define TG_BRK_PIPE_REQ "/dev/pipe/tg-%s-req"
 #define TG_BRK_PIPE_RSP "/dev/pipe/tg-%s-rsp"
 
-/* The engine holds eight named pipes, thus four peers take all of them. */
+/* The peers of the broker. This is the budget of the broker alone: another
+ * wapp of the board serves peers of its own over the same engine-wide pipe
+ * table, thus the count here does not divide that table.
+ */
 
 #define TG_BRK_MAX_PEERS 4
 
