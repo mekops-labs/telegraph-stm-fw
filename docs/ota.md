@@ -54,3 +54,11 @@ Those files are build outputs and the repository does not hold them.
 Note: the version comes from `git describe`, and the comparison is exact. Thus
 a build from a tree with local changes carries the suffix `-dirty`, never
 matches the board, and writes the flash at every start.
+
+## When the board does not answer
+
+The wapp asks the board for the version it runs before it writes anything, and
+it asks again while another peer holds the broker. A version that never arrives
+leaves the flash untouched: writing blind is the more dangerous action, and a
+new firmware of the STM32 arrives only as a new version of this wapp, which
+runs the check again.

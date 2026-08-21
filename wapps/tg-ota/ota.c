@@ -82,8 +82,8 @@
  * thus a single NACK says nothing about the firmware that runs.
  */
 
-#define VERSION_TRIES 4u
-#define VERSION_RETRY_MS 500u
+#define VERSION_TRIES 10u
+#define VERSION_RETRY_MS 1000u
 
 /****************************************************************************
  * Private Data
@@ -700,7 +700,13 @@ int main(void) {
             return 0;
         }
     } else {
-        emit("ota: the board gave no version, thus the image goes in\n");
+        /* Writing the flash blind is the more dangerous action, and a new
+         * firmware of the STM32 arrives only as a new version of this wapp,
+         * which runs this check again. Thus nothing is written here.
+         */
+
+        emit("ota: the board gave no version, thus nothing is written\n");
+        return 0;
     }
 
     fd = open(IMAGE_PATH, O_RDONLY);
