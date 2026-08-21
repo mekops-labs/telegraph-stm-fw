@@ -57,7 +57,9 @@
       },
       "envs": [
         "HASS_DEVICE=telegraph-01",
-        "HASS_NAME=Telegraph"
+        "HASS_NAME=Telegraph",
+        "HASS_USER=MQTT_USER",
+        "HASS_PASS=MQTT_PASS"
       ]
     },
     {

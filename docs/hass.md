@@ -65,6 +65,14 @@ serves two boards.
 | `TELEGRAPH_CLIENT` | `hass` | the name of this client of the display |
 | `TELEGRAPH_SOCKET` | `mqtt` | the socket grant to use |
 
+The deployment of this repository carries the credentials as `MQTT_USER` and
+`MQTT_PASS` of the make invocation, thus no file here holds them:
+
+```sh
+make deploy REGISTRY=<host:port> BROKER=<host:port> \
+     MQTT_USER=<user> MQTT_PASS=<password>
+```
+
 **A password in `envs` is signed, not encrypted.** It is readable in the store
 of the control plane, in the twin its API serves, and in the persisted state on
 the flash of the device. An anonymous broker, or a token issued per device, is

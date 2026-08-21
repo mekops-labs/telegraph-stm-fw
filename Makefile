@@ -47,7 +47,8 @@ help:
 	@echo "  wapp-images   package each wapp for the registry of the engine"
 	@echo "  wapp-push     push those images to an OCI registry (needs REGISTRY=host:port)"
 	@echo "  deploy        push the images, then the desired state of the device"
-	@echo "                (needs REGISTRY=<host:port> and BROKER=<host:port>)"
+	@echo "                (needs REGISTRY=<host:port> and BROKER=<host:port>;"
+	@echo "                 MQTT_USER/MQTT_PASS when that broker asks for them)"
 	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
 	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
@@ -220,6 +221,11 @@ BROKER ?=
 require-broker:
 	@test -n "$(BROKER)" || { echo "set BROKER=<host:port>"; exit 1; }
 
+# The credentials of that broker. They go into the desired state, thus they
+# come from the environment and never from a file of this repository.
+MQTT_USER ?=
+MQTT_PASS ?=
+
 wapp-push: require-registry wapp-images
 	@python3 tools/wapppush.py $(REGISTRY) $(WAPP_OUT)/*.wapp
 
@@ -237,6 +243,8 @@ $(DEPLOY_OUT): $(DEPLOY_SPEC) FORCE
 	@$(MAKE) --no-print-directory require-broker
 	@sed -e "s|REGISTRY|$(REGISTRY)|g" \
 	     -e "s|BROKER|$(BROKER)|g" \
+	     -e "s|MQTT_USER|$(MQTT_USER)|g" \
+	     -e "s|MQTT_PASS|$(MQTT_PASS)|g" \
 	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
 
 FORCE:
