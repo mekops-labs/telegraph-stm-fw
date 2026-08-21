@@ -36,7 +36,13 @@ static void nap(void) {
 static void on_frame(void *arg, const struct ipc_frame_s *frame) {
     struct tg_dsp_client_s *client = arg;
 
-    /* The display sends no unsolicited frame, thus this is the reply. */
+    /* A reply that arrives after its own request timed out matches nothing
+     * and is dropped, rather than answering the request that follows.
+     */
+
+    if (frame->corr_id != client->inflight) {
+        return;
+    }
 
     client->reply_op = frame->opcode;
     client->reply_len = frame->payload_len;
@@ -84,10 +90,12 @@ int tg_dsp_open(struct tg_dsp_client_s *client, const char *name,
 
 int tg_dsp_ask(struct tg_dsp_client_s *client, uint8_t opcode,
                const void *payload, uint16_t len) {
-    int n = ipc_encode(client->frame, sizeof(client->frame), opcode,
-                       client->corr++, payload, len);
     uint64_t deadline;
+    int n;
 
+    client->inflight = client->corr;
+    n = ipc_encode(client->frame, sizeof(client->frame), opcode, client->corr++,
+                   payload, len);
     if (client->corr == IPC_CORR_ID_PUSH) {
         client->corr = 1;
     }

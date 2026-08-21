@@ -77,6 +77,7 @@ static uint8_t g_replyOp;
 static bool g_gotReply;
 
 static uint16_t g_corr = 1;
+static uint16_t g_inflight;
 
 static struct client_s g_clients[TG_DSP_MAX_CLIENTS];
 static unsigned int g_nclients;
@@ -126,7 +127,13 @@ static void nap(void) { nap_us(POLL_US); }
 static void on_frame(void *arg, const struct ipc_frame_s *frame) {
     (void)arg;
 
-    /* This wapp follows no opcode, thus every frame here answers a request. */
+    /* A reply that arrives after its own request timed out matches nothing
+     * and is dropped, rather than answering the request that follows.
+     */
+
+    if (frame->corr_id != g_inflight) {
+        return;
+    }
 
     g_replyOp = frame->opcode;
     g_replyLen = frame->payload_len;
@@ -141,10 +148,11 @@ static void on_frame(void *arg, const struct ipc_frame_s *frame) {
 /* One request to the board, and the reply it gives. */
 
 static int ask(uint8_t opcode, const void *payload, uint16_t len) {
-    int n =
-        ipc_encode(g_frame, sizeof(g_frame), opcode, g_corr++, payload, len);
+    int n;
     uint64_t deadline;
 
+    g_inflight = g_corr;
+    n = ipc_encode(g_frame, sizeof(g_frame), opcode, g_corr++, payload, len);
     if (g_corr == IPC_CORR_ID_PUSH) {
         g_corr = 1;
     }

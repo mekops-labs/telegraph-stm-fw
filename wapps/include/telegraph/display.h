@@ -127,6 +127,7 @@ struct tg_dsp_client_s {
     int req_fd;
     int rsp_fd;
     uint16_t corr;
+    uint16_t inflight;
     struct ipc_parser_s parser;
     uint8_t frame[IPC_FRAME_MAX];
 

@@ -106,6 +106,14 @@ static unsigned int g_replyLen;
 static uint8_t g_replyOp;
 static bool g_gotReply;
 
+/* The identifier of the request in flight. Each one takes a new value, thus a
+ * reply that arrives after its own request timed out matches nothing and is
+ * dropped instead of answering the request that follows.
+ */
+
+static uint16_t g_corr = 1;
+static uint16_t g_inflight;
+
 static uint32_t g_addr = FLASH_ORIGIN;
 
 /****************************************************************************
@@ -164,6 +172,10 @@ static void on_frame(void *arg, const struct ipc_frame_s *frame) {
         return;
     }
 
+    if (frame->corr_id != g_inflight) {
+        return; /* the answer of a request that timed out */
+    }
+
     g_replyOp = frame->opcode;
     g_replyLen = frame->payload_len;
     if (g_replyLen > sizeof(g_reply)) {
@@ -197,14 +209,19 @@ static int send(uint8_t opcode, uint16_t corr_id, const void *payload,
     return 0;
 }
 
-/* Send a request and wait for its reply. */
+/* Send a request and wait for the reply that carries its identifier. */
 
-static int request(uint8_t opcode, uint16_t corr_id, const void *payload,
-                   uint16_t len, unsigned int wait_ms) {
+static int request(uint8_t opcode, const void *payload, uint16_t len,
+                   unsigned int wait_ms) {
     uint64_t deadline;
 
+    if (++g_corr == IPC_CORR_ID_PUSH) {
+        g_corr = 1;
+    }
+
+    g_inflight = g_corr;
     g_gotReply = false;
-    if (send(opcode, corr_id, payload, len) < 0) {
+    if (send(opcode, g_inflight, payload, len) < 0) {
         return -1;
     }
 
@@ -272,8 +289,7 @@ static int raw_enter(void) {
     settings[TG_BRK_RAW_PARITY] = BOOT_PARITY;
     settings[TG_BRK_RAW_STOPBITS] = BOOT_STOPBITS;
 
-    if (request(TG_BRK_OP_RAW, 0x0e01, settings, sizeof(settings), RAW_MS) <
-            0 ||
+    if (request(TG_BRK_OP_RAW, settings, sizeof(settings), RAW_MS) < 0 ||
         g_replyOp != IPC_OP_ACK) {
         emit("ota: the broker kept the line\n");
         return -1;
@@ -283,9 +299,7 @@ static int raw_enter(void) {
     return 0;
 }
 
-static int raw_leave(void) {
-    return request(TG_BRK_OP_RAW, 0x0e02, NULL, 0, RAW_MS);
-}
+static int raw_leave(void) { return request(TG_BRK_OP_RAW, NULL, 0, RAW_MS); }
 
 static int line_write(const void *data, uint16_t len) {
     return send(TG_BRK_OP_RAW_DATA, IPC_CORR_ID_PUSH, data, len);
@@ -479,10 +493,24 @@ static int read_file(const char *path, uint8_t *buf, size_t cap, size_t *len) {
     return 0;
 }
 
+/* The version text of the state the last reply holds. */
+
+static int version_from_state(char *out, size_t cap) {
+    size_t n = g_replyLen - IPC_STATE_FWVER;
+
+    if (n >= cap) {
+        n = cap - 1;
+    }
+
+    memcpy(out, &g_reply[IPC_STATE_FWVER], n);
+    out[n] = '\0';
+    return 0;
+}
+
 /* The version the running firmware reports, through the broker.
  *
- * Note: a busy broker answers a NACK, and this decides whether the flash is
- * written. Thus a version that does not arrive is asked for again.
+ * Note: this decides whether the flash is written, and the broker answers a
+ * busy link with a NACK. Thus only that NACK is asked again.
  */
 
 static int running_version(char *out, size_t cap) {
@@ -493,25 +521,26 @@ static int running_version(char *out, size_t cap) {
             delay_ms(VERSION_RETRY_MS);
         }
 
-        if (request(IPC_OP_GET_STATE, 0x0e10, NULL, 0, RAW_MS) == 0 &&
-            g_replyOp == IPC_OP_STATE && g_replyLen > IPC_STATE_FWVER) {
-            break;
+        if (request(IPC_OP_GET_STATE, NULL, 0, RAW_MS) < 0) {
+            continue; /* no reply in time */
+        }
+
+        if (g_replyOp == IPC_OP_STATE) {
+            /* A state without a version is an answer, not a busy link. */
+
+            return g_replyLen > IPC_STATE_FWVER ? version_from_state(out, cap)
+                                                : -1;
+        }
+
+        /* Only a busy broker is worth asking again. */
+
+        if (g_replyOp == IPC_OP_NACK &&
+            (g_replyLen == 0 || g_reply[0] != IPC_ERR_BUSY)) {
+            return -1;
         }
     }
 
-    if (tries == VERSION_TRIES) {
-        return -1;
-    }
-
-    size_t n = g_replyLen - IPC_STATE_FWVER;
-
-    if (n >= cap) {
-        n = cap - 1;
-    }
-
-    memcpy(out, &g_reply[IPC_STATE_FWVER], n);
-    out[n] = '\0';
-    return 0;
+    return -1;
 }
 
 /****************************************************************************
