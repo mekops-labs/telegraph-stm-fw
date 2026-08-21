@@ -407,10 +407,19 @@ int main(void) {
 
     emitf("rest: serving on %s as the client %s\n", path, name);
 
+    /* A stop of this wapp ends the wait inside accept with EINTR. Returning
+     * on it leaves the wapp EXITED, and a wapp killed in its loop is FAILED.
+     */
+
     for (;;) {
         int cfd = accept(lfd, NULL, NULL);
 
         if (cfd < 0) {
+            if (errno == EINTR) {
+                emit("rest: stopped\n");
+                return 0;
+            }
+
             nap();
             continue;
         }
