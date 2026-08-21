@@ -32,7 +32,7 @@ FLASHER_ENV   := xiao_esp32s3
 .PHONY: help image shell configure build all clean distclean menuconfig \
         savedefconfig test version font compactfont sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
-        ota-image wapp-push require-registry deploy \
+        ota-image wapp-push require-registry require-broker deploy \
         lint-format format-fix tidy cppcheck
 
 help:
@@ -47,6 +47,7 @@ help:
 	@echo "  wapp-images   package each wapp for the registry of the engine"
 	@echo "  wapp-push     push those images to an OCI registry (needs REGISTRY=host:port)"
 	@echo "  deploy        push the images, then the desired state of the device"
+	@echo "                (needs REGISTRY=<host:port> and BROKER=<host:port>)"
 	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
 	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
@@ -212,6 +213,13 @@ REGISTRY ?=
 require-registry:
 	@test -n "$(REGISTRY)" || { echo "set REGISTRY=<host:port>"; exit 1; }
 
+# The MQTT broker the Home Assistant adapter connects to. A property of the
+# deployment, thus it carries no default either.
+BROKER ?=
+
+require-broker:
+	@test -n "$(BROKER)" || { echo "set BROKER=<host:port>"; exit 1; }
+
 wapp-push: require-registry wapp-images
 	@python3 tools/wapppush.py $(REGISTRY) $(WAPP_OUT)/*.wapp
 
@@ -226,7 +234,9 @@ DEVICE      ?= telegraph-01
 $(DEPLOY_OUT): $(DEPLOY_SPEC) FORCE
 	@mkdir -p $(BUILD)
 	@$(MAKE) --no-print-directory require-registry
+	@$(MAKE) --no-print-directory require-broker
 	@sed -e "s|REGISTRY|$(REGISTRY)|g" \
+	     -e "s|BROKER|$(BROKER)|g" \
 	     -e "s|VERSION|$$(sh tools/wappversion.sh)|g" $(DEPLOY_SPEC) > $@
 
 FORCE:

@@ -346,10 +346,12 @@ the wapp that writes it. Refer to [the runbook](docs/ota-runbook.md).
 The wapp `tg-display` owns the panels, the digits and the clock. It serves
 them as a request set of its own, over a pipe pair for each client, thus a wapp
 that speaks a protocol of the outside world translates that protocol and holds
-no grant of the hardware. The wapp `tg-rest` is the first such adapter, and it
-holds the listening socket. Refer to
-[the request set of the display](docs/display.md) and
-[the display over HTTP](docs/display-http.md).
+no grant of the hardware. The wapp `tg-rest` is the first such adapter and holds
+the listening socket; `tg-hass` is the second and publishes the entities of the
+board to Home Assistant over MQTT. Refer to
+[the request set of the display](docs/display.md),
+[the display over HTTP](docs/display-http.md) and
+[the display in Home Assistant](docs/hass.md).
 
 The wapp `tg-usb` serves the USB port over HTTP: the devices the port holds,
 the channel of a serial device, and the files of a mass storage device. Refer

@@ -23,7 +23,8 @@
       "version": "VERSION",
       "image": "REGISTRY/tg-display:VERSION",
       "args": [
-        "rest"
+        "rest",
+        "hass"
       ]
     },
     {
@@ -41,6 +42,23 @@
           }
         ]
       }
+    },
+    {
+      "name": "tg-hass",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-hass:VERSION",
+      "policy": {
+        "Sockets": [
+          {
+            "Name": "mqtt",
+            "Address": "tcp://BROKER"
+          }
+        ]
+      },
+      "envs": [
+        "HASS_DEVICE=telegraph-01",
+        "HASS_NAME=Telegraph"
+      ]
     },
     {
       "name": "tg-ota",
