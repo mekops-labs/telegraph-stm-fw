@@ -3,11 +3,9 @@
 #ifndef __TELEGRAPH_BROKER_H
 #define __TELEGRAPH_BROKER_H
 
-/* The interface between the broker and its peers.
- *
- * Note: the broker holds the UART grant, thus every other wapp reaches the
- * STM32 through it. A peer carries the frames of telegraph/ipc.h over two
- * named pipes, and the broker gives each frame a correlation ID of the link.
+/* The interface between the broker and its peers. The broker holds the UART
+ * grant, thus every other wapp reaches the STM32 through it, over two named
+ * pipes carrying the frames of telegraph/ipc.h.
  */
 
 #include <telegraph/ipc.h>
@@ -46,15 +44,10 @@
 #define TG_BRK_OP_RAW 0xe0u      /* peer -> broker: take or leave raw mode */
 #define TG_BRK_OP_RAW_DATA 0xe1u /* both ways: the bytes of raw mode       */
 
-/* The payload of TG_BRK_OP_RAW gives the line settings of raw mode.
+/* TG_BRK_OP_RAW: [baud u32] [databits u8] [parity u8] [stopbits u8].
  *
- *   [baud u32] [databits u8] [parity u8] [stopbits u8]
- *
- * The parity is one of the characters N, E or O. An empty payload leaves raw
- * mode, and the link returns to IPC_BAUD and 8N1.
- *
- * Note: a peer in raw mode holds the whole link. A request of another peer
- * takes a NACK with IPC_ERR_BUSY until that peer leaves this mode.
+ * The parity is N, E or O, and an empty payload leaves raw mode. A peer in it
+ * holds the whole link, thus another peer takes IPC_ERR_BUSY meanwhile.
  */
 
 #define TG_BRK_RAW_BAUD 0u
@@ -72,14 +65,9 @@
  * The correlation IDs
  ****************************************************************************/
 
-/* A peer chooses the correlation ID of its request freely. The broker keeps
- * the ID of that peer, gives the frame an ID of its own on the link, and puts
- * the ID of the peer back into the reply. Thus two peers never collide, and
- * neither of them coordinates with the other.
- *
- * Note: the value IPC_CORR_ID_PUSH marks a frame that no request asked for.
- * The broker sends such a frame to the peers that follow its opcode, and it
- * keeps the ID at that value.
+/* A peer chooses the ID of its request freely: the broker gives the frame an
+ * ID of its own on the link and puts the peer's back into the reply, thus two
+ * peers never collide. IPC_CORR_ID_PUSH marks a frame no request asked for.
  */
 
 #endif /* __TELEGRAPH_BROKER_H */

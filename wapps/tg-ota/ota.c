@@ -1,10 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The firmware of the STM32 travels in this wapp's own image, and this wapp
- * writes it through the bootloader of the ROM.
- *
- * Note: the broker holds the line, thus this wapp takes raw mode from it and
- * drives BOOT0 and NRST through its own grant of those two pins.
+/* The firmware of the STM32 travels in this wapp's own image and goes in
+ * through the bootloader of the ROM. The broker holds the line, thus this
+ * takes raw mode from it and drives BOOT0 and NRST through its own grant.
  */
 
 #include <errno.h>
@@ -249,11 +247,9 @@ static int request(uint8_t opcode, const void *payload, uint16_t len,
     return g_gotReply ? 0 : -1;
 }
 
-/* Send a request, and keep asking while the broker answers that its line is
- * in use. A request that goes unanswered is waited for and not sent again: a
- * second frame in the pipe of this peer takes a NACK of its own.
- *
- * Returns 0 with the reply in g_reply, or -1 when the budget ran out.
+/* Keep asking while the broker answers that its line is in use; a request
+ * that goes unanswered is waited for, since a second frame in the pipe takes
+ * a NACK of its own. Returns 0 with the reply in g_reply, or -1.
  */
 
 static int ask_until(uint8_t opcode, const void *payload, uint16_t len,

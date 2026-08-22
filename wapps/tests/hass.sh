@@ -9,7 +9,9 @@
 # Usage: WANTED=<path to wanted-cli> wapps/tests/hass.sh
 #
 # Note: the engine of that build needs CONFIG_WANTED_VFS_UART=y and four wapp
-# slots. The broker image is eclipse-mosquitto.
+# slots, and a socket read that honours O_NONBLOCK. Without the last one the
+# adapter parks in the read of the broker and publishes no reading. The broker
+# image is eclipse-mosquitto.
 #
 # Note: the cadence rides a config mount. The desired state of the control
 # plane carries it as `config: [{path, content}]`, which the supervisor turns

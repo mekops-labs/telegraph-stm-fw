@@ -1,11 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The display in Home Assistant.
- *
- * Note: an adapter. It holds an outbound socket to an MQTT broker, publishes
- * the discovery of the entities, and translates their commands into the
- * request set of the display. It reaches neither the broker of the link nor
- * the STM32.
+/* The display in Home Assistant: an outbound socket to an MQTT broker, the
+ * discovery of the entities, and their commands as display requests. It
+ * reaches neither the broker of the link nor the STM32.
  */
 
 #include <fcntl.h>
@@ -51,10 +48,9 @@
 #define POLL_US 10000u
 #define RECONNECT_MS 5000u
 
-/* The readings of the board. Every sample is a request that crosses the link
- * the scan loop of the STM32 shares, thus the cadence is a load decision. The
- * four environment variables the board allows are spent, thus it comes from a
- * config mount.
+/* Every sample crosses the link the scan loop of the STM32 shares, thus the
+ * cadence is a load decision. The environment variables are spent, thus it
+ * comes from a config mount.
  */
 
 #define CONFIG_PATH "/etc/tg-hass.conf"
@@ -226,9 +222,12 @@ static void publish_state(void) {
     char body[256];
     const uint8_t *st = g_display.reply;
 
-    if (tg_dsp_ask(&g_display, TG_DSP_OP_GET_STATE, NULL, 0) != TG_DSP_OK ||
-        g_display.reply_op != TG_DSP_OP_STATE ||
+    int rc = tg_dsp_ask(&g_display, TG_DSP_OP_GET_STATE, NULL, 0);
+
+    if (rc != TG_DSP_OK || g_display.reply_op != TG_DSP_OP_STATE ||
         g_display.reply_len < IPC_STATE_LEN) {
+        emitf("hass: no reading (rc %d, op 0x%02x, len %u)\n", rc,
+              g_display.reply_op, g_display.reply_len);
         return;
     }
 

@@ -32,11 +32,9 @@
  * The opcodes
  ****************************************************************************/
 
-/* The framing is the one of telegraph/ipc.h, and the display repeats the
- * correlation ID of the request. It sends no frame a request did not ask for.
- *
- * Note: these opcodes are of the display. They take a group of their own in
- * the numbering of the link, thus a crossed pipe gives IPC_ERR_BAD_OPCODE.
+/* The framing is the one of telegraph/ipc.h and the display repeats the ID of
+ * the request, sending no frame a request did not ask for. These opcodes take
+ * a group of their own, thus a crossed pipe gives IPC_ERR_BAD_OPCODE.
  */
 
 #define TG_DSP_OP_GET_STATE 0x40u /* client -> display: request the state  */
