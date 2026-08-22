@@ -1,12 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* DS3231 temperature registers.
- *
- * Note: the standard DS3231 RTC driver keeps the time and the date. That
- * driver gives the values to the system clock.
- *
- * Note: the same driver does not give access to the temperature sensor. Thus
- * the board reads these two registers.
+/* DS3231 temperature registers. The standard driver keeps the time and the
+ * date and gives them to the system clock; it exposes no temperature, thus
+ * the board reads these two registers itself.
  */
 
 #include <nuttx/config.h>
@@ -52,11 +48,8 @@ int ds3231_temperature(struct i2c_master_s *i2c, int16_t *out) {
         return ret;
     }
 
-    /* Calculate the temperature in tenths of a degree.
-     *
-     * Note: the first byte holds the degrees as a signed value. The two upper
-     * bits of the second byte are steps of a quarter degree. Thus one step is
-     * equal to 2.5 tenths.
+    /* The temperature in tenths: the first byte is signed degrees, and the
+     * top two bits of the second are quarter-degree steps of 2.5 tenths.
      */
 
     *out = (int16_t)((int8_t)raw[0]) * 10 + (((raw[1] >> 6) * 10) / 4);

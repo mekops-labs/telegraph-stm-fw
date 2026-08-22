@@ -1,14 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* Clock setup.
- *
- * Note: the standard connectivity-line code in arch/arm/src/stm32 waits for
- * each PLL without a limit. A clock that never comes up thus stops the boot
- * with no sign of the cause. Every wait here has an end, and the failure
- * keeps the internal oscillator at 8 MHz.
- *
- * Note: CONFIG_HAZK03_CLOCK_HSE selects the source. The crystal gives 72 MHz
- * and a clock for the USB host. The internal oscillator gives 36 MHz.
+/* Clock setup. Every wait here ends, where the connectivity-line code waits
+ * for a PLL forever and stops the boot with no sign of the cause; the failure
+ * keeps the internal oscillator. CONFIG_HAZK03_CLOCK_HSE selects the source.
  */
 
 #include <nuttx/config.h>
@@ -104,16 +98,9 @@ static bool clock_hse_input(void) {
  * Public Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: stm32_board_clockconfig
- *
- * Description:
- *   Build the clock tree from the source that the configuration selects.
- *
- *   Note: the boot sequence calls this function early. At that time the chip
- *   runs on the internal oscillator without the PLL.
- *
- ****************************************************************************/
+/* Build the clock tree from the source the configuration selects. This runs
+ * early, with the chip on the internal oscillator and no PLL.
+ */
 
 void stm32_board_clockconfig(void) {
     uint32_t regval;
@@ -153,11 +140,8 @@ void stm32_board_clockconfig(void) {
     regval &= ~RCC_CR_PLLON;
     putreg32(regval, STM32_RCC_CR);
 
-    /* Set the bus prescalers. AHB gets SYSCLK, APB2 gets HCLK, APB1 gets
-     * HCLK/2.
-     *
-     * Note: this step occurs before the increase of SYSCLK. Thus no bus runs
-     * above its maximum frequency.
+    /* The bus prescalers: AHB takes SYSCLK, APB2 HCLK, APB1 HCLK/2. Set
+     * before SYSCLK rises, thus no bus runs past its maximum.
      */
 
     regval = getreg32(STM32_RCC_CFGR);

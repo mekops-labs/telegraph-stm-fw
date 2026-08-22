@@ -13,29 +13,13 @@
  * Public Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: stm32_boardinitialize
- *
- * Description:
- *   Do nothing.
- *
- *   Note: the boot sequence calls this function early. At that time the
- *   device drivers and the memory system are not available.
- *
- ****************************************************************************/
+/* Nothing: this runs before the drivers and the memory system exist. */
 
 void stm32_boardinitialize(void) {}
 
-/****************************************************************************
- * Name: board_late_initialize
- *
- * Description:
- *   Do the start-up steps for this board.
- *
- *   Note: the system calls this function after the OS start. Thus the
- *   start-up steps can use the drivers and the file system.
- *
- ****************************************************************************/
+/* The start-up steps of this board, after the OS starts, thus they may use
+ * the drivers and the file system.
+ */
 
 #ifdef CONFIG_BOARD_LATE_INITIALIZE
 void board_late_initialize(void) { stm32_bringup(); }

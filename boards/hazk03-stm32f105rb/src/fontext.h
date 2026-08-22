@@ -9,16 +9,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The extended font. The board reads it from the flash, and it holds the
- * letters that the ASCII table does not carry.
- *
- * Note: the font of 5x7 in the firmware stays the fallback. A board with an
- * empty flash thus keeps a legible display.
- *
- * The cell has 10 rows for a letter of 7 rows. Two rows above the letter carry
- * a mark such as an acute, and one row below carries a mark such as an
- * ogonek. Thus a letter keeps its full height, and a mark needs no space
- * inside the letter.
+/* The extended font, read from the flash, holding what ASCII does not. The
+ * 5x7 font of the firmware is the fallback. Its cell is 10 rows for a letter
+ * of 7: two above for an acute, one below for an ogonek.
  */
 
 #define FONTEXT_MAGIC 0x31464754u /* "TGF1", little-endian */
@@ -33,11 +26,9 @@
 #define FONTEXT_ASCENT 2
 #define FONTEXT_ADVANCE (FONTEXT_WIDTH + 1)
 
-/* The file holds this header, and then one entry for each character. The
- * entries go up by their code point, thus a search divides the range.
- *
- * Each entry is one code point of 2 bytes, and then one column of 2 bytes for
- * each column of the cell. Bit 0 of a column is the row at the top.
+/* This header, then an entry per character ordered by code point so a search
+ * divides the range. An entry is [code point u16] then a u16 per column, bit
+ * 0 the top row.
  */
 
 #define FONTEXT_HEADER_LEN 12
@@ -47,48 +38,22 @@
 
 #define FONTEXT_MAX_GLYPHS 128
 
-/****************************************************************************
- * Name: fontext_load
- *
- * Description:
- *   Read the extended font from a file into memory.
- *
- *   Note: a file that is absent, too large or not a font gives a negative
- *   value. The renderer then uses the font of the firmware alone.
- *
- ****************************************************************************/
+/* Read the extended font from a file. Negative when it is absent, too large
+ * or not a font, and the renderer then uses the firmware's own.
+ */
 
 int fontext_load(const char *path);
 
-/****************************************************************************
- * Name: fontext_next
- *
- * Description:
- *   Take one character from a text in UTF-8, and give its columns.
- *   Give the count of the bytes that the character takes.
- *
- *   The function looks in the extended font first. A character that is absent
- *   there and inside the ASCII table comes from the font of the firmware. Any
- *   other character gives the columns of the space.
- *
- *   Note: the columns are those of the cell of FONTEXT_ROWS rows. The caller
- *   draws the row 0 at FONTEXT_ASCENT rows above the top of the letter.
- *
- ****************************************************************************/
+/* Take one UTF-8 character and give its columns and its length in bytes. The
+ * extended font first, then the firmware's for ASCII, then the space. Row 0
+ * of the cell draws FONTEXT_ASCENT rows above the top of the letter.
+ */
 
 size_t fontext_next(const char *s, size_t len, const uint16_t **cols);
 
-/****************************************************************************
- * Name: fontext_width, fontext_rows, fontext_ascent, fontext_advance
- *
- * Description:
- *   Give the cell of the font in use. A font from the flash carries its own
- *   cell, thus a compact font gives two lines on a panel of 14 rows.
- *
- *   Note: without such a font these give the cell of the font of the
- *   firmware.
- *
- ****************************************************************************/
+/* The cell of the font in use, or the firmware's without one from the flash.
+ * A font carries its own cell, thus a compact one gives two lines on 14 rows.
+ */
 
 int fontext_width(void);
 int fontext_rows(void);

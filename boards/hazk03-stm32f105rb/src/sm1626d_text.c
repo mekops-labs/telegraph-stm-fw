@@ -1,12 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The text renderer of the dot-matrix panels.
- *
- * Note: this file is separate from the driver. Thus a build without text
- * pays no flash for the font.
- *
- * Note: the text is in UTF-8. The extended font gives the letters outside the
- * ASCII table, and the font of the firmware gives the others.
+/* The text renderer of the panels, separate from the driver so a build with
+ * no text pays no flash for the font. The text is UTF-8, the extended font
+ * giving what ASCII does not.
  */
 
 #include <nuttx/config.h>

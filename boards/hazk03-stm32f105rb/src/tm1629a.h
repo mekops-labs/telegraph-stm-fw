@@ -12,15 +12,9 @@
 
 #define TM1629A_NDIGITS 12
 
-/****************************************************************************
- * Name: tm1629a_init
- *
- * Description:
- *   Set the pins to their idle levels.
- *   Clear the display.
- *   Set the brightness. Permitted values are 0 to 7.
- *
- ****************************************************************************/
+/* Set the pins to their idle levels, clear the display, and set the
+ * brightness, which takes 0 to 7.
+ */
 
 void tm1629a_init(uint8_t brightness);
 
@@ -32,11 +26,8 @@ void tm1629a_init(uint8_t brightness);
 
 void tm1629a_setbrightness(uint8_t level, bool on);
 
-/* Put a segment mask or a character into the framebuffer. In the mask, bit 0
- * is segment A and bit 6 is segment G.
- *
- * Note: these two functions do not write to the hardware. The function
- * tm1629a_flush() writes the framebuffer to the part.
+/* Put a segment mask or a character into the framebuffer, bit 0 segment A and
+ * bit 6 segment G. tm1629a_flush() is what writes it to the part.
  */
 
 void tm1629a_setraw(uint8_t digit, uint8_t segments);

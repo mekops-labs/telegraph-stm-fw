@@ -1,14 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* TM1629A 7-segment driver. The interface is a 3-wire serial bus with STB,
- * CLK and DIO. The bus sends the least significant bit first.
- *
- * Note: the wiring puts the segments of one digit at different controller
- * addresses. Segment N of every digit uses address N*2. Digits in the upper
- * bit half add 1 to that address. The digit selects one bit at the address.
- *
- * Note: the function tm1629a_setraw() does this distribution. The framebuffer
- * holds a copy of the controller memory. The flush function writes all of it.
+/* TM1629A 7-segment driver on a 3-wire bus, least significant bit first. The
+ * wiring scatters the segments of one digit across addresses — segment N at
+ * N*2, plus 1 in the upper half — which tm1629a_setraw() undoes.
  */
 
 #include <nuttx/config.h>

@@ -1,18 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* DS3231 on a bus in software.
- *
- * Note: the pins PC6 and PC7 have no connection to an I2C peripheral on this
- * part. Thus the board gives the pin functions to the generic software bus
- * master. The board then gives that bus to the standard DS3231 driver.
- *
- * Note: this driver gives the time to the system clock. The system reads the
- * RTC at start-up. A call to clock_settime() writes the RTC. The `date -s`
- * command at the shell makes that call.
- *
- * Note: the two lines are open-drain against the pull-up resistors on the
- * board. A high level releases the wire. It does not drive the wire. Thus the
- * device can acknowledge and hold the clock.
+/* DS3231 on a bus in software: PC6 and PC7 reach no I2C peripheral on this
+ * part, thus the board supplies the pins to the generic master and hands that
+ * bus to the standard driver. The lines are open-drain against pull-ups.
  */
 
 #include <nuttx/config.h>
@@ -73,30 +63,15 @@ static struct i2c_bitbang_lower_dev_s g_i2c_lower = {
  * Public Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: up_rtc_initialize
- *
- * Description:
- *   Do nothing.
- *
- *   Note: the clock initialisation calls this function very early. At that
- *   time the software bus is not available. Thus the function
- *   hazk03_rtc_initialize() does the true initialisation later.
- *
- ****************************************************************************/
+/* Nothing: this runs before the software bus exists, and
+ * hazk03_rtc_initialize() does the work later.
+ */
 
 int up_rtc_initialize(void) { return OK; }
 
-/****************************************************************************
- * Name: hazk03_rtc_initialize
- *
- * Description:
- *   Start the software bus. Then attach the DS3231 to that bus.
- *
- *   Note: the function returns the bus. The caller uses the bus for the other
- *   registers of the device.
- *
- ****************************************************************************/
+/* Start the software bus and attach the DS3231 to it. The bus comes back for
+ * the other registers of the device.
+ */
 
 struct i2c_master_s *hazk03_rtc_initialize(void) {
     struct i2c_master_s *i2c;

@@ -19,20 +19,10 @@
  * Private Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: hazk03_jtag_reclaim
- *
- * Description:
- *   Release PA13 for use as the serial data line of the sub-screen.
- *
- *   Note: after a reset, PA13 is the SWDIO signal. The debug port keeps that
- *   pin until this function changes the JTAG and SWD configuration. The GPIO
- *   configuration alone has no effect on this.
- *
- *   Note: after this function runs, a hardware debugger cannot connect. A
- *   reset makes the debug port available again.
- *
- ****************************************************************************/
+/* Release PA13 for the data line of the sub-screen. It is SWDIO after a reset
+ * and the debug port holds it until the JTAG configuration changes, which a
+ * GPIO configuration alone does not do. A debugger cannot attach after this.
+ */
 
 static void hazk03_jtag_reclaim(void) {
     uint32_t regval;

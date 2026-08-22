@@ -19,13 +19,9 @@
 
 /* Clocking *****************************************************************/
 
-/* The board carries a crystal of 25 MHz. Two clock trees are available, and
- * CONFIG_HAZK03_CLOCK_HSE selects between them.
- *
- * Note: the connectivity-line clock code in arch/arm/src/stm32 always drives
- * the PLL from PREDIV1, and it waits for each PLL without a limit. Thus this
- * board supplies a custom stm32_board_clockconfig() function, which gives up
- * and keeps the internal oscillator when a PLL does not lock.
+/* A crystal of 25 MHz, and CONFIG_HAZK03_CLOCK_HSE selects between two clock
+ * trees. The connectivity-line code waits for a PLL without a limit, thus
+ * this board supplies its own stm32_board_clockconfig() that gives up.
  */
 
 #define STM32_BOARD_XTAL 25000000ul
@@ -37,15 +33,9 @@
 
 #ifdef CONFIG_HAZK03_CLOCK_HSE
 
-/* The crystal path gives 72 MHz, and a clock of 48 MHz for the USB host.
- *
- * The crystal of 25 MHz goes to PREDIV2 with a divider of 5, thus 5 MHz.
- * PLL2 multiplies that by 8, thus 40 MHz. PREDIV1 takes PLL2 with a divider
- * of 5, thus 8 MHz. The main PLL multiplies that by 9, thus 72 MHz.
- *
- * Note: the USB host needs exactly 48 MHz, and the OTG prescaler takes the
- * PLL oscillator at three times SYSCLK and divides it by 3. Thus 72 MHz is
- * the only SYSCLK that serves both the core and USB.
+/* The crystal path: 25 MHz / 5 -> PLL2 x8 -> / 5 -> PLL x9, thus 72 MHz. The
+ * USB host needs exactly 48 MHz and its prescaler divides by 3, thus 72 MHz
+ * is the only SYSCLK serving both the core and USB.
  */
 
 #define STM32_PLL_PREDIV2 RCC_CFGR2_PREDIV2d5
@@ -66,15 +56,9 @@
 
 #else
 
-/* The internal oscillator gives 36 MHz, and no clock for the USB host.
- *
- * The HSI of 8 MHz goes through a fixed divider of 2, thus 4 MHz. The main
- * PLL multiplies that by 9, thus 36 MHz.
- *
- * Note: 36 MHz is the maximum SYSCLK from this source. The divider before the
- * PLL is fixed, and x9 is the largest multiplier on this part.
- *
- * Note: PLL2 and PLL3 stay off. These two PLLs only condition the crystal.
+/* The internal oscillator: 8 MHz / 2 -> PLL x9, thus 36 MHz and no USB clock.
+ * That is its maximum, since the divider is fixed and x9 the largest
+ * multiplier. PLL2 and PLL3 stay off, as they condition the crystal alone.
  */
 
 #define STM32_PLL_PLLMUL RCC_CFGR_PLLMUL_CLKx9
@@ -135,26 +119,18 @@
 #define GPIO_USART1_TX GPIO_USART1_TX_0
 #define GPIO_USART1_RX GPIO_USART1_RX_0
 
-/* SPI1 uses PA5 for SCK, PA6 for MISO and PA7 for MOSI. The bus carries the
- * W25Q32 flash.
- *
- * Note: the chip-select line is PA4, and the board drives it as a GPIO. Thus
- * the NSS signal of the peripheral stays unused.
- *
- * Note: SPI2 is not available for this function. Its pins PB13 and PB15 carry
- * the output-enable and the data of the main panel.
+/* SPI1 carries the W25Q32: PA5 SCK, PA6 MISO, PA7 MOSI, and PA4 as a GPIO
+ * chip select, thus NSS stays unused. SPI2 is unavailable here, its PB13 and
+ * PB15 carrying the output-enable and the data of the main panel.
  */
 
 #define GPIO_SPI1_SCK GPIO_SPI1_SCK_0
 #define GPIO_SPI1_MISO GPIO_SPI1_MISO_0
 #define GPIO_SPI1_MOSI GPIO_SPI1_MOSI_0
 
-/* The OTG FS peripheral uses PA11 for D- and PA12 for D+.
- *
- * Note: the peripheral also has a VBUS input on PA9 and an identifier line on
- * PA10, and those two pins carry the UART of the edge MCU. A host takes the
- * identifier from its role and the core takes an internal VBUS state, thus
- * neither pin belongs to this peripheral here.
+/* OTG FS uses PA11 for D- and PA12 for D+. Its VBUS and identifier pins carry
+ * the UART of the edge MCU instead: a host takes the identifier from its role
+ * and the core takes an internal VBUS state.
  */
 
 #define GPIO_OTGFS_DM GPIO_OTGFS_DM_0

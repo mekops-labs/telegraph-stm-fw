@@ -48,13 +48,9 @@
 
 #define BRIGHTNESS 4
 
-/* The time of one row. Both panels take the same row in one pass, thus one
- * full image takes 16 of these.
- *
- * Note: the rate of the row events is the limit of this board, and not the
- * work in each one. Above near 1250 events each second the UART loses bytes
- * at 460800 baud, because an interrupt and a change of thread each hold the
- * other interrupts for a time.
+/* The time of one row; a full image takes 16. The rate of the events is the
+ * limit, not the work in one: above about 1250 each second the UART loses
+ * bytes. Refer to docs/display-scan.md.
  */
 
 #define ROW_US 800
@@ -64,16 +60,9 @@
  * which is 21.7 us at 460800 baud. Thus the link keeps its bytes.
  */
 
-/* The thread that sends the rows runs BELOW the task of the protocol.
- *
- * Note: the opposite order loses frames of the protocol. The task of the
- * protocol then waits behind every row, its receive buffer fills, and the
- * bytes of a burst go past its end. Measured with the rows above that task,
- * a burst of 200 frames delivered none of them.
- *
- * Note: the cost of this order is a row that comes late while the protocol
- * holds the CPU. That shows as a short flicker, and a lost frame does not
- * repair itself.
+/* The rows run below the task of the protocol: the other order fills its
+ * receive buffer and loses a burst whole. The price is a flicker, which
+ * repairs itself. Refer to docs/display-scan.md.
  */
 
 #define SHIFT_PRIORITY 95
@@ -83,12 +72,8 @@
 
 #define DISPLAY_TIMER 3
 
-/* The thread of the board runs at this period. It moves the animations, and
- * it keeps the digits when the second of the clock changes.
- *
- * Note: the digits follow the clock itself, read fresh on every wait. A wait
- * takes at least its period and often more, so this is what keeps a long
- * iteration from costing the digits a second.
+/* The period of the thread of the board. The digits follow the clock read
+ * fresh on every wait, since a count of the waits drifts.
  */
 
 #define TICK_MS 20
@@ -114,10 +99,8 @@
 
 #define TEXT_SCROLL_GAP_CHARS 3
 
-/* The most lines a wrapped text takes, bounded so that its rendered bitmap
- * never exceeds ANIM_SRC_MAIN: at a 70-px panel and this font's shortest
- * possible line height (7 rows, the compact font), 7 lines plus one gap
- * line is 504 of the 512 bytes the source buffer holds.
+/* The most lines a wrapped text takes, so its bitmap fits ANIM_SRC_MAIN: at
+ * 70 px and a 7-row line, eight lines are 504 of its 512 bytes.
  */
 
 #define TEXT_WRAP_MAX_LINES 7
@@ -138,12 +121,8 @@
 
 #define DISPLAY_STACKSIZE 1024
 
-/* This priority is less than the priority of the shell.
- *
- * Note: the scan loop is a wait loop. It has no point to stop at. A thread
- * above the shell thus stops the shell fully. The shell waits for console
- * input almost all of the time. Thus the scan loop gets the necessary CPU
- * time.
+/* Below the shell: the scan is a wait loop with no point to stop at, thus a
+ * thread above the shell would stop it outright.
  */
 
 #define DISPLAY_PRIORITY 90
@@ -175,11 +154,8 @@ static volatile int g_slot;
 static sem_t g_rowsem = SEM_INITIALIZER(0);
 static volatile uint32_t g_frames;
 
-/* The minutes of the local time from UTC. The RTC keeps UTC, thus this value
- * changes the panels only.
- *
- * Note: the device has no store for this value. Thus the edge MCU sends it
- * again after each reset of this board.
+/* The minutes of the local time from UTC, which changes the panels alone. The
+ * board has no store for it, thus the edge MCU sends it after each reset.
  */
 
 static int16_t g_utcoffset;
@@ -398,11 +374,8 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
     nxmutex_unlock(&g_fblock);
 }
 
-/* Put one step of an animation on its rectangle.
- *
- * Note: the window takes its pixels from the source and returns to the start
- * at the end of that source. Thus the message repeats without a gap in the
- * code that moves it.
+/* Put one step of an animation on its rectangle. The window wraps at the end
+ * of the source, thus the message repeats with no special case.
  */
 
 static void anim_draw(struct sm1626d_dev_s *dev, struct display_anim_s *a) {
@@ -474,13 +447,9 @@ static void anim_tick(void) {
     }
 }
 
-/* Break s into lines of at most maxw pixels, breaking at a space where one
- * is available. A single word wider than maxw breaks mid-word, at the last
- * character that still fits. Returns the line count, at most maxlines.
- *
- * Note: a caller that finds the returned count below the count the text
- * needs has lost the remainder of the text, the same way a too-long source
- * elsewhere in this file is capped rather than rejected.
+/* Break s into lines of at most maxw pixels, at a space where there is one
+ * and mid-word otherwise. Returns the line count, at most maxlines; a text
+ * needing more has lost its remainder.
  */
 
 static int wrap_text(const char *s, size_t len, int maxw, size_t *starts,
@@ -554,11 +523,8 @@ static void draw_line_at(struct sm1626d_dev_s *dev, const char *s, size_t len,
     sm1626d_drawtext(dev, x, ytop + fontext_ascent(), s, len);
 }
 
-/* Draw a text on one panel, or start it scrolling if the text does not fit.
- *
- * A caller that wants the fixed truncating draw calls draw_text() directly.
- * A board default and an IPC text both go through this one instead, so a
- * long boot version scrolls the same way a long IPC text does.
+/* Draw a text on one panel, or scroll it when it does not fit. draw_text()
+ * is the fixed truncating draw for a caller that wants one.
  */
 
 static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
@@ -700,15 +666,9 @@ static void show_time(const struct tm *t, int16_t temp) {
     tm1629a_flush();
 }
 
-/* The scan of one row, from the timer.
- *
- * Note: this runs in an interrupt. The work is the transfer of one row, and
- * the wait between the rows costs no CPU. Thus the tasks of the board keep
- * the time that the earlier loop took for its wait.
- *
- * Note: the lock of the framebuffer is a mutex, and an interrupt takes no
- * mutex. A writer of the framebuffer thus stops this timer around its change,
- * and a scan pass never gives a partial image.
+/* The scan of one row, in an interrupt. An interrupt takes no mutex, thus a
+ * writer of the framebuffer stops this timer around its change and a pass
+ * never gives a partial image. Refer to docs/display-scan.md.
  */
 
 static int display_ontimer(int irq, void *context, void *arg) {
@@ -802,14 +762,8 @@ static int display_scanner(int argc, char *argv[]) {
             struct tm tm;
             time_t now;
 
-            /* Read the system clock. The DS3231 with the battery keeps that
-             * clock. Thus this step uses no bus. Only the temperature uses the
-             * bus.
-             *
-             * Note: the clock of the panel comes from this value and not from a
-             * count of the waits. A wait takes at least its time and often
-             * more, thus a count of them drifts and the digits then miss a
-             * second from time to time.
+            /* The battery-backed DS3231 keeps this clock, thus reading it
+             * uses no bus. Only the temperature does.
              */
 
             now = time(NULL);
@@ -984,10 +938,8 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
             return -E2BIG;
         }
 
-        /* A window left at 0/0 takes the frame size from the file: the frame
-         * width is the file's step, the frame height is the file's height.
-         * This is what stops a window wider than one frame from showing part
-         * of the next one beside it.
+        /* A window left at 0/0 takes its frame size from the file, which
+         * stops one wider than a frame showing part of the next.
          */
 
         if (w == 0) {
@@ -1011,11 +963,8 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
             return ret;
         }
     } else if (text) {
-        /* The board draws the text itself. Thus a message that scrolls costs
-         * one frame of the protocol, and not one frame for each step.
-         *
-         * The source wraps at its own end back to its own start. A gap of
-         * blank columns after the text keeps the wrap from reading as the
+        /* The board draws the text, thus a scroll costs one frame and not
+         * one per step. The blank gap keeps the wrap from reading as the
          * text running into itself.
          */
 

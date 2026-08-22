@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* Board support for SPI1. The bus carries the W25Q32 flash alone.
- *
- * Note: the driver of the bus calls the select function for each transfer.
- * Thus the chip-select line is a GPIO, and not the NSS signal of the
- * peripheral.
+/* Board support for SPI1, which carries the W25Q32 alone. The bus driver
+ * calls the select per transfer, thus the chip select is a GPIO.
  */
 
 #include <nuttx/config.h>
@@ -35,16 +32,9 @@
 
 void stm32_spidev_initialize(void) { stm32_configgpio(GPIO_W25_CS); }
 
-/****************************************************************************
- * Name: stm32_spi1select
- *
- * Description:
- *   Drive the chip-select line of one device on the bus.
- *
- *   Note: the line is active low, thus the level is the opposite of the
- *   argument.
- *
- ****************************************************************************/
+/* Drive the chip-select line of one device. It is active low, thus the level
+ * is the opposite of the argument.
+ */
 
 void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid, bool selected) {
     if (devid == SPIDEV_FLASH(0)) {

@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The logs of every wapp, over HTTP.
- *
- * Note: a board of a deployment has no console. This wapp takes a log mount of
- * the engine and a listening socket, thus what a wapp printed is readable from
- * the network.
+/* The logs of every wapp over HTTP: a log mount of the engine and a listening
+ * socket, thus a board with no console is still readable.
  */
 
 #include <dirent.h>

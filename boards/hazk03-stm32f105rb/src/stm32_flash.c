@@ -1,12 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The W25Q32 serial flash on SPI1.
- *
- * Note: the driver of the part is in the NuttX tree. This file gives only the
- * connection to the bus and the layout of the partitions.
- *
- * Note: the driver reads the identification of the part. Thus a failure here
- * shows a fault of the bus or an absent device.
+/* The W25Q32 serial flash on SPI1: the connection to the bus and the layout
+ * of the partitions. The driver reads the identification of the part, thus a
+ * failure here is a fault of the bus or an absent device.
  */
 
 #include <nuttx/config.h>
@@ -63,21 +59,14 @@
 
 #define CONFIG_BLOCK(n) ((n) * W25_BLOCKS_PER_SECTOR)
 
-/* The version of the layout. A new field takes the next value.
- *
- * Note: the fields of the settings only join the end of the structure. Thus
- * the settings of an older record are the first bytes of the newer structure,
- * and the board reads that record without a loss.
+/* The version of the layout. A field joins the end of the structure alone,
+ * thus an older record is the first bytes of the newer one and reads whole.
  */
 
 #define CONFIG_VERSION 1u
 
-/* The header of a record:
- *
- *   [magic u32] [sequence u32] [version u16] [length u16] [the settings]
- *
- * The check value comes after the settings, thus its place depends on that
- * length. It covers every byte before it.
+/* A record: [magic u32] [sequence u32] [version u16] [length u16] [settings],
+ * then the check value, which covers every byte before it.
  */
 
 #define CONFIG_OFF_MAGIC 0u
@@ -116,12 +105,8 @@ static bool g_config_valid;
  * Private Functions
  ****************************************************************************/
 
-/* Read one record. Give its sequence number and its settings.
- *
- * Note: a record of an older version carries fewer bytes than the structure
- * of this firmware. The settings that it does carry go over the defaults, and
- * the fields that it lacks keep those defaults. Thus a step of the firmware
- * loses no setting.
+/* Read one record, giving its sequence and its settings. What an older record
+ * carries goes over the defaults and what it lacks keeps them.
  */
 
 static bool config_read_slot(int slot, uint32_t *seq,
@@ -174,14 +159,9 @@ static bool config_read_slot(int slot, uint32_t *seq,
 }
 
 #ifdef CONFIG_FS_SMARTFS
-/* Make an empty file system on the partition of the assets.
- *
- * Note: the utility mksmartfs does this work, and it is an application. The
- * configuration for the protocol carries no application, thus this function
- * gives the same steps through the driver alone.
- *
- * Note: a new board reaches this path one time. The partition then holds a
- * file system, and the mount at each start after that one finds it.
+/* Make an empty file system on the assets. mksmartfs is an application and
+ * the protocol configuration carries none, thus these are its steps through
+ * the driver. A board reaches this once.
  */
 
 static int config_format_assets(void) {

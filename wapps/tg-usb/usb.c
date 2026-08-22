@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The USB port of the board over HTTP.
- *
- * Note: the board owns the port; this wapp reaches it through the broker. A
- * serial device becomes a channel a client writes to and reads from, and a
- * mass storage device becomes a file tree under the media root.
+/* The USB port of the board over HTTP, reached through the broker. A serial
+ * device becomes a channel, and a mass storage device a file tree.
  */
 
 #include <errno.h>

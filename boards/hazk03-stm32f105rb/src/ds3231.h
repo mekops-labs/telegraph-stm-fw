@@ -9,16 +9,9 @@
 
 #include <nuttx/i2c/i2c_master.h>
 
-/****************************************************************************
- * Name: ds3231_temperature
- *
- * Description:
- *   Read the temperature sensor. The unit is tenths of a degree Celsius.
- *
- *   Note: the standard DS3231 RTC driver keeps the time and the date. Only
- *   these temperature registers stay with the board.
- *
- ****************************************************************************/
+/* Read the temperature sensor, in tenths of a degree Celsius. The standard
+ * driver keeps the time and the date; these registers stay with the board.
+ */
 
 int ds3231_temperature(struct i2c_master_s *i2c, int16_t *out);
 

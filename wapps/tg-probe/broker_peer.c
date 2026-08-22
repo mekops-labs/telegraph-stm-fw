@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* A peer of the broker that proves the two pipes carry a request, its reply
- * and a frame that no request asked for.
- *
- * Note: this wapp reaches no hardware. It exercises the broker alone, thus it
- * runs on a host build of the engine as well as on the device.
+/* A peer proving the pipes carry a request, its reply and an unsolicited
+ * frame. It reaches no hardware, thus it runs on a host build too.
  */
 
 #include <errno.h>

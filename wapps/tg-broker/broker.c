@@ -31,11 +31,8 @@
 #define PORT_DEFAULT "1"
 #define PORT_MAX 8
 
-/* The loop sleeps this long after a pass that did no work.
- *
- * Note: a sleep shorter than the tick of the system does not yield on every
- * platform. The value stays at or above the 10 ms tick of the edge MCU, or
- * the loop takes a whole processor and the watchdog of the system fires.
+/* The sleep after a pass that did no work. At or above the 10 ms tick of the
+ * edge MCU, since a shorter one does not yield there.
  */
 
 #define IDLE_SLEEP_US 10000u
@@ -55,11 +52,8 @@
 
 #define PUSH_MAX 4u
 
-/* The peers of the device, and the frames each of them follows.
- *
- * Note: the desired state of the control plane carries no arguments, thus a
- * launch that names none takes this set. The device has a fixed set of wapps,
- * and this is it.
+/* The peers of the device and the frames each follows, taken by a launch that
+ * names none.
  */
 
 static const char *const g_defaultPeers[] = {
@@ -524,11 +518,9 @@ static bool pump_peers(void) {
     return worked;
 }
 
-/* Send a request again, and fail it after the last attempt.
- *
- * Note: the link loses about one frame in ten thousand, and such a loss
- * carries no error of its own. Thus a reply that never arrives is a retry and
- * not a fault of the peer.
+/* Send a request again, failing it after the last attempt. The link loses
+ * about one frame in ten thousand with no error of its own, thus a missing
+ * reply is a retry and not a fault of the peer.
  */
 
 static void check_timeout(void) {

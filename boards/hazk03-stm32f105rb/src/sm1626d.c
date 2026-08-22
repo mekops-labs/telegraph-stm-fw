@@ -1,17 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* SM1626D dot-matrix driver.
- *
- * Two coordinate changes are between the logical pixels and the panel. Keep
- * both of them. An error in one of them gives a mirrored or a moved image.
- *
- * The two coordinate changes are:
- *
- *   - X: the wiring of each 16-bit shift register is in the opposite
- *     direction. Thus the driver turns the position of a pixel in its own
- *     16-column block end for end.
- *   - Y: the sub-screen uses the scan rows 0 and 1. Thus the driver moves
- *     every logical row down by two rows.
+/* SM1626D dot-matrix driver. Two coordinate changes sit between the logical
+ * pixels and the panel and are load-bearing: X reverses a pixel within its
+ * 16-column block, and Y moves every row down by two.
  */
 
 #include <nuttx/config.h>
@@ -43,19 +34,13 @@
 
 #define SM_COLBITS(w) (((w) > 32) ? 80 : 32)
 
-/* The on-time of each level, in sixteenths of the row time.
- *
- * Note: the TM1629A gives these same fractions to the digits. Thus one level
- * makes the panels and the digits equally bright. The level 7 is the full row
- * time, because the panels have no other source of light.
+/* The on-time of each level, in sixteenths of the row time. The TM1629A gives
+ * the digits the same fractions, thus one level means one brightness.
  */
 
-/* The transfer of one row uses direct writes to the set-reset register. The
- * function stm32_gpiowrite() is too slow here: it costs near 2 us for each
- * bit, thus a row takes longer than its own on-time.
- *
- * Note: the shared lines are on port B. Only the data input of the sub-screen
- * is on port A.
+/* A row transfers through direct writes to the set-reset register:
+ * stm32_gpiowrite() costs near 2 us a bit, longer than the row's own on-time.
+ * The shared lines are on port B, and the sub-screen's data on port A.
  */
 
 #define SM_BSRR_SET(pin) (1ul << (pin))
@@ -210,12 +195,9 @@ void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on) {
     }
 }
 
-/* The output-enable signal is active low. Both panels share it.
- *
- * Note: this function blanks the panels at the end of each row. Without that
- * step, the last row stays on until the next scan. The time for one row is
- * only 200 us. Thus a short delay makes that one row much brighter than the
- * others.
+/* The output-enable is active low and shared. Blanking at the end of a row is
+ * what keeps the last row from staying lit into the gap, which at 200 us a
+ * row makes it visibly brighter than the rest.
  */
 
 /* Send one bit to both panels. They share the clock, thus one pass fills the

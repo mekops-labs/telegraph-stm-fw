@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The names of the assets in the flash.
- *
- * Note: the board keeps each kind of asset in one place, and it takes one
- * format for each kind. Thus the edge MCU names an asset alone, and this file
- * gives the full path of that name.
+/* The names of the assets in the flash. Each kind sits in one place in one
+ * format, thus the edge MCU names an asset and this gives its full path.
  */
 
 #include <nuttx/config.h>

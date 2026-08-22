@@ -19,15 +19,9 @@
 #define FONT5X7_FIRST 0x20
 #define FONT5X7_LAST 0x7e
 
-/****************************************************************************
- * Name: font5x7_glyph
- *
- * Description:
- *   Give the 5 columns of one character. Bit 0 is the row at the top.
- *
- *   Note: a character outside the range gives the columns of the space.
- *
- ****************************************************************************/
+/* The 5 columns of one character, bit 0 the top row. A character outside the
+ * range gives the columns of the space.
+ */
 
 const uint8_t *font5x7_glyph(char c);
 

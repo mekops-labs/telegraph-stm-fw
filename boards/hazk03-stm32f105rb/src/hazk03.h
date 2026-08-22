@@ -75,24 +75,17 @@
     (GPIO_OUTPUT | GPIO_CNF_OUTOD | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
      GPIO_PORTC | GPIO_PIN7)
 
-/* Winbond W25Q32 serial flash, 4 MB, on SPI1. The peripheral drives PA5, PA6
- * and PA7. The chip-select line is a GPIO, because the driver of the bus
- * controls it for each transfer.
- *
- * Note: the idle level of the chip-select line is high.
+/* Winbond W25Q32, 4 MB, on SPI1 with PA5, PA6 and PA7. The chip select is a
+ * GPIO the bus driver controls per transfer, and its idle level is high.
  */
 
 #define GPIO_W25_CS                                                            \
     (GPIO_OUTPUT | GPIO_CNF_OUTPP | GPIO_MODE_50MHz | GPIO_OUTPUT_SET |        \
      GPIO_PORTA | GPIO_PIN4)
 
-/* The layout of the flash. One erase sector is 4096 bytes.
- *
- * The first two sectors keep the settings of the board. The sectors that come
- * after them keep the fonts, the icons and the animations.
- *
- * Note: the driver of the flash gives blocks of 256 bytes, thus one erase
- * sector is 16 blocks. The partitions use the block as their unit.
+/* The layout of the flash: two sectors of settings, then the fonts, icons and
+ * animations. An erase sector is 4096 bytes and the driver gives blocks of
+ * 256, thus the partitions count in blocks.
  */
 
 #define W25_BLOCKS_PER_SECTOR 16
@@ -152,12 +145,9 @@ int hazk03_flash_initialize(void);
 
 #define HAZK03_SLEEP_OFF 0xffffu
 
-/* The settings that the board keeps through a loss of power.
- *
- * Note: a new field joins the end of this structure, and it never joins the
- * middle of it. The store then reads a record of an older firmware as the
- * first bytes of this structure, and the new field keeps its default. Thus a
- * step of the firmware loses no setting.
+/* The settings the board keeps through a loss of power. A field joins the end
+ * of this structure alone, thus an older record reads as its first bytes and
+ * the new field keeps its default.
  */
 
 struct hazk03_config_s {
@@ -169,11 +159,9 @@ struct hazk03_config_s {
     uint16_t wakemin;   /* Minute of the day that starts it again      */
 };
 
-/* The settings of a board with an empty store. A record that lacks a field
- * takes its value from here.
- *
- * Note: a default of zero is wrong for some fields. The minute that stops the
- * display is one of them, because zero is midnight.
+/* The settings of an empty store, and what a record lacking a field takes.
+ * Zero is wrong for some of them: it is midnight for the minute that stops
+ * the display.
  */
 
 #define HAZK03_CONFIG_DEFAULTS                                                 \

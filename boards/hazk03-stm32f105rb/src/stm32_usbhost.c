@@ -61,25 +61,14 @@ static struct usbhost_connection_s *g_usbconn;
  * Private Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: usbhost_waiter
- *
- * Description:
- *   Enumerate each device that arrives on the root port. The class driver of
- *   the device then registers its own node under /dev.
- *
- ****************************************************************************/
+/* Enumerate each device arriving on the root port; its class driver then
+ * registers a node under /dev.
+ */
 
 #ifdef CONFIG_USBHOST_MSC
-/****************************************************************************
- * Name: usbhost_mount
- *
- * Description:
- *   Mount the file system of a mass storage device. The edge MCU reaches this
- *   path over the protocol, thus a build with no console still serves the
- *   device.
- *
- ****************************************************************************/
+/* Mount the file system of a mass storage device. The edge MCU reaches this
+ * path over the protocol, thus a build with no console still serves it.
+ */
 
 static void usbhost_mount(void) {
     for (int i = 0; i < USBHOST_MOUNT_TRIES; i++) {

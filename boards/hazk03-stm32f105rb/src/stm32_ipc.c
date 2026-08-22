@@ -70,11 +70,8 @@
 
 #define IPC_TEXT_MAX 64
 
-/* A stat of one entry of a list takes the directory, a separator and the name
- * of the entry.
- *
- * Note: a name longer than this value gives a size of 0 in the reply, because
- * the stat of the truncated path fails. SmartFS holds 32 characters.
+/* A stat of a listed entry takes the directory, a separator and the name. A
+ * longer name reports a size of 0, its truncated path failing to stat.
  */
 
 #define IPC_FS_NAME_MAX 64
@@ -735,11 +732,8 @@ static void ipc_fs_mkdir(struct ipc_ctx_s *ctx,
 }
 
 /* cppcheck-suppress constParameterPointer
- * The function writes through path via the alias strrchr() returns, which
- * cppcheck does not trace back to this parameter. A const path would still
- * compile, because the standard strrchr() prototype returns a non-const
- * char* regardless of its own argument's constness, but path is genuinely
- * mutated here.
+ * The function writes through the alias strrchr() returns, which cppcheck
+ * does not trace back to this parameter; path is genuinely mutated.
  */
 
 static void ipc_asset_mkdir(char *path) {
@@ -891,16 +885,9 @@ static void ipc_usb_devpath(char *path, size_t size, uint8_t channel) {
     snprintf(path, size, IPC_USB_DEVFMT, channel);
 }
 
-/* Wait on one channel, and give what it sends to the ring.
- *
- * Note: the class of the USB host takes one packet from the device for each run
- * of its own work, and it schedules that work again after a delay of at least
- * one tick. A read that waits replaces that delay with immediate work, thus the
- * host asks the device for a packet as fast as the device fills one. A reader
- * that cannot wait leaves the delay in place, and a device that talks faster
- * than the delay allows then drops what it cannot hand over. Thus this task
- * exists: the server of the protocol serves the link, and it can never wait
- * here.
+/* Wait on one channel and give what it sends to the ring. A read that waits
+ * is what keeps the host asking as fast as the device fills a packet, and the
+ * server of the protocol can never wait here. Refer to docs/usb-http.md.
  */
 
 static int ipc_chan_reader(int argc, char **argv) {

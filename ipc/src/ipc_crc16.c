@@ -6,11 +6,8 @@
  * Private Data
  ****************************************************************************/
 
-/* The table holds the CRC of each 4-bit value.
- *
- * Note: a table for 8 bits is faster, and it costs 512 bytes of flash. A loop
- * for each bit costs no flash, and it needs about 8 times more cycles. This
- * table of 32 bytes takes two steps for each byte.
+/* The CRC of each 4-bit value: 32 bytes and two steps a byte. A table for 8
+ * bits costs 512 bytes, and a loop per bit about 8 times the cycles.
  */
 
 static const uint16_t g_crc16_nibble[16] = {

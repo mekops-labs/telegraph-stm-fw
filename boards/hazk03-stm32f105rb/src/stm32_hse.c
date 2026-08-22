@@ -1,20 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* A probe of the external crystal.
- *
- * Note: the USB host of this part needs a clock of 48 MHz, and a PLL that
- * takes the HSE oscillator is the only source of it. The HSI gives at most
- * 36 MHz, because the PLL takes HSI/2 of 4 MHz and its largest multiplier on
- * this part is 9. Thus the crystal decides whether this board reaches USB.
- *
- * Note: this probe leaves the system clock on the HSI. It starts the crystal
- * and it reads the frequency, and it changes no divider. A crystal that does
- * not start thus costs nothing.
- *
- * Note: the frequency comes from the hardware and not from a marking on the
- * part. The clock output on PA8 carries the crystal, and TIM1 counts the
- * edges of that same pin while TIM2 measures the time. The pin drives its own
- * input, thus this needs no wire.
+/* A probe of the external crystal, which decides whether this board reaches
+ * USB. It leaves the system clock on the HSI and changes no divider, and the
+ * frequency is measured on PA8 rather than read from a marking.
  */
 
 #include <nuttx/config.h>
@@ -59,12 +47,8 @@
  * Private Functions
  ****************************************************************************/
 
-/* Count the edges of one clock on the output pin during the gate, and give
- * the frequency in kHz.
- *
- * Note: TIM1 samples its input at the timer clock of 36 MHz. Thus a source
- * above 18 MHz gives an alias and not its own frequency. The caller reads the
- * known sources as well, and those state where the method stops.
+/* The frequency in kHz, from the edges counted during the gate. TIM1 samples
+ * at 36 MHz, thus a source above 18 MHz aliases.
  */
 
 static uint32_t hazk03_mco_khz(uint32_t source) {
@@ -119,14 +103,9 @@ static uint32_t hazk03_mco_khz(uint32_t source) {
  * Public Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: hazk03_hse_probe
- *
- * Description:
- *   Start the external crystal and read its frequency into a text buffer.
- *   The system clock keeps the HSI in every case.
- *
- ****************************************************************************/
+/* Start the external crystal and read its frequency into a text buffer. The
+ * system clock keeps the HSI in every case.
+ */
 
 void hazk03_hse_probe(char *buf, size_t len) {
     uint32_t spins;
