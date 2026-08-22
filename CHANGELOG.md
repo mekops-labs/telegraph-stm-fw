@@ -55,6 +55,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   killed inside its loop.
 - `tg-hass` says when a reading does not arrive, which left no trace before.
 
+### Documentation
+
+- `docs/display-scan.md` carries the design of the scan of the panels: the row
+  rate the UART bounds, the priority order, and what bounds a wrapped text.
+- `docs/ipc-protocol.md` carries the reference of the framing library.
+- Every comment of the firmware states a fact in three lines at most.
+
 ### Requires
 
 - An engine whose socket read honours `O_NONBLOCK`, whose named-pipe table
