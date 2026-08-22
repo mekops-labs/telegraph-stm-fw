@@ -7,12 +7,52 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The wapp `tg-display` serves a request set of its own over a pipe pair for
+  each client, in the framing of the link: the state, text and moving text on
+  a panel, the brightness, the clock, and a clear.
+- `wapps/include/telegraph/display.h` carries that request set, and
+  `wapps/lib/dspclient.c` the client side of it; a wapp names that file in
+  `EXTRA_SRCS`.
+- The wapp `tg-rest` holds the listening socket and translates the ten HTTP
+  routes into display requests.
+- The wapp `tg-hass` publishes the board to Home Assistant over MQTT 3.1.1:
+  the discovery of the entities, the command topics, and a last will for
+  availability.
+- `tg-hass` publishes the readings of the board — the temperature, the frame,
+  CRC and resync counters of the link, and the version the STM32 reports — as
+  one document each entity reads a field of.
+- The cadence of those readings comes from a config mount at
+  `/etc/tg-hass.conf`, `interval_s=<n>`, with a floor of 5 s.
+- `wapps/tests/hass.sh` runs a broker in a container and asserts the
+  discovery, the availability, a command reaching the board, the read-back,
+  the readings and the will.
+- `make deploy` takes `BROKER=<host:port>`, and `MQTT_USER`/`MQTT_PASS` when
+  that broker asks for them.
+
+### Changed
+
+- `tg-display` holds no listening socket. The HTTP surface is `tg-rest`, and
+  the launch config of the display names its clients.
+
 ### Fixed
 
 - `tg-ota` left the target in the ROM bootloader when a flash failed, where
   nothing on the link answers and the display stays dark.
 - `tg-ota` sent the bootloader sync byte once. The first byte after a reset is
   lost often enough that one attempt does not test whether it is there.
+- `tg-ota` took the next frame as the reply of its request, thus a reply that
+  arrived after its request timed out answered the request that followed.
+- `tg-ota` re-sent a request the broker had not answered. The broker refuses a
+  request while it holds another, thus only that refusal means ask again.
+- `tg-ota` wrote the flash when it could not read the version the board runs.
+- `tg-display` and the client of the display took the next frame as their
+  reply, for the same reason as `tg-ota`.
+- `tg-display` slept below one tick of the scheduler between passes, which
+  busy-waits on the edge MCU and resets the board through its watchdog.
+- `tg-rest` returns when a stop ends the wait in `accept`, rather than being
+  killed inside its loop.
 
 ## [0.5.0] - 2026-08-09
 
