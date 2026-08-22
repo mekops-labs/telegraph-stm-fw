@@ -771,6 +771,30 @@ not on the stack of a task.
 The payload of a frame points into the buffer of the parser. The data stays
 valid only during the callback. Copy the data to keep it.
 
+### The functions
+
+| Function | What it does | Returns |
+| :--- | :--- | :--- |
+| `ipc_crc16(data, len)` | the CRC-16/CCITT-FALSE of a buffer — poly `0x1021`, init `0xffff`, no reflection, no final exclusive-or | the CRC |
+| `ipc_encode(dst, dstlen, opcode, corr_id, payload, len)` | write a full frame | its length, or a negative `IPC_ERR_*` |
+| `ipc_encode_ack(dst, dstlen, corr_id, credits)` | write an ACK, its payload the credits the receiver has left | its length, or a negative `IPC_ERR_*` |
+| `ipc_encode_nack(dst, dstlen, corr_id, error)` | write a NACK, its payload one `IPC_ERR_*` code | its length, or a negative `IPC_ERR_*` |
+| `ipc_parser_init(parser)` | set the parser empty and every count to zero | — |
+| `ipc_parser_push(parser, data, len, cb, arg)` | give the parser received bytes, in any quantity, and take one callback per accepted frame | how many were accepted |
+| `ipc_parser_timeout(parser, cb, arg)` | tell the parser the line is idle | how many were accepted |
+| `ipc_parser_pending(parser)` | whether the parser holds a partial frame | `true` or `false` |
+
+The credits of an ACK are the only flow control: the link has no RTS/CTS
+signal, and a sender with none stops until the next ACK.
+
+A bad CRC, or a `LEN` above the maximum, makes the parser drop one byte and
+hunt for the next `SOF`. Thus a false `SOF` in corrupt data delays the next
+frame without stopping the link — and `ipc_parser_timeout()` is what recovers
+the case where that false `SOF` carries a plausible `LEN`, since the parser
+would otherwise hold a good frame behind one that no sender will finish. Arm
+an idle timer while `ipc_parser_pending()` is true, and three frame times
+without a byte is enough.
+
 ### Tests
 
 ```sh

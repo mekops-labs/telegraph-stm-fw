@@ -5,7 +5,7 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-08-22
 
 ### Added
 
@@ -53,6 +53,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   busy-waits on the edge MCU and resets the board through its watchdog.
 - `tg-rest` returns when a stop ends the wait in `accept`, rather than being
   killed inside its loop.
+- `tg-hass` says when a reading does not arrive, which left no trace before.
+
+### Requires
+
+- An engine whose socket read honours `O_NONBLOCK`, whose named-pipe table
+  holds the ten pipes of this deployment, and whose registry image slot fits
+  the seven wapps of it at two versions during a rollout. Newer than 0.13.0.
 
 ## [0.5.0] - 2026-08-09
 
