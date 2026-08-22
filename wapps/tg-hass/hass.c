@@ -51,6 +51,16 @@
 #define POLL_US 10000u
 #define RECONNECT_MS 5000u
 
+/* The readings of the board. Every sample is a request that crosses the link
+ * the scan loop of the STM32 shares, thus the cadence is a load decision. The
+ * four environment variables the board allows are spent, thus it comes from a
+ * config mount.
+ */
+
+#define CONFIG_PATH "/etc/tg-hass.conf"
+#define INTERVAL_DEFAULT_S 30u
+#define INTERVAL_MIN_S 5u
+
 /* The panels hold this many characters of the compiled-in font. */
 
 #define MAIN_CHARS 40u
@@ -75,6 +85,8 @@ static const char *g_pass;
 static char g_socket_path[64];
 
 static char g_avail[TOPIC_MAX];
+static char g_state[TOPIC_MAX];
+static unsigned int g_interval_s = INTERVAL_DEFAULT_S;
 
 /****************************************************************************
  * Private Functions
@@ -96,6 +108,13 @@ static void nap(void) {
     struct timespec ts = {.tv_sec = 0, .tv_nsec = POLL_US * 1000};
 
     nanosleep(&ts, NULL);
+}
+
+static uint64_t now_ms(void) {
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000);
 }
 
 static const char *env_or(const char *name, const char *fallback) {
@@ -164,6 +183,74 @@ static void set_bright(bool digits, unsigned int level) {
 }
 
 /****************************************************************************
+ * The readings
+ ****************************************************************************/
+
+/* The cadence of the readings, from the config mount. A board with no mount
+ * keeps the default, thus the deployment names one only to change it.
+ */
+
+static void read_config(void) {
+    char buf[128];
+    int fd = open(CONFIG_PATH, O_RDONLY);
+    ssize_t n;
+    const char *key = "interval_s=";
+    const char *at;
+
+    if (fd < 0) {
+        return;
+    }
+
+    n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) {
+        return;
+    }
+
+    buf[n] = '\0';
+    at = strstr(buf, key);
+    if (at == NULL) {
+        return;
+    }
+
+    unsigned int v = (unsigned int)strtoul(at + strlen(key), NULL, 10);
+
+    g_interval_s = v < INTERVAL_MIN_S ? INTERVAL_MIN_S : v;
+}
+
+/* One reading of the board, as the document the entities read. The display
+ * answers the same state frame the REST surface serves.
+ */
+
+static void publish_state(void) {
+    char body[256];
+    const uint8_t *st = g_display.reply;
+
+    if (tg_dsp_ask(&g_display, TG_DSP_OP_GET_STATE, NULL, 0) != TG_DSP_OK ||
+        g_display.reply_op != TG_DSP_OP_STATE ||
+        g_display.reply_len < IPC_STATE_LEN) {
+        return;
+    }
+
+    unsigned int vlen = g_display.reply_len > IPC_STATE_FWVER
+                            ? g_display.reply_len - IPC_STATE_FWVER
+                            : 0;
+    int temp = (int16_t)ipc_get_u16(&st[IPC_STATE_TEMP]);
+
+    int n = snprintf(body, sizeof(body),
+                     "{\"temperature\":%d.%d,\"frames\":%u,"
+                     "\"crc_errors\":%u,\"resyncs\":%u,\"firmware\":\"%.*s\"}",
+                     temp / 10, (temp < 0 ? -temp : temp) % 10,
+                     ipc_get_u16(&st[IPC_STATE_FRAMES]),
+                     ipc_get_u16(&st[IPC_STATE_CRC_ERR]), st[IPC_STATE_RESYNC],
+                     (int)vlen, (const char *)&st[IPC_STATE_FWVER]);
+
+    if (n > 0 && (size_t)n < sizeof(body)) {
+        mqtt_publish(&g_mqtt, g_state, body, true);
+    }
+}
+
+/****************************************************************************
  * Home Assistant
  ****************************************************************************/
 
@@ -174,7 +261,9 @@ static void set_bright(bool digits, unsigned int level) {
  */
 
 static int publish_discovery(void) {
-    char doc[MQTT_BUF_MAX];
+    /* Static: a wapp holds 8 KiB of stack, and the document with every
+     * component of the device is the largest thing this wapp builds. */
+    static char doc[MQTT_BUF_MAX];
     char t[TOPIC_MAX];
     char main_cmd[TOPIC_MAX];
     char main_stat[TOPIC_MAX];
@@ -211,10 +300,33 @@ static int publish_discovery(void) {
         "\"uniq_id\":\"%s_digits\"},"
         "\"panels\":{\"p\":\"number\",\"name\":\"Panel brightness\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"min\":0,\"max\":%u,\"step\":1,"
-        "\"uniq_id\":\"%s_panels\"}}}",
+        "\"uniq_id\":\"%s_panels\"},"
+        /* The readings. One document on the state topic serves them all, and
+         * each component reads its own field of it. */
+        "\"temperature\":{\"p\":\"sensor\",\"name\":\"Temperature\","
+        "\"stat_t\":\"%s\",\"val_tpl\":\"{{value_json.temperature}}\","
+        "\"dev_cla\":\"temperature\",\"unit_of_meas\":\"\u00b0C\","
+        "\"stat_cla\":\"measurement\",\"uniq_id\":\"%s_temp\"},"
+        "\"frames\":{\"p\":\"sensor\",\"name\":\"Frames\",\"stat_t\":\"%s\","
+        "\"val_tpl\":\"{{value_json.frames}}\",\"stat_cla\":\"total_"
+        "increasing\","
+        "\"ent_cat\":\"diagnostic\",\"uniq_id\":\"%s_frames\"},"
+        "\"crc\":{\"p\":\"sensor\",\"name\":\"CRC errors\",\"stat_t\":\"%s\","
+        "\"val_tpl\":\"{{value_json.crc_errors}}\","
+        "\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\","
+        "\"uniq_id\":\"%s_crc\"},"
+        "\"resyncs\":{\"p\":\"sensor\",\"name\":\"Resyncs\",\"stat_t\":\"%s\","
+        "\"val_tpl\":\"{{value_json.resyncs}}\","
+        "\"stat_cla\":\"total_increasing\",\"ent_cat\":\"diagnostic\","
+        "\"uniq_id\":\"%s_resyncs\"},"
+        "\"fw\":{\"p\":\"sensor\",\"name\":\"Display firmware\","
+        "\"stat_t\":\"%s\",\"val_tpl\":\"{{value_json.firmware}}\","
+        "\"ent_cat\":\"diagnostic\",\"uniq_id\":\"%s_fw\"}}}",
         g_device, g_name, g_avail, main_cmd, main_stat, MAIN_CHARS, g_device,
         sub_cmd, sub_stat, SUB_CHARS, g_device, dig_cmd, dig_stat,
-        IPC_BRIGHT_MAX, g_device, pan_cmd, pan_stat, IPC_BRIGHT_MAX, g_device);
+        IPC_BRIGHT_MAX, g_device, pan_cmd, pan_stat, IPC_BRIGHT_MAX, g_device,
+        g_state, g_device, g_state, g_device, g_state, g_device, g_state,
+        g_device, g_state, g_device);
 
     if (n < 0 || (size_t)n >= sizeof(doc)) {
         emit("hass: the discovery document does not fit\n");
@@ -324,7 +436,10 @@ static int session(void) {
         return -1;
     }
 
-    emitf("hass: %s serves the entities of %s\n", g_socket_path, g_device);
+    emitf("hass: %s serves the entities of %s every %u s\n", g_socket_path,
+          g_device, g_interval_s);
+
+    uint64_t next = 0; /* the first reading goes out at once */
 
     for (;;) {
         struct mqtt_msg_s msg;
@@ -339,6 +454,11 @@ static int session(void) {
         if (rc > 0) {
             on_message(&msg);
             continue;
+        }
+
+        if (now_ms() >= next) {
+            publish_state();
+            next = now_ms() + (uint64_t)g_interval_s * 1000u;
         }
 
         if (mqtt_keepalive(&g_mqtt) < 0) {
@@ -364,6 +484,8 @@ int main(void) {
 
     snprintf(g_socket_path, sizeof(g_socket_path), "/net/%s", socket_name);
     topic(g_avail, sizeof(g_avail), "availability");
+    topic(g_state, sizeof(g_state), "state");
+    read_config();
 
     if (tg_dsp_open(&g_display, client, OPEN_MS) < 0) {
         emitf("hass: the pipes of the display stayed closed for %s\n", client);

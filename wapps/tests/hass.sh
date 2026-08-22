@@ -10,6 +10,10 @@
 #
 # Note: the engine of that build needs CONFIG_WANTED_VFS_UART=y and four wapp
 # slots. The broker image is eclipse-mosquitto.
+#
+# Note: the cadence rides a config mount. The desired state of the control
+# plane carries it as `config: [{path, content}]`, which the supervisor turns
+# into the mount below; a launch config names that mount itself.
 
 set -u
 
@@ -83,7 +87,7 @@ sleep 1
 
 BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["display"]}'
 DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"args":["hass"]}'
-HCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"mqtt","address":"tcp://127.0.0.1:'"$PORT"'"}],"envs":["HASS_DEVICE='"$DEVICE"'","HASS_PREFIX=telegraph"]}'
+HCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"mqtt","address":"tcp://127.0.0.1:'"$PORT"'"}],"envs":["HASS_DEVICE='"$DEVICE"'","HASS_PREFIX=telegraph"],"mounts":[{"name":"config","path":"/etc/tg-hass.conf","options":"interval_s=5"}]}'
 
 {
   sleep 1; echo "create tg-broker"
@@ -140,6 +144,20 @@ sleep 3
 
 check "a brightness command reaches the board" 'opcode 0x11' \
       "$(cat "$WORK/stub.log")"
+
+# The readings: one document on the state topic, which every sensor entity of
+# the discovery reads a field of.
+state=$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "telegraph/$DEVICE/state" -C 1 -W 8 2>&1)
+check "the board publishes its readings" '"temperature"' "$state"
+check "the readings carry the counters of the link" '"resyncs"' "$state"
+check "the readings carry the firmware of the display" '"firmware"' "$state"
+check "the discovery names the temperature entity" '"dev_cla":"temperature"' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
+
+check "the cadence comes from the config mount" 'every 5 s' \
+      "$(grep -a 'hass:' "$WORK/engine.log")"
 
 wait "$engine_pid" 2>/dev/null
 

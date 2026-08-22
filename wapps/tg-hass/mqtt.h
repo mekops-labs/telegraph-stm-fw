@@ -15,7 +15,7 @@
  * the device is the longest of them.
  */
 
-#define MQTT_BUF_MAX 2048u
+#define MQTT_BUF_MAX 3072u
 
 /* The longest topic of a subscription or a message. */
 

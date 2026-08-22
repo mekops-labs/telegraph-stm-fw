@@ -60,6 +60,12 @@
         "HASS_NAME=Telegraph",
         "HASS_USER=MQTT_USER",
         "HASS_PASS=MQTT_PASS"
+      ],
+      "config": [
+        {
+          "path": "/etc/tg-hass.conf",
+          "content": "interval_s=30"
+        }
       ]
     },
     {

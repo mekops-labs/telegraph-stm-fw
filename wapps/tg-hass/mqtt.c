@@ -208,7 +208,9 @@ static int await_packet(struct mqtt_s *m, uint8_t want, unsigned int wait_ms) {
 int mqtt_connect(struct mqtt_s *m, int fd, const char *client_id,
                  const char *user, const char *pass, const char *will_topic,
                  const char *will_payload, unsigned int keepalive_s) {
-    uint8_t body[MQTT_BUF_MAX];
+    /* Static: a wapp holds 8 KiB of stack and this is the largest buffer in
+     * the program. */
+    static uint8_t body[MQTT_BUF_MAX];
     size_t n = 0;
     uint8_t flags = CONNECT_CLEAN;
 
@@ -259,7 +261,7 @@ int mqtt_connect(struct mqtt_s *m, int fd, const char *client_id,
 
 int mqtt_publish(struct mqtt_s *m, const char *topic, const char *payload,
                  bool retain) {
-    uint8_t body[MQTT_BUF_MAX];
+    static uint8_t body[MQTT_BUF_MAX];
     size_t n = put_str(body, topic);
     size_t plen = payload != NULL ? strlen(payload) : 0;
 
