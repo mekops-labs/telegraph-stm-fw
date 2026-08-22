@@ -109,54 +109,27 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-/****************************************************************************
- * Name: stm32_bringup
- *
- * Description:
- *   Do the initialisation for this board.
- *   Release the debug pins.
- *   Set every display line to a known state.
- *
- ****************************************************************************/
+/* Initialise this board: release the debug pins, and set every display line
+ * to a known state.
+ */
 
 int stm32_bringup(void);
 
-/****************************************************************************
- * Name: hazk03_display_init
- *
- * Description:
- *   Initialise the panels and the digits.
- *   Start the scan loop that keeps the panels on.
- *
- ****************************************************************************/
+/* Initialise the panels and the digits, and start the scan loop that keeps
+ * the panels on.
+ */
 
 int hazk03_display_init(void);
 
-/****************************************************************************
- * Name: hazk03_rtc_initialize
- *
- * Description:
- *   Start the software bus.
- *   Attach the DS3231 with the battery to that bus as the system RTC.
- *
- *   Note: the function returns the bus for the other registers of the device.
- *
- ****************************************************************************/
+/* Start the software bus and attach the DS3231 to it as the system RTC. The
+ * bus comes back for the registers that driver does not expose.
+ */
 
 struct i2c_master_s *hazk03_rtc_initialize(void);
 
-/****************************************************************************
- * Name: hazk03_flash_initialize
- *
- * Description:
- *   Start SPI1, and attach the W25Q32 flash to that bus.
- *   Divide the flash into the partition for the settings and the partition
- *   for the assets.
- *
- *   Note: a board without the flash gives an error. The other functions of
- *   the board continue.
- *
- ****************************************************************************/
+/* Start SPI1, attach the W25Q32, and split it into the settings and the
+ * assets. A board with no flash still boots.
+ */
 
 int hazk03_flash_initialize(void);
 
@@ -213,53 +186,23 @@ struct hazk03_config_s {
         HAZK03_SLEEP_OFF  /* wakemin    */                                     \
     }
 
-/****************************************************************************
- * Name: hazk03_config_load
- *
- * Description:
- *   Read the settings from the flash.
- *
- *   Note: the function gives -ENOENT if the store holds no valid record. The
- *   caller then keeps its own values.
- *
- ****************************************************************************/
+/* Read the settings from the flash. -ENOENT when the store holds no valid
+ * record, and the caller then keeps its own values.
+ */
 
 int hazk03_config_load(struct hazk03_config_s *cfg);
 
-/****************************************************************************
- * Name: hazk03_config_save
- *
- * Description:
- *   Write the settings to the flash.
- *
- *   Note: the store holds two records, and a write goes to the record that
- *   the board does not use. Thus a loss of power during a write keeps the
- *   record from before that write.
- *
- ****************************************************************************/
+/* Write the settings to the flash. The store holds two records and a write
+ * goes to the unused one, thus a loss of power keeps the other.
+ */
 
 int hazk03_config_save(const struct hazk03_config_s *cfg);
 
-/****************************************************************************
- * Name: hazk03_display_setconfig
- *
- * Description:
- *   Apply the settings from the store to the display.
- *
- *   Note: these values come from the store, thus the function writes nothing
- *   back to it.
- *
- ****************************************************************************/
+/* Apply the settings of the store to the display, writing nothing back. */
 
 void hazk03_display_setconfig(const struct hazk03_config_s *cfg);
 
-/****************************************************************************
- * Name: stm32_spidev_initialize
- *
- * Description:
- *   Set the chip-select line of the flash to its idle level.
- *
- ****************************************************************************/
+/* Set the chip-select line of the flash to its idle level. */
 
 void stm32_spidev_initialize(void);
 
@@ -267,17 +210,9 @@ void stm32_spidev_initialize(void);
 
 #define HAZK03_HSE_REPORT_MAX 64
 
-/****************************************************************************
- * Name: hazk03_hse_probe
- *
- * Description:
- *   Start the external crystal and write its state and its frequency into a
- *   text buffer.
- *
- *   Note: the system clock keeps the HSI. Thus a crystal that does not start
- *   changes nothing.
- *
- ****************************************************************************/
+/* Start the external crystal and write its state and frequency into a text
+ * buffer. The system clock keeps the HSI either way.
+ */
 
 void hazk03_hse_probe(char *buf, size_t len);
 
@@ -298,80 +233,34 @@ void hazk03_hse_probe(char *buf, size_t len);
 #define HAZK03_VALIGN_TOP 1
 #define HAZK03_VALIGN_BOTTOM 2
 
-/****************************************************************************
- * Name: hazk03_display_text
- *
- * Description:
- *   Put a text on one panel. An empty text clears that panel.
- *   The text goes in the middle of the panel, at its left or at its right.
- *
- *   Note: the function takes the lock of the framebuffer. Thus a scan pass
- *   never gives a partial image.
- *
- ****************************************************************************/
+/* Put a text on one panel, in the middle or at an edge. An empty text clears
+ * that panel.
+ */
 
 int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
                         uint8_t valign);
 
-/****************************************************************************
- * Name: hazk03_display_pixels
- *
- * Description:
- *   Put a rectangle of pixels on one panel. The rest of that panel keeps its
- *   content, thus two parts of one panel carry two different things.
- *
- *   Note: the bits go row by row, and each row starts at a byte. Bit 7 of a
- *   byte is the pixel at the left.
- *
- ****************************************************************************/
+/* Put a rectangle of pixels on one panel, row by row with bit 7 leftmost. The
+ * rest of the panel keeps its content.
+ */
 
 int hazk03_display_pixels(int panel, int x, int y, int w, int h,
                           const uint8_t *bits);
 
-/****************************************************************************
- * Name: hazk03_display_animate
- *
- * Description:
- *   Move a window over a source, inside one rectangle of a panel. A step of
- *   one pixel gives a scroll, and a step of the width of the rectangle gives
- *   the frames of a sprite.
- *
- *   The source is a bitmap when text is false, and a text in UTF-8 when it is
- *   true. A text becomes a bitmap here, thus the edge MCU sends it one time.
- *
- *   Note: a text needs at least 11 rows of height. The cell of the font takes
- *   10 rows for a letter of 7, because a mark such as an acute goes above the
- *   letter. A shorter rectangle loses that mark.
- *
- *   Note: the function gives a negative value when the source does not fit
- *   the space of that panel.
- *
- ****************************************************************************/
+/* Move a window over a source inside one rectangle. A step of one pixel
+ * scrolls, and a step of the width plays the frames of a sprite.
+ */
 
-/****************************************************************************
- * Name: hazk03_asset_path
- *
- * Description:
- *   Give the full path of an asset from its name alone.
- *
- *   Note: a name that holds a separator gives a negative value. Thus a caller
- *   reaches no file outside the place of that kind.
- *
- ****************************************************************************/
+/* The full path of an asset from its name. Negative for a name holding a
+ * separator, thus a caller reaches no file outside the assets.
+ */
 
 int hazk03_asset_path(char *buf, size_t len, const char *dir, const char *name,
                       size_t namelen, const char *ext);
 
-/****************************************************************************
- * Name: hazk03_asset_list
- *
- * Description:
- *   Put the names of the assets of one kind into a buffer, with a newline
- *   after each one. The ending of each name is removed.
- *
- *   Note: the function gives the bytes that it wrote.
- *
- ****************************************************************************/
+/* The names of the assets of one kind into a buffer, one per line and without
+ * their ending.
+ */
 
 size_t hazk03_asset_list(char *buf, size_t len, const char *dir,
                          const char *ext);
@@ -381,143 +270,59 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
                            bool file, int srcw, int srch, const uint8_t *src,
                            size_t srclen);
 
-/****************************************************************************
- * Name: hazk03_display_animstop
- *
- * Description:
- *   Stop the animation of one panel. The rectangle keeps the pixels of its
- *   last step.
- *
- ****************************************************************************/
+/* Stop the animation of one panel. The rectangle keeps its last step. */
 
 void hazk03_display_animstop(int panel);
 
-/****************************************************************************
- * Name: hazk03_display_clear
- *
- * Description:
- *   Take every pixel from one panel.
- *
- *   Note: the animation of that panel stops as well. An animation that kept
- *   its steps would draw over the panel again at its next one.
- *
- ****************************************************************************/
+/* Take every pixel from one panel. The animation of that panel stops with it,
+ * since one that kept its steps would draw over the panel again.
+ */
 
 void hazk03_display_clear(int panel);
 
-/****************************************************************************
- * Name: hazk03_display_animspeed
- *
- * Description:
- *   Change the rate of the animation of one panel. A step of 0 keeps the step
- *   that the animation already has.
- *
- *   Note: the animation keeps its source and its place, thus the rate changes
- *   without the cost of sending that source again.
- *
- *   Note: the function gives a negative value when that panel has no
- *   animation.
- *
- ****************************************************************************/
+/* Change the rate of the animation of one panel, keeping its source and its
+ * place. A step of 0 keeps the step it has.
+ */
 
 int hazk03_display_animspeed(int panel, uint16_t period_ms, uint8_t step);
 
-/****************************************************************************
- * Name: hazk03_display_temperature
- *
- * Description:
- *   Give the last temperature of the DS3231, in tenths of a degree Celsius.
- *
- ****************************************************************************/
+/* The last temperature of the DS3231, in tenths of a degree Celsius. */
 
 int16_t hazk03_display_temperature(void);
 
-/****************************************************************************
- * Name: hazk03_display_utcoffset
- *
- * Description:
- *   Set the minutes of the local time from UTC. The panels show the local
- *   time, and the RTC keeps UTC.
- *
- *   Note: the board has no store for this value. Thus the edge MCU sends it
- *   again after each reset.
- *
- ****************************************************************************/
+/* The minutes of the local time from UTC. The panels show local time and the
+ * RTC keeps UTC; the board has no store for this, thus it is set at each boot.
+ */
 
 void hazk03_display_utcoffset(int16_t minutes);
 
-/****************************************************************************
- * Name: hazk03_display_tempoffset
- *
- * Description:
- *   Set the correction of the temperature, in tenths of a degree Celsius.
- *   The board adds this value to each reading of the DS3231.
- *
- ****************************************************************************/
+/* The correction of the temperature in tenths of a degree, added to each
+ * reading of the DS3231.
+ */
 
 void hazk03_display_tempoffset(int16_t tenths);
 
-/****************************************************************************
- * Name: hazk03_display_sleep
- *
- * Description:
- *   Set the period that stops the display. Each value is a minute of the
- *   local day. A period that starts after it ends goes through midnight.
- *
- *   Note: the value HAZK03_SLEEP_OFF for the start stops this function. The
- *   display then keeps its brightness through the day.
- *
- *   Note: the period does not change the brightness of the settings. Thus the
- *   display takes its previous levels again at the end of the period.
- *
- ****************************************************************************/
+/* The period that stops the display, as minutes of the local day. A period
+ * that starts after it ends goes through midnight.
+ */
 
 void hazk03_display_sleep(uint16_t sleepmin, uint16_t wakemin);
 
-/****************************************************************************
- * Name: hazk03_display_brightness
- *
- * Description:
- *   Set the brightness of the digits and of the panels. Permitted values are
- *   0 to 8. The value 0 turns the device off. The values 1 to 8 give eight
- *   levels of brightness, from the dimmest to the full level.
- *
- *   Note: the TM1629A has its own control. The panels use the on-time of
- *   each row.
- *
- ****************************************************************************/
+/* The brightness of the digits and of the panels, 0 to 8. The value 0 turns a
+ * device off, and 1 to 8 are the levels from dimmest to full.
+ */
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels);
 
-/****************************************************************************
- * Name: hazk03_ipc_init
- *
- * Description:
- *   Start the task that serves the protocol on the UART of the edge MCU.
- *
- *   Note: this UART also carries the serial console. Thus only a build
- *   without a console starts this task.
- *
- ****************************************************************************/
+/* Start the task serving the protocol on the UART of the edge MCU. That UART
+ * also carries the console, thus only a build without one serves it.
+ */
 
 int hazk03_ipc_init(void);
 
-/****************************************************************************
- * Name: hazk03_usbhost_initialize
- *
- * Description:
- *   Start the USB host on the OTG FS peripheral and register the class
- *   drivers of the supported devices. A thread then enumerates each device
- *   that arrives on the port.
- *
- *   Note: the peripheral takes a clock of exactly 48 MHz, and a PLL on the
- *   crystal is its only source. Refer to HAZK03_CLOCK_HSE.
- *
- *   Note: the pins PA11 and PA12 carry the two data lines. The pins of the
- *   VBUS input and of the OTG identifier carry the UART of the edge MCU, thus
- *   the core takes its VBUS state from an internal source.
- *
- ****************************************************************************/
+/* Start the USB host on OTG FS and register the class drivers. A thread then
+ * enumerates each device that arrives.
+ */
 
 int hazk03_usbhost_initialize(void);
 

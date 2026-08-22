@@ -382,8 +382,6 @@ extern "C" {
 
 #define IPC_USB_CHANNELS 2u
 
-#define IPC_USB_CHANNELS 2u
-
 /* IPC_OP_USB_WRITE: [channel u8] [sequence u8] [the data]. A write is the one
  * operation a repeat does not leave unchanged, thus the sequence marks a
  * retry: the board ACKs a repeat of the last value and writes nothing.

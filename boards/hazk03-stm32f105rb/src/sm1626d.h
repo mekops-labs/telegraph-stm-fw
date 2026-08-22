@@ -45,47 +45,27 @@ struct sm1626d_dev_s {
     uint8_t fb[2][SM1626D_ROWS][SM1626D_ROW_BYTES];
 };
 
-/****************************************************************************
- * Name: sm1626d_begin
- *
- * Description:
- *   Start a change of the image. The first change after a swap copies the
- *   image that the scan reads, thus a change of one part keeps the rest.
- *
- ****************************************************************************/
+/* Start a change of the image. The first change after a swap copies what the
+ * scan reads, thus changing one part keeps the rest.
+ */
 
 void sm1626d_begin(struct sm1626d_dev_s *dev);
 
-/****************************************************************************
- * Name: sm1626d_commit
- *
- * Description:
- *   Give the changed image to the scan. The scan takes it at the start of the
- *   next image, thus no image ever mixes the two.
- *
- ****************************************************************************/
+/* Give the changed image to the scan, which takes it at the start of the next
+ * image, thus no image mixes the two.
+ */
 
 void sm1626d_commit(struct sm1626d_dev_s *dev);
 
-/****************************************************************************
- * Name: sm1626d_swapnow
- *
- * Description:
- *   Take the changed image, if a writer gave one. The scan calls this at the
- *   start of an image, and it calls nothing else that a writer also calls.
- *
- ****************************************************************************/
+/* Take the changed image if a writer gave one. The scan calls this at the
+ * start of an image, and nothing else a writer also calls.
+ */
 
 void sm1626d_swapnow(struct sm1626d_dev_s *dev);
 
-/****************************************************************************
- * Name: sm1626d_drawbitmap
- *
- * Description:
- *   Put a rectangle of pixels into the image. The bits go row by row, and
- *   each row starts at a byte. Bit 7 of a byte is the pixel at the left.
- *
- ****************************************************************************/
+/* Put a rectangle of pixels into the image, row by row, each row starting at
+ * a byte with bit 7 the pixel at the left.
+ */
 
 void sm1626d_drawbitmap(struct sm1626d_dev_s *dev, int x, int y, int w, int h,
                         const uint8_t *bits);
@@ -104,148 +84,67 @@ void sm1626d_setbrightness(struct sm1626d_dev_s *dev, uint8_t level, bool on);
 void sm1626d_clear(struct sm1626d_dev_s *dev);
 void sm1626d_drawpixel(struct sm1626d_dev_s *dev, int x, int y, bool on);
 
-/****************************************************************************
- * Name: sm1626d_refresh
- *
- * Description:
- *   Scan the panel one time.
- *
- *   Note: the panel keeps an image only during a scan. Thus the caller calls
- *   this function again and again.
- *
- ****************************************************************************/
+/* Scan the panel one time. The panel keeps an image only during a scan, thus
+ * a caller calls this again and again.
+ */
 
 void sm1626d_refresh(struct sm1626d_dev_s *dev);
 
-/****************************************************************************
- * Name: sm1626d_shiftrow
- *
- * Description:
- *   Send part of the bits of one row. The bits of a row are the columns of
- *   the panel and then the selection of that row.
- *
- *   Note: the transfer changes no light. Thus the caller sends the next row
- *   in parts while the panel holds the row of the last latch, and no part
- *   holds the CPU for long.
- *
- ****************************************************************************/
+/* Send part of the bits of one row: the columns of the panel, then the
+ * selection of that row. The transfer changes no light.
+ */
 
 void sm1626d_shiftbits(struct sm1626d_dev_s *dev, int row, int from, int count);
 
-/****************************************************************************
- * Name: sm1626d_rowbits
- *
- * Description:
- *   Give the count of the bits that one row takes: the columns of the panel
- *   and then the selection of the row.
- *
- ****************************************************************************/
+/* The count of the bits one row takes: the columns, then its selection. */
 
 int sm1626d_rowbits(const struct sm1626d_dev_s *dev);
 
-/****************************************************************************
- * Name: sm1626d_shiftcombined
- *
- * Description:
- *   Send one row to both panels in one pass. The panels share the clock, thus
- *   a pass for one panel alone leaves the other panel dark for that time.
- *
- *   Note: one image then takes 16 rows and not 32. Thus the rate of the image
- *   doubles, and each panel keeps its light through the whole row.
- *
- ****************************************************************************/
+/* Send one row to both panels in one pass. They share the clock, thus a pass
+ * for one alone leaves the other dark for that time.
+ */
 
 void sm1626d_shiftcombined(struct sm1626d_dev_s *main,
                            struct sm1626d_dev_s *sub, int row);
 
-/****************************************************************************
- * Name: sm1626d_latch
- *
- * Description:
- *   Move the bits of the shift register to the output of the panel.
- *
- *   Note: the shift register and that output are separate. Thus a transfer
- *   changes no light, and the panel keeps the row of the last latch.
- *
- ****************************************************************************/
+/* Move the bits of the shift register to the output. The two are separate,
+ * thus a transfer changes no light.
+ */
 
 void sm1626d_latch(void);
 
-/****************************************************************************
- * Name: sm1626d_output
- *
- * Description:
- *   Give light to the panels, or take it away. Both panels share this line.
- *
- ****************************************************************************/
+/* Give light to the panels or take it away. Both share this line. */
 
 void sm1626d_output(bool enable);
 
-/****************************************************************************
- * Name: sm1626d_ontime
- *
- * Description:
- *   Give the time with light for one row, in microseconds, at the brightness
- *   of this panel. A panel that is off gives zero.
- *
- ****************************************************************************/
+/* The time with light for one row in microseconds, at the brightness of this
+ * panel. A panel that is off gives zero.
+ */
 
 int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us);
 
-/****************************************************************************
- * Name: sm1626d_drawtext
- *
- * Description:
- *   Draw a text with the 5x7 font. The position x,y is the top left corner of
- *   the first character.
- *
- *   Note: the function stops at the right edge of the panel. It draws no
- *   partial character.
- *
- ****************************************************************************/
+/* Draw a text with the 5x7 font, x,y the top left of the first character. It
+ * stops at the right edge of the panel.
+ */
 
 void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y, const char *s,
                       size_t len);
 
-/****************************************************************************
- * Name: sm1626d_textwidth
- *
- * Description:
- *   Give the width of a text in pixels.
- *
- *   Note: the text is in UTF-8, thus the count of the characters is not the
- *   count of the bytes.
- *
- ****************************************************************************/
+/* The width of a text in pixels. The text is UTF-8, thus its characters are
+ * not its bytes.
+ */
 
 int sm1626d_textwidth(const char *s, size_t len);
 
-/****************************************************************************
- * Name: sm1626d_rendertext
- *
- * Description:
- *   Draw a text into a bitmap that belongs to the caller. The rows follow
- *   each other, each row starts at a byte, and bit 7 of a byte is the pixel
- *   at the left.
- *
- *   Note: the animation uses this to hold a message wider than the panel.
- *   Thus a scrolling message costs one frame and not one for each step.
- *
- ****************************************************************************/
+/* Draw a text into a bitmap of the caller: rows in order, each starting at a
+ * byte, bit 7 the pixel at the left.
+ */
 
 void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s, size_t len);
 
-/****************************************************************************
- * Name: sm1626d_rendertextlines
- *
- * Description:
- *   Draw n texts into the same bitmap of sm1626d_rendertext, one below the
- *   other. Each text s[starts[k]..starts[k]+lens[k]) takes one line, in the
- *   font's own line height, starting at column xoffs[k]. The caller wraps
- *   the text into lines and places each one horizontally; this function
- *   only draws already-placed lines.
- *
- ****************************************************************************/
+/* Draw n texts into one bitmap of sm1626d_rendertext, one below the other,
+ * each taking a line of the font's height.
+ */
 
 void sm1626d_rendertextlines(uint8_t *bits, int w, int totalh,
                              const size_t *starts, const size_t *lens,
