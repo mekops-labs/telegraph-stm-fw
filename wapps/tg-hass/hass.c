@@ -296,10 +296,10 @@ static int publish_discovery(void) {
         "\"stat_t\":\"%s\",\"max\":%u,\"uniq_id\":\"%s_sub\"},"
         "\"digits\":{\"p\":\"number\",\"name\":\"Digit brightness\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"min\":0,\"max\":%u,\"step\":1,"
-        "\"uniq_id\":\"%s_digits\"},"
+        "\"ent_cat\":\"config\",\"uniq_id\":\"%s_digits\"},"
         "\"panels\":{\"p\":\"number\",\"name\":\"Panel brightness\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"min\":0,\"max\":%u,\"step\":1,"
-        "\"uniq_id\":\"%s_panels\"},"
+        "\"ent_cat\":\"config\",\"uniq_id\":\"%s_panels\"},"
         /* The readings. One document on the state topic serves them all, and
          * each component reads its own field of it. */
         "\"temperature\":{\"p\":\"sensor\",\"name\":\"Temperature\","
