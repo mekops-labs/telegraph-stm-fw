@@ -12,8 +12,9 @@ wapp to its desired state, and removing it is dropping that wapp.
 | :--- | :--- | :--- |
 | Main panel | `text` | the text of the large panel |
 | Sub panel | `text` | the text of the small panel |
-| Digit brightness | `number` | 0 turns the digits off, 8 is the full level |
-| Panel brightness | `number` | the same for both panels |
+| Digit brightness | `number`, config | 0 turns the digits off, 8 is the full level |
+| Panel brightness | `number`, config | the same for both panels |
+| Display off at, Display on at | `time`, config | the period without light; equal values disable it |
 | Temperature | `sensor` | what the DS3231 reads, in °C |
 | Frames, CRC errors, Resyncs | `sensor`, diagnostic | the counters of the link |
 | Display firmware | `sensor`, diagnostic | the version the STM32 reports |
@@ -46,6 +47,8 @@ With the defaults, and a device named `telegraph-01`:
 | `telegraph/telegraph-01/sub/set`, `…/sub` | the same for the sub panel |
 | `telegraph/telegraph-01/brightness/digits/set`, `…/digits` | the digits |
 | `telegraph/telegraph-01/brightness/panels/set`, `…/panels` | the panels |
+| `telegraph/telegraph-01/dnd/start/set`, `…/start` | the minute the display stops |
+| `telegraph/telegraph-01/dnd/end/set`, `…/end` | the minute it starts again |
 | `telegraph/telegraph-01/state` | the readings, retained |
 
 ## The configuration

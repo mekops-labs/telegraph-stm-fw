@@ -396,6 +396,20 @@ static void do_clear(struct client_s *client, uint16_t corr) {
     result_to_client(client, corr, ask(IPC_OP_CLEAR, NULL, 0));
 }
 
+/* The period without light. The payload matches IPC_OP_SET_SLEEP, so it
+ * forwards unchanged.
+ */
+
+static void do_sleep(struct client_s *client, uint16_t corr,
+                     const uint8_t *payload, uint16_t len) {
+    if (len != TG_DSP_SLEEP_LEN) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    result_to_client(client, corr, ask(IPC_OP_SET_SLEEP, payload, len));
+}
+
 static void on_client_frame(void *arg, const struct ipc_frame_s *frame) {
     struct client_s *client = arg;
 
@@ -422,6 +436,10 @@ static void on_client_frame(void *arg, const struct ipc_frame_s *frame) {
 
     case TG_DSP_OP_CLEAR:
         do_clear(client, frame->corr_id);
+        break;
+
+    case TG_DSP_OP_SLEEP:
+        do_sleep(client, frame->corr_id, frame->payload, frame->payload_len);
         break;
 
     default:

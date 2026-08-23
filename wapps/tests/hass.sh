@@ -127,6 +127,10 @@ check "the device is discovered" '"cmds\?"\|"cmps"' \
 check "the discovery names the panels" '"Main panel"' \
       "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
              -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
+check "the DND entities are config, not the default list" \
+      '"dnd_start":{"p":"time".*"ent_cat":"config"' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
 check "the device is available" 'online' \
       "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
              -t "telegraph/$DEVICE/availability" -C 1 -W 5 2>&1)"
@@ -146,6 +150,16 @@ sleep 3
 
 check "a brightness command reaches the board" 'opcode 0x11' \
       "$(cat "$WORK/stub.log")"
+
+mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" \
+     -t "telegraph/$DEVICE/dnd/start/set" -m "22:00" >/dev/null 2>&1
+sleep 3
+
+check "a DND command reaches the board" 'opcode 0x12' \
+      "$(cat "$WORK/stub.log")"
+check "the DND entity reads back what was set" '22:00' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "telegraph/$DEVICE/dnd/start" -C 1 -W 5 2>&1)"
 
 # The readings: one document on the state topic, which every sensor entity of
 # the discovery reads a field of.

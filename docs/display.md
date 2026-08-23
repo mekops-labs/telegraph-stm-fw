@@ -40,6 +40,7 @@ did not ask for.
 | `0x44` | the brightness | `[digits] [panels]` |
 | `0x45` | the clock | `[epoch u32] [offset i16]` |
 | `0x46` | clear both panels | — |
+| `0x47` | the period without light | `[start u16] [end u16]` |
 
 The state comes back as opcode `0x41`, carrying the payload of the board's own
 state frame. Every other request takes an ACK, or a NACK with one byte of

@@ -178,6 +178,51 @@ static void set_bright(bool digits, unsigned int level) {
     }
 }
 
+/* The period without light, as two minutes of the local day. Equal values
+ * disable it, which is also the default.
+ */
+
+static uint16_t g_dnd_start;
+static uint16_t g_dnd_end;
+
+static void set_dnd(bool is_start, unsigned int minute) {
+    uint8_t payload[TG_DSP_SLEEP_LEN];
+
+    if (minute >= IPC_MINUTES_PER_DAY) {
+        minute = IPC_MINUTES_PER_DAY - 1;
+    }
+
+    if (is_start) {
+        g_dnd_start = (uint16_t)minute;
+    } else {
+        g_dnd_end = (uint16_t)minute;
+    }
+
+    ipc_put_u16(&payload[TG_DSP_SLEEP_START], g_dnd_start);
+    ipc_put_u16(&payload[TG_DSP_SLEEP_END], g_dnd_end);
+
+    int rc = tg_dsp_ask(&g_display, TG_DSP_OP_SLEEP, payload, sizeof(payload));
+    if (rc != TG_DSP_OK) {
+        emitf("hass: the DND period was refused (%d)\n", rc);
+    }
+}
+
+/* "HH:MM" or "HH:MM:SS", as HA's time entity sends it, to a minute of the
+ * local day. A payload it cannot parse leaves the period unchanged.
+ */
+
+static bool parse_hhmm(const char *value, unsigned int *minute) {
+    unsigned int h;
+    unsigned int m;
+
+    if (sscanf(value, "%u:%u", &h, &m) != 2 || h > 23 || m > 59) {
+        return false;
+    }
+
+    *minute = h * 60u + m;
+    return true;
+}
+
 /****************************************************************************
  * The readings
  ****************************************************************************/
@@ -272,6 +317,10 @@ static int publish_discovery(void) {
     char dig_stat[TOPIC_MAX];
     char pan_cmd[TOPIC_MAX];
     char pan_stat[TOPIC_MAX];
+    char dnds_cmd[TOPIC_MAX];
+    char dnds_stat[TOPIC_MAX];
+    char dnde_cmd[TOPIC_MAX];
+    char dnde_stat[TOPIC_MAX];
 
     topic(main_cmd, sizeof(main_cmd), "main/set");
     topic(main_stat, sizeof(main_stat), "main");
@@ -281,6 +330,10 @@ static int publish_discovery(void) {
     topic(dig_stat, sizeof(dig_stat), "brightness/digits");
     topic(pan_cmd, sizeof(pan_cmd), "brightness/panels/set");
     topic(pan_stat, sizeof(pan_stat), "brightness/panels");
+    topic(dnds_cmd, sizeof(dnds_cmd), "dnd/start/set");
+    topic(dnds_stat, sizeof(dnds_stat), "dnd/start");
+    topic(dnde_cmd, sizeof(dnde_cmd), "dnd/end/set");
+    topic(dnde_stat, sizeof(dnde_stat), "dnd/end");
 
     int n = snprintf(
         doc, sizeof(doc),
@@ -300,6 +353,12 @@ static int publish_discovery(void) {
         "\"panels\":{\"p\":\"number\",\"name\":\"Panel brightness\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"min\":0,\"max\":%u,\"step\":1,"
         "\"ent_cat\":\"config\",\"uniq_id\":\"%s_panels\"},"
+        "\"dnd_start\":{\"p\":\"time\",\"name\":\"Display off at\","
+        "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"ent_cat\":\"config\","
+        "\"uniq_id\":\"%s_dnd_start\"},"
+        "\"dnd_end\":{\"p\":\"time\",\"name\":\"Display on at\","
+        "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"ent_cat\":\"config\","
+        "\"uniq_id\":\"%s_dnd_end\"},"
         /* The readings. One document on the state topic serves them all, and
          * each component reads its own field of it. */
         "\"temperature\":{\"p\":\"sensor\",\"name\":\"Temperature\","
@@ -324,8 +383,9 @@ static int publish_discovery(void) {
         g_device, g_name, g_avail, main_cmd, main_stat, MAIN_CHARS, g_device,
         sub_cmd, sub_stat, SUB_CHARS, g_device, dig_cmd, dig_stat,
         IPC_BRIGHT_MAX, g_device, pan_cmd, pan_stat, IPC_BRIGHT_MAX, g_device,
-        g_state, g_device, g_state, g_device, g_state, g_device, g_state,
-        g_device, g_state, g_device);
+        dnds_cmd, dnds_stat, g_device, dnde_cmd, dnde_stat, g_device, g_state,
+        g_device, g_state, g_device, g_state, g_device, g_state, g_device,
+        g_state, g_device);
 
     if (n < 0 || (size_t)n >= sizeof(doc)) {
         emit("hass: the discovery document does not fit\n");
@@ -344,6 +404,8 @@ static int subscribe_all(void) {
         "sub/set",
         "brightness/digits/set",
         "brightness/panels/set",
+        "dnd/start/set",
+        "dnd/end/set",
     };
     size_t i;
 
@@ -400,6 +462,20 @@ static void on_message(const struct mqtt_msg_s *msg) {
     } else if (is_topic(msg->topic, "brightness/panels/set")) {
         set_bright(false, (unsigned int)strtoul(value, NULL, 10));
         echo_state("brightness/panels", value);
+    } else if (is_topic(msg->topic, "dnd/start/set")) {
+        unsigned int minute;
+
+        if (parse_hhmm(value, &minute)) {
+            set_dnd(true, minute);
+            echo_state("dnd/start", value);
+        }
+    } else if (is_topic(msg->topic, "dnd/end/set")) {
+        unsigned int minute;
+
+        if (parse_hhmm(value, &minute)) {
+            set_dnd(false, minute);
+            echo_state("dnd/end", value);
+        }
     }
 }
 

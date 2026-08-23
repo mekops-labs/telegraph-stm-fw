@@ -44,6 +44,7 @@
 #define TG_DSP_OP_BRIGHT 0x44u    /* client -> display: the brightness     */
 #define TG_DSP_OP_TIME 0x45u      /* client -> display: the clock          */
 #define TG_DSP_OP_CLEAR 0x46u     /* client -> display: clear the panels   */
+#define TG_DSP_OP_SLEEP 0x47u     /* client -> display: no light in a window */
 
 /* A request takes IPC_OP_ACK, or IPC_OP_NACK with one byte of IPC_ERR_*.
  * IPC_ERR_BUSY means the board gave no reply, thus it says nothing about the
@@ -106,6 +107,15 @@
 
 #define TG_DSP_TIME_LEN 4u
 #define TG_DSP_TIME_TZ_LEN 6u
+
+/* TG_DSP_OP_SLEEP: [start u16] [end u16], minutes of the local day. Equal
+ * values disable the period, and the wire layout matches IPC_OP_SET_SLEEP.
+ */
+
+#define TG_DSP_SLEEP_START 0u
+#define TG_DSP_SLEEP_END 2u
+
+#define TG_DSP_SLEEP_LEN 4u
 
 /* TG_DSP_OP_CLEAR takes no payload. */
 
