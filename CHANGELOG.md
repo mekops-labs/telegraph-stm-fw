@@ -30,11 +30,15 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the readings and the will.
 - `make deploy` takes `BROKER=<host:port>`, and `MQTT_USER`/`MQTT_PASS` when
   that broker asks for them.
+- `tg-hass` publishes "Display off at" and "Display on at" time entities for
+  the STM32's do-not-disturb period, over `tg-display` opcode `0x47`.
 
 ### Changed
 
 - `tg-display` holds no listening socket. The HTTP surface is `tg-rest`, and
   the launch config of the display names its clients.
+- The digit and panel brightness numbers carry `entity_category: config` in
+  HA discovery.
 
 ### Fixed
 
