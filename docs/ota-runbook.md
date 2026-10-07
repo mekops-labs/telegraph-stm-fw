@@ -12,67 +12,53 @@ Verified on the bench: a change to the supervisor reached the board as
 | Piece | Where | Why |
 | :--- | :--- | :--- |
 | Deputy | a host of the LAN | holds the desired state and the firmware intent |
-| An HTTP server | the same host | serves the image the device fetches |
-| An OCI registry | the LAN | holds the wapp images |
+| An OCI registry | the LAN | holds the wapp images and the firmware image |
 
 The board reaches Deputy at the address its launch config names (`manager`),
 and the registry at the address of the `registry` socket. Both are in the
 board's own configuration, thus a move of either needs a new image.
 
+The device fetches the firmware from the registry itself, without a
+credential. Thus the registry has to serve that image anonymously.
+
 ## The steps
 
 ```sh
-# 1. build the supervisor image
+# 1. build the engine image, with the Sheriff supervisor it embeds
 cd <wanted-engine>
-make sheriff                                    # -> wasm/supervisor/sheriff/supervisor.tar
+make build DEFCONFIG=xiao_esp32s3-telegraph-sheriff BUILD_DIR=build-tgs \
+    RUNNER_CMD='podman run --userns=keep-id -v <telegraph-fw>/wapps:/tgwapps:ro -e TELEGRAPH_WAPPS=/tgwapps'
+                                                # -> dist/esp-idf/wanted-esp32s3-ota.bin
 
-# 2. build the engine image that embeds it
-OTA_PROFILE=s3-telegraph-sheriff just build     # in the ESP-IDF container
+# 2. publish it as an OCI image, tagged <release>-telegraph
+REGISTRY=<host:port> docker/publish-images.sh -p -k -b telegraph \
+    -i dist/esp-idf/wanted-esp32s3-ota.bin firmware
 
-# 3. check which supervisor the image carries
-strings platform/esp-idf/project/build/wanted-esp-idf.bin \
-    | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[0-9a-f]+' | sort -u
+# 3. tell the device to take it
+deputy device firmware push --image <host:port>/wanted-engine:<release>-telegraph telegraph-01
 
-# 4. serve it
-cp platform/esp-idf/project/build/wanted-esp-idf.bin /srv/wanted.bin
-python3 -m http.server 8000 --bind 0.0.0.0      # from /srv
-curl -s http://127.0.0.1:8000/wanted.bin | sha256sum   # must match step 5's digest
-
-# 5. tell the device to take it
-deputy device firmware push \
-    --version "$(strings /srv/wanted.bin | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\+g[0-9a-f]+\.[0-9]+' | head -1)" \
-    --digest "sha256:$(sha256sum /srv/wanted.bin | cut -d' ' -f1)" \
-    --source "http://<host>:8000/wanted.bin" \
-    telegraph-01
-
-# 6. watch it land
+# 4. watch it land
 deputy device show telegraph-01      # Engine.OTAStatus and Engine.Version
 ```
 
-This board seeds `tg-logs` into the firmware, thus the container needs the
-wapps of this repository at `/tgwapps`:
+This board seeds `tg-logs` into the firmware, thus the build needs the wapps of
+this repository at `/tgwapps`, which `RUNNER_CMD` mounts. Run `make wapps` in
+this repository before the engine build. A missing `.wasm` stops the engine
+build at the configure step with `registry-seed: … missing`.
 
-```sh
-podman run --rm --userns=keep-id --security-opt label=disable \
-    -e BUILD_DIR=build-tgs -e OTA_PROFILE=s3-telegraph-sheriff \
-    -v "$PWD:/src" -v <telegraph-fw>/wapps:/tgwapps:ro \
-    -w /src wanted-esp-idf just build
-```
+`make build` builds the wapps and the Sheriff supervisor itself. The last
+`Supervisor image:` line of the configure output names
+`wasm/supervisor/sheriff/supervisor.tar`, which identifies the supervisor the
+image carries.
 
-Run `make wapps` in this repository before the engine build. A missing
-`.wasm` stops the engine build at the configure step with
-`registry-seed: … missing`.
+The image holds one layer, and its labels `firmware.digest` and `firmware.size`
+name the binary inside it. Deputy reads the tag, the digest and the size from
+the image, and a wrong digest stops the update at the device and latches the
+version as failed. A clean checkout of a release tag publishes under that
+release, such as `0.24.0-telegraph`. The suffix `-telegraph` is the board.
 
-`just build` embeds the `supervisor.tar` that `make sheriff` writes. A build
-without `make sheriff` embeds the previous supervisor and still stamps a new
-version. The device then downloads, stages, reboots and reports `confirmed`
-with the supervisor unchanged. Step 3 names the supervisor in the image, thus
-it identifies that build before the push.
-
-Step 4 hashes what the server returns, not the file on disk. A server already
-bound to the port answers instead of the new one, and it can serve different
-bytes. A digest mismatch stops the update at the device and latches the
-version as failed.
+The tool `docker/publish-images.sh` of the engine uses `sha256sum` and
+`stat -c`, thus a macOS host needs a `stat` that accepts `-c %s`.
 
 `OTAStatus` reads 1 while the image comes down, 2 once it is staged, and 3 when
 the device has booted it and confirmed. A 4 means it booted and did not
