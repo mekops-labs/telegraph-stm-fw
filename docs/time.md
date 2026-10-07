@@ -13,9 +13,9 @@ The wapp reads three nodes of the engine clock, `/dev/rtc/main/source`,
 
 | The engine clock | The wapp |
 | :--- | :--- |
-| Has no source (`none`), or reads invalid | Writes the time of the STM32 to the engine, with the source `rtc`. |
-| Has the source `sntp`, `server` or `manual` | Sends its time to the STM32 when the two differ by more than 2 s, or when the STM32 holds no plausible time. |
-| Has the source `rtc` | Changes neither clock. |
+| Has no source (`none`), a source the wapp does not know, or reads invalid | Writes the time of the STM32 to the engine, with the source `rtc`, when that time is plausible. |
+| Has the source `sntp`, `server` or `manual` | Sends its time to the STM32 when the two differ by more than 2 s, when the STM32 holds no plausible time or does not answer, or when the offset is due. |
+| Has the source `rtc` | Writes neither clock. It sends the time and the offset to the STM32 only when the offset is due. |
 
 The wapp never writes the engine clock back when the control plane or a person
 set it, because those sources are the more accurate ones. Sheriff sets that
