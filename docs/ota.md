@@ -43,13 +43,18 @@ working between the runs of the firmware.
 ## The build
 
 ```sh
-make ota-image    # build the STM32 firmware and stage it into the wapp
-make wapp-images  # package every wapp, this one with its firmware inside
+make CONFIG=ipc ota-image  # build the STM32 firmware and stage it into the wapp
+make wapp-images           # package every wapp, this one with its firmware inside
 ```
 
 `ota-image` copies the image and the version of the current build into
 `wapps/tg-ota/root/`, which the packaging step puts at the root of the wapp.
 Those files are build outputs and the repository does not hold them.
+
+Note: the configuration `ipc` carries the protocol on USART1. The default
+`nsh` puts a console there and serves no protocol, thus a board that runs it
+answers the edge MCU with nothing. Run a `distclean` when the configuration
+changes.
 
 Note: the version comes from `git describe`, and the comparison is exact. Thus
 a build from a tree with local changes carries the suffix `-dirty`, never
