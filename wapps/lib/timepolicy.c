@@ -119,12 +119,13 @@ static int parse_value(const char *at, const char *end, int *value) {
 
 int tg_time_parse_offset(const char *conf, size_t len, int *offset_min) {
     const size_t keylen = sizeof(OFFSET_KEY) - 1;
-    const char *end = conf + len;
 
     *offset_min = 0;
     if (conf == NULL) {
         return 0;
     }
+
+    const char *end = conf + len;
 
     /* A key counts at the start of a line alone. */
 
