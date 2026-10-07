@@ -189,9 +189,11 @@ wapps:
 	$(WAPP_RUN) 'make -C $(WAPP_DIR)'
 
 # The round trip of the broker on a host build of the engine. That build needs
-# CONFIG_WANTED_VFS_UART=y, and WANTED gives the path of its wanted-cli.
+# CONFIG_WANTED_VFS_UART=y and CONFIG_WANTED_VFS_RTC=y, and WANTED gives the
+# path of its wanted-cli.
 wapp-test: wapps
 	WANTED="$(WANTED)" $(WAPP_DIR)/tests/roundtrip.sh
+	WANTED="$(WANTED)" $(WAPP_DIR)/tests/time.sh
 
 # The registry takes the name and the version from the filename of the image.
 # A wapp that carries data files holds them in its own root/ directory.

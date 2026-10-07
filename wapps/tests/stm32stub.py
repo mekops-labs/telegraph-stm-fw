@@ -24,12 +24,23 @@ def usbdev(channel, kind, name):
     """One record of a USB_DEVS reply."""
     return bytes([channel, kind, len(name)]) + name
 
+def state(time_s, frames):
+    """The 12 fixed bytes of a STATE reply, then the firmware version."""
+    fixed = struct.pack("<IhHHBB", time_s, 215, frames & 0xFFFF, 0, 0, 1)
+    return fixed + b"v0.0.0-stub"
+
 def main(dev):
     fd = os.open(dev, os.O_RDWR | os.O_NOCTTY)
     buf = b""
     started = time.time()
     pushed = False
     dropped = [False]
+    # The clock of the stub: STUB_TIME is its DS3231, and it keeps running.
+    # STUB_RESET_AT is the count of frames after which it resets and counts
+    # from zero again.
+    delta = int(os.environ.get("STUB_TIME", "0")) - time.time()
+    reset_at = int(os.environ.get("STUB_RESET_AT", "0"))
+    frames = 0
     while time.time() - started < 20:
         try:
             chunk = os.read(fd, 256)
@@ -57,8 +68,18 @@ def main(dev):
                 dropped[0] = True
                 print("stub: dropped it", flush=True)
                 continue
+            if op == 0x01 and reset_at and frames >= reset_at:
+                frames = 0
+                print("stub: reset", flush=True)
+            frames += 1
             if op == 0x01:  # GET_STATE -> STATE
-                os.write(fd, encode(0x02, corr, b"\x01" + b"\x00" * 11 + b"v0.0.0-stub"))
+                os.write(fd, encode(0x02, corr, state(int(time.time() + delta), frames)))
+            elif op == 0x04:  # SET_TIME -> ACK, with the optional offset
+                clock = struct.unpack("<I", frame[6:10])[0]
+                delta = clock - time.time()
+                offset = struct.unpack("<h", frame[10:12])[0] if ln >= 6 else None
+                print(f"stub: set time {clock} offset {offset}", flush=True)
+                os.write(fd, encode(0xF0, corr, bytes([8])))
             elif op == 0x20:  # FS_LIST -> one file and one directory
                 entries = entry(0x00, 12, b"backup.bin") + entry(0x01, 0, b"logs")
                 os.write(fd, encode(0x20, corr, struct.pack("<H", 0xFFFF) + entries))
