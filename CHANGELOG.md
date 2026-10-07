@@ -5,6 +5,47 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-07
+
+### Added
+
+- The wapp `tg-time` keeps the clock of the engine and the DS3231 of the STM32
+  together.
+- `tg-time` writes the time of the STM32 to the engine, with the source `rtc`,
+  while the engine clock has no source or reads invalid. A time of the STM32
+  counts only from 2025-01-01 to 2099-12-31.
+- `tg-time` sends the time of the engine and the offset to the STM32 at its
+  start and after each reset of the STM32. With the source `sntp`, `server` or
+  `manual` it also sends them when the clocks differ by more than 2 s, or the
+  STM32 holds no plausible time.
+- The offset of the local time comes from a config mount at
+  `/etc/tg-time.conf`, `offset_min=<minutes>`, from -840 to 840.
+- `deploy/telegraph.json` runs `tg-time` with the grant `rtc` as
+  `devices=main,set`, and names `time` among the peers of `tg-broker`.
+- `make test` runs the unit tests of the time policy.
+- `wapps/tests/time.sh` runs three cases of `tg-time` against a host build of
+  the engine, and `make wapp-test` runs it.
+
+### Changed
+
+- `make wapp-push` pushes the image of `tg-<name>` to the repository
+  `tg/<name>`, and `deploy/telegraph.json` names the image there.
+- A desired state that names `<registry>/tg-<name>` must name
+  `<registry>/tg/<name>`.
+
+### Documentation
+
+- `docs/time.md` carries the behaviour of `tg-time`.
+- `docs/ota.md` names the configuration `ipc` for the firmware of `tg-ota`.
+- `docs/ota-runbook.md` publishes the engine image to the registry as an OCI
+  image, and the device takes it from there.
+
+### Requires
+
+- An engine with `CONFIG_WANTED_VFS_RTC`, 0.24.0 or newer, whose named-pipe
+  table holds the twelve pipes of this deployment, and whose registry image
+  slot fits the eight wapps of it at two versions during a rollout.
+
 ## [0.6.0] - 2026-08-22
 
 ### Added
@@ -381,6 +422,8 @@ hardware and answers a binary protocol on the edge MCU's UART.
 - The scan loop is CPU-driven, not DMA-driven.
 - The firmware has no animation support and reads no USB device.
 
+[0.7.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.7.0
+[0.6.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.6.0
 [0.5.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.5.0
 [0.4.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.4.0
 [0.3.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.3.0
