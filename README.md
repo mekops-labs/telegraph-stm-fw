@@ -357,6 +357,11 @@ The wapp `tg-usb` serves the USB port over HTTP: the devices the port holds,
 the channel of a serial device, and the files of a mass storage device. Refer
 to [the USB port over HTTP](docs/usb-http.md).
 
+The wapp `tg-time` keeps the clock of the engine and the DS3231 of the STM32
+together: the engine takes the time of the STM32 after a power cycle, and the
+STM32 takes the time that Sheriff or a person set. Refer to
+[the clock](docs/time.md).
+
 The wapp `tg-ota` writes the firmware of the STM32 through the bootloader of
 its ROM. It carries the image in its own package and takes the line from the
 broker, thus a new firmware ships as a new version of that wapp. Refer to
@@ -372,7 +377,8 @@ make wapp-test WANTED=<path to a wanted-cli>
 The compiler is the wapp SDK image of the engine. The test runs the wapps on a
 host build of the engine, against a pty pair and a program that answers as the
 STM32 does, thus it needs no hardware. That build needs
-`CONFIG_WANTED_VFS_UART=y`, and `wapps/tests/http.sh` also needs
+`CONFIG_WANTED_VFS_UART=y`, `wapps/tests/time.sh` also needs
+`CONFIG_WANTED_VFS_RTC=y`, and `wapps/tests/http.sh` also needs
 `CONFIG_WANTED_VFS_SOCKET_LISTEN=y` and four wapp slots.
 
 ## License
