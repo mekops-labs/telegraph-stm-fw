@@ -15,6 +15,7 @@
       "args": [
         "display",
         "ota",
+        "time",
         "usb:0x33"
       ]
     },
@@ -78,6 +79,19 @@
           {
             "Name": "gpio",
             "Options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tg-time",
+      "version": "VERSION",
+      "image": "REGISTRY/tg-time:VERSION",
+      "policy": {
+        "Drivers": [
+          {
+            "Name": "rtc",
+            "Options": "devices=main,set"
           }
         ]
       }

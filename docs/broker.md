@@ -22,12 +22,12 @@ has the form `<name>[:<opcode>...]`, and each opcode after the name asks for
 the frames of that kind that no request asked for.
 
 ```json
-"args": ["display", "usb:0x33", "ota"]
+"args": ["display", "usb:0x33", "ota", "time"]
 ```
 
-The broker serves four peers. The pipe table of the engine is wider than the
-eight pipes of its default, because the display serves clients of its own over
-the same table.
+The broker serves four peers: the display, the USB port, the firmware writer and
+the clock. The pipe table of the engine is wider than the eight pipes of its
+default, because the display serves clients of its own over the same table.
 
 A pipe holds 4096 bytes. The broker discards a frame when a peer leaves its
 pipe full for two seconds, and it writes a line to its console for that frame.
