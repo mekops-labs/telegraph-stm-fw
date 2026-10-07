@@ -3,7 +3,7 @@
     {
       "name": "tg-broker",
       "version": "VERSION",
-      "image": "REGISTRY/tg-broker:VERSION",
+      "image": "REGISTRY/tg/broker:VERSION",
       "policy": {
         "Drivers": [
           {
@@ -22,7 +22,7 @@
     {
       "name": "tg-display",
       "version": "VERSION",
-      "image": "REGISTRY/tg-display:VERSION",
+      "image": "REGISTRY/tg/display:VERSION",
       "args": [
         "rest",
         "hass"
@@ -31,7 +31,7 @@
     {
       "name": "tg-rest",
       "version": "VERSION",
-      "image": "REGISTRY/tg-rest:VERSION",
+      "image": "REGISTRY/tg/rest:VERSION",
       "policy": {
         "Sockets": [
           {
@@ -47,7 +47,7 @@
     {
       "name": "tg-hass",
       "version": "VERSION",
-      "image": "REGISTRY/tg-hass:VERSION",
+      "image": "REGISTRY/tg/hass:VERSION",
       "policy": {
         "Sockets": [
           {
@@ -72,7 +72,7 @@
     {
       "name": "tg-ota",
       "version": "VERSION",
-      "image": "REGISTRY/tg-ota:VERSION",
+      "image": "REGISTRY/tg/ota:VERSION",
       "restart": "never",
       "policy": {
         "Drivers": [
@@ -86,7 +86,7 @@
     {
       "name": "tg-time",
       "version": "VERSION",
-      "image": "REGISTRY/tg-time:VERSION",
+      "image": "REGISTRY/tg/time:VERSION",
       "policy": {
         "Drivers": [
           {
@@ -99,7 +99,7 @@
     {
       "name": "tg-usb",
       "version": "VERSION",
-      "image": "REGISTRY/tg-usb:VERSION",
+      "image": "REGISTRY/tg/usb:VERSION",
       "policy": {
         "Sockets": [
           {
@@ -115,7 +115,7 @@
     {
       "name": "tg-logs",
       "version": "VERSION",
-      "image": "REGISTRY/tg-logs:VERSION",
+      "image": "REGISTRY/tg/logs:VERSION",
       "policy": {
         "Drivers": [
           {

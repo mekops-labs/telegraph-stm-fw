@@ -10,6 +10,8 @@ file of that wapp.
 Usage:
   tools/wapppush.py <registry-host:port> <image.wapp>...
 
+The image of the wapp tg-<name> goes to the repository tg/<name>.
+
 Note: the transport is plain HTTP. A registry of a LAN needs no more, and a
 registry that takes TLS needs a client this script does not try to be.
 """
@@ -74,7 +76,7 @@ def push(base, path):
 
     name = match.group("name")
     version = match.group("version")
-    repo = name
+    repo = "tg/" + name[len("tg-"):] if name.startswith("tg-") else name
 
     with open(path, "rb") as handle:
         layer = gzip.compress(handle.read(), mtime=0)
