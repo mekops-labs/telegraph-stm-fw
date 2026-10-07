@@ -56,7 +56,7 @@ help:
 	@echo "  font          build the extended font for the flash"
 	@echo "  compactfont   build the compact font, for two lines"
 	@echo "  sprites       build the sprites of the animation"
-	@echo "  test          build and run the host tests of the IPC library"
+	@echo "  test          build and run the host tests of the IPC library and the time policy"
 	@echo "  lint-format   reject any clang-format drift in boards/ and ipc/"
 	@echo "  format-fix    reformat boards/ and ipc/ in place with clang-format"
 	@echo "  tidy          clang-tidy the host-buildable ipc/ sources"
@@ -270,10 +270,17 @@ IPC_SRC   := $(wildcard ipc/src/*.c)
 IPC_CF    := -std=c99 -Wall -Wextra -Werror -Iipc/include
 TEST_BIN  := $(BUILD)/test_ipc
 
+# The policy of the wapp tg-time is pure code, thus it builds for the host too.
+POLICY_SRC := wapps/lib/timepolicy.c
+POLICY_BIN := $(BUILD)/test_timepolicy
+
 test:
 	$(RUN) sh -c 'mkdir -p $(BUILD) && \
 	  cc $(IPC_CF) -I$(UNITY)/src $(IPC_SRC) ipc/tests/test_ipc.c \
-	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN)'
+	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN) && \
+	  cc $(IPC_CF) -Iwapps/include -I$(UNITY)/src $(POLICY_SRC) \
+	     wapps/tests/test_timepolicy.c $(UNITY)/src/unity.c \
+	     -o $(POLICY_BIN) && $(POLICY_BIN)'
 
 # The formatter covers this repository's own C sources only: boards/ is the
 # board port, ipc/ is the shared framing library. third_party/ is vendored
