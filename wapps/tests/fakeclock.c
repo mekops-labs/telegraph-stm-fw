@@ -1,9 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* A shim for the host test of tg-time, loaded with LD_PRELOAD. The engine sets
- * the wall clock of its host, and a test must not move that clock. The shim
- * keeps the offset of a clock that the test sets, and it adds the offset to
- * every reading of CLOCK_REALTIME.
+/* A shim for the host test of tg-time, loaded with LD_PRELOAD. It keeps the
+ * offset of a clock that the test sets and adds it to CLOCK_REALTIME.
  */
 
 #define _GNU_SOURCE

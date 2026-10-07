@@ -23,9 +23,8 @@ enum tg_time_source {
     TG_TIME_SRC_UNKNOWN,
 };
 
-/* A time of the STM32 below the floor is the default of a DS3231 that lost its
- * battery, and not a time of today. The ceiling is the last second the engine
- * clock holds.
+/* A time below the floor is the default of a DS3231 that lost its battery. The
+ * ceiling is the last second the engine clock holds.
  */
 
 #define TG_TIME_FLOOR_S 1735689600u /* 2025-01-01 00:00:00 UTC */
@@ -65,15 +64,7 @@ struct tg_time_action {
 
 bool tg_time_plausible(uint32_t seconds);
 
-/* Decide the next step.
- *
- * The engine has no time of its own, or an unset clock: take the time of the
- * STM32, if it is plausible. The engine has a time from the control plane or a
- * person: send it to the STM32 when the two differ by more than the
- * threshold, or the STM32 holds no plausible time, or the offset is due. The
- * wapp never writes the engine clock back in that case. The source rtc came
- * from the STM32 itself, thus the wapp only sends the offset.
- */
+/* Decide the next step. The cases are in docs/time.md. */
 
 struct tg_time_action tg_time_decide(const struct tg_time_in *in);
 

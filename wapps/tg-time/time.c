@@ -1,11 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /* The wapp tg-time keeps the clock of the engine and the DS3231 of the STM32
- * together. The engine holds no time after a power cycle, and the DS3231 does,
- * thus the wapp takes the time from the STM32 when nothing else set the engine
- * clock. Sheriff and a person set that clock too, and the wapp then sends the
- * time to the STM32 with the offset of the local time. The decisions are in
- * telegraph/timepolicy.h.
+ * together. The decisions are in telegraph/timepolicy.h, and the behaviour is
+ * in docs/time.md.
  */
 
 #include <errno.h>
