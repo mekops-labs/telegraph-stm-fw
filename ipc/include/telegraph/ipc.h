@@ -309,10 +309,9 @@ extern "C" {
 
 #define IPC_SET_TEMPOFF_LEN 2u
 
-/* IPC_OP_SET_EXTTEMP: [tenths i16] replaces the reading on the temperature
- * digits with an outside value, in tenths of a degree Celsius. An empty
- * payload returns the digits to the reading of the DS3231. The board keeps
- * the value in RAM alone.
+/* IPC_OP_SET_EXTTEMP: [tenths i16] shows an outside value on the temperature
+ * digits, in tenths of a degree Celsius. An empty payload returns them to the
+ * DS3231. The board keeps the value in RAM alone.
  */
 
 #define IPC_SET_EXTTEMP_LEN 2u

@@ -69,10 +69,9 @@ const struct fontext_s *fontext_big(void);
 
 const struct fontext_s *fontext_compact(void);
 
-/* Read the big font from a file into a second table, and publish that table
- * only when the whole file is good. Thus a bad file leaves the font as it was,
- * and a call that took fontext_big() before keeps a consistent table. Negative
- * when the file is absent, too large, unordered or not a font.
+/* Read the big font from a file into a second table, and publish it only when
+ * the whole file is good. A bad file leaves the font as it was; the result is
+ * negative when the file is absent, too large, unordered or not a font.
  */
 
 int fontext_load(const char *path);
