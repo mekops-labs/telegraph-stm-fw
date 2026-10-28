@@ -50,6 +50,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `<engine release>-telegraph-<version of this repository>`.
 - The engine firmware builds on engine v0.29.2, which holds no copy of the
   Telegraph board, and the wapp tests run on it.
+- The wapp tests set `privileged` in the launch config of the supervisor, as
+  engine v0.29.0 requires, and no longer in `system`.
 
 ### Fixed
 

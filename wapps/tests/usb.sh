@@ -43,10 +43,11 @@ done
 
 cat > "$WORK/config.json" <<EOF
 {
-  "system": {"privileged": true},
+  "system": {},
   "supervisor": {
     "imagePath": "$SUPERVISOR",
     "params": {
+      "privileged": true,
       "console": {"in": {"name": "platform"}, "out": {"name": "platform"},
                   "err": {"name": "platform"}},
       "drivers": [{"name": "wanted"}]
