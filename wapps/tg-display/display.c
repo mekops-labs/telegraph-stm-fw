@@ -410,6 +410,48 @@ static void do_sleep(struct client_s *client, uint16_t corr,
     result_to_client(client, corr, ask(IPC_OP_SET_SLEEP, payload, len));
 }
 
+/* The outside temperature. The board checks the range. */
+
+static void do_exttemp(struct client_s *client, uint16_t corr,
+                       const uint8_t *payload, uint16_t len) {
+    result_to_client(client, corr, ask(IPC_OP_SET_EXTTEMP, payload, len));
+}
+
+/* A panel back to the content of the board. */
+
+static void do_release(struct client_s *client, uint16_t corr,
+                       const uint8_t *payload, uint16_t len) {
+    if (len != TG_DSP_RELEASE_LEN) {
+        nack_client(client, corr, IPC_ERR_BAD_LENGTH);
+        return;
+    }
+
+    if (!panel_ok(payload[TG_DSP_RELEASE_PANEL])) {
+        nack_client(client, corr, IPC_ERR_BAD_PAYLOAD);
+        return;
+    }
+
+    result_to_client(client, corr, ask(IPC_OP_RELEASE, payload, len));
+}
+
+/* The settings of the board, forwarded as the board gave them. */
+
+static void do_settings(struct client_s *client, uint16_t corr) {
+    int rc = ask(IPC_OP_GET_SETTINGS, NULL, 0);
+
+    if (rc != 0) {
+        result_to_client(client, corr, rc);
+        return;
+    }
+
+    if (g_replyOp != IPC_OP_SETTINGS || g_replyLen < IPC_SETTINGS_LEN) {
+        nack_client(client, corr, IPC_ERR_FAILED);
+        return;
+    }
+
+    to_client(client, TG_DSP_OP_SETTINGS, corr, g_reply, (uint16_t)g_replyLen);
+}
+
 static void on_client_frame(void *arg, const struct ipc_frame_s *frame) {
     struct client_s *client = arg;
 
@@ -440,6 +482,18 @@ static void on_client_frame(void *arg, const struct ipc_frame_s *frame) {
 
     case TG_DSP_OP_SLEEP:
         do_sleep(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_EXTTEMP:
+        do_exttemp(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_RELEASE:
+        do_release(client, frame->corr_id, frame->payload, frame->payload_len);
+        break;
+
+    case TG_DSP_OP_GET_SETTINGS:
+        do_settings(client, frame->corr_id);
         break;
 
     default:

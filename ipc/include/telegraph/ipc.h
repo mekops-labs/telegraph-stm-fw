@@ -80,12 +80,15 @@ extern "C" {
 
 /* The board: its state, its clock, its mode. */
 
-#define IPC_OP_GET_STATE 0x01u   /* edge -> STM32: request the state       */
-#define IPC_OP_STATE 0x02u       /* STM32 -> edge: the state               */
-#define IPC_OP_LOG 0x03u         /* STM32 -> edge: a log line, a push      */
-#define IPC_OP_SET_TIME 0x04u    /* edge -> STM32: set the RTC             */
-#define IPC_OP_SET_TEMPOFF 0x05u /* edge -> STM32: correct the temperature */
-#define IPC_OP_FLASH 0x06u       /* edge -> STM32: start the flash mode    */
+#define IPC_OP_GET_STATE 0x01u    /* edge -> STM32: request the state       */
+#define IPC_OP_STATE 0x02u        /* STM32 -> edge: the state               */
+#define IPC_OP_LOG 0x03u          /* STM32 -> edge: a log line, a push      */
+#define IPC_OP_SET_TIME 0x04u     /* edge -> STM32: set the RTC             */
+#define IPC_OP_SET_TEMPOFF 0x05u  /* edge -> STM32: correct the temperature */
+#define IPC_OP_FLASH 0x06u        /* edge -> STM32: start the flash mode    */
+#define IPC_OP_SET_EXTTEMP 0x07u  /* edge -> STM32: the outside temperature */
+#define IPC_OP_GET_SETTINGS 0x08u /* edge -> STM32: request the settings   */
+#define IPC_OP_SETTINGS 0x09u     /* STM32 -> edge: the settings            */
 
 /* The display: what the panels show, and how they move. */
 
@@ -98,6 +101,7 @@ extern "C" {
 #define IPC_OP_SET_ANIM 0x16u   /* edge -> STM32: animate a rectangle     */
 #define IPC_OP_ANIM_SPEED 0x17u /* edge -> STM32: the rate of a movement  */
 #define IPC_OP_ANIM_STOP 0x18u  /* edge -> STM32: stop an animation       */
+#define IPC_OP_RELEASE 0x19u    /* edge -> STM32: give a panel to the board */
 
 /* The storage: the flash of the board and the USB device alike. */
 
@@ -257,6 +261,19 @@ extern "C" {
  * rectangle keeps the pixels of its last step.
  */
 
+#define IPC_ANIMSTOP_LEN 1u
+
+/* IPC_OP_RELEASE: [panel u8]. The panel loses its animation and its pixels,
+ * and the board owns its content again: the sub panel shows the day of the
+ * week and the main panel stays empty.
+ */
+
+#define IPC_RELEASE_LEN 1u
+
+/* Result of a panel selector that may name both panels. */
+
+#define IPC_PANEL_BOTH 0xffu
+
 /* IPC_OP_SET_FONT takes the name of a font, with no directory and no ending.
  * An empty payload asks for the names the board holds, answered under the
  * same opcode and ID, one name per line.
@@ -291,6 +308,31 @@ extern "C" {
  */
 
 #define IPC_SET_TEMPOFF_LEN 2u
+
+/* IPC_OP_SET_EXTTEMP: [tenths i16] replaces the reading on the temperature
+ * digits with an outside value, in tenths of a degree Celsius. An empty
+ * payload returns the digits to the reading of the DS3231. The board keeps
+ * the value in RAM alone.
+ */
+
+#define IPC_SET_EXTTEMP_LEN 2u
+#define IPC_EXTTEMP_MIN (-990)
+#define IPC_EXTTEMP_MAX 1999
+
+/* IPC_OP_SETTINGS answers IPC_OP_GET_SETTINGS with the values the board
+ * holds: [digits u8] [panels u8] [sleep u16] [wake u16] [utc offset i16]
+ * [temperature correction i16] [outside set u8] [outside tenths i16].
+ */
+
+#define IPC_SETTINGS_DIGITS 0u
+#define IPC_SETTINGS_PANELS 1u
+#define IPC_SETTINGS_SLEEP 2u
+#define IPC_SETTINGS_WAKE 4u
+#define IPC_SETTINGS_UTCOFFSET 6u
+#define IPC_SETTINGS_TEMPOFF 8u
+#define IPC_SETTINGS_EXT_SET 10u
+#define IPC_SETTINGS_EXT 11u
+#define IPC_SETTINGS_LEN 13u
 
 /* IPC_OP_SET_SLEEP: the display gives no light between two minutes of the
  * local day, and a start past the end goes through midnight. A start of
@@ -536,6 +578,25 @@ int ipc_encode_ack(void *dst, size_t dstlen, uint16_t corr_id, uint8_t credits);
 /* Write a NACK into dst, its payload one IPC_ERR_* code. */
 
 int ipc_encode_nack(void *dst, size_t dstlen, uint16_t corr_id, uint8_t error);
+
+/* Check the payload of IPC_OP_SET_EXTTEMP. Returns IPC_ERR_NONE, or the NACK
+ * code the board answers with. An empty payload clears the value: *set is
+ * false then, and *tenths is untouched.
+ */
+
+uint8_t ipc_check_exttemp(const uint8_t *payload, uint16_t len, bool *set,
+                          int16_t *tenths);
+
+/* Check the payload of IPC_OP_RELEASE and give its panel. */
+
+uint8_t ipc_check_release(const uint8_t *payload, uint16_t len, uint8_t *panel);
+
+/* Check the payload of IPC_OP_ANIM_STOP. *panel is IPC_PANEL_MAIN,
+ * IPC_PANEL_SUB, or IPC_PANEL_BOTH for an empty payload.
+ */
+
+uint8_t ipc_check_animstop(const uint8_t *payload, uint16_t len,
+                           uint8_t *panel);
 
 /* Set the parser to the empty state, and every count to zero. */
 

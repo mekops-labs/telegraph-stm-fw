@@ -186,6 +186,12 @@ int hazk03_config_load(struct hazk03_config_s *cfg);
 
 int hazk03_config_save(const struct hazk03_config_s *cfg);
 
+/* The result of the settings load at start, as one line for the edge MCU. */
+
+#define HAZK03_BOOT_NOTE_MAX 64
+
+const char *hazk03_boot_note(void);
+
 /* Apply the settings of the store to the display, writing nothing back. */
 
 void hazk03_display_setconfig(const struct hazk03_config_s *cfg);
@@ -227,6 +233,12 @@ void hazk03_hse_probe(char *buf, size_t len);
 
 int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
                         uint8_t valign);
+
+/* Read the big font from a file, with the lock of the framebuffer held. A bad
+ * file leaves the font as it was.
+ */
+
+int hazk03_display_loadfont(const char *path);
 
 /* Put a rectangle of pixels on one panel, row by row with bit 7 leftmost. The
  * rest of the panel keeps its content.
@@ -301,6 +313,30 @@ void hazk03_display_sleep(uint16_t sleepmin, uint16_t wakemin);
  */
 
 int hazk03_display_brightness(uint8_t digits, uint8_t panels);
+
+/* Show an outside temperature, in tenths of a degree, on the temperature
+ * digits. Clearing it returns the digits to the DS3231. The value lives in
+ * RAM alone.
+ */
+
+void hazk03_display_exttemp(bool set, int16_t tenths);
+
+/* The values the board holds: the persisted settings and the outside value. */
+
+void hazk03_display_getsettings(struct hazk03_config_s *cfg, bool *ext_set,
+                                int16_t *ext_tenths);
+
+/* Give one panel to the board: it loses its animation and pixels, then the
+ * sub panel shows the day of the week and the main panel stays empty.
+ */
+
+void hazk03_display_release(int panel);
+
+/* The error of the last failed save of the settings, or 0. Reading it clears
+ * the record.
+ */
+
+int hazk03_display_saveerr(void);
 
 /* Start the task serving the protocol on the UART of the edge MCU. That UART
  * also carries the console, thus only a build without one serves it.

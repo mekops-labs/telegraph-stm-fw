@@ -68,6 +68,10 @@ static const uint8_t g_font[] = {
 
 #define TM_FONT_BLANK 16
 
+/* Segment G alone. */
+
+#define TM_GLYPH_MINUS 0x40
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -177,6 +181,8 @@ void tm1629a_setchar(uint8_t digit, char c) {
         glyph = g_font[10 + (c - 'a')];
     } else if (c == ' ') {
         glyph = g_font[TM_FONT_BLANK];
+    } else if (c == '-') {
+        glyph = TM_GLYPH_MINUS;
     } else {
         return;
     }

@@ -3,6 +3,7 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <stdio.h>
 #include <sys/mount.h>
 #include <syslog.h>
 
@@ -41,6 +42,10 @@ static void hazk03_jtag_reclaim(void) {
  * Name: stm32_bringup
  ****************************************************************************/
 
+static char g_boot_note[HAZK03_BOOT_NOTE_MAX];
+
+const char *hazk03_boot_note(void) { return g_boot_note; }
+
 int stm32_bringup(void) {
     /* Do this step before the configuration of PA13 below. */
 
@@ -59,7 +64,12 @@ int stm32_bringup(void) {
     hazk03_display_init();
 
 #ifdef CONFIG_MTD_W25
-    if (hazk03_flash_initialize() == OK) {
+    int flash = hazk03_flash_initialize();
+
+    if (flash != OK) {
+        snprintf(g_boot_note, sizeof(g_boot_note), "config: flash failed (%d)",
+                 flash);
+    } else {
         struct hazk03_config_s cfg;
 
         /* The settings survive a reset. Thus the edge MCU sends the offset of
@@ -70,6 +80,11 @@ int stm32_bringup(void) {
             hazk03_display_setconfig(&cfg);
             syslog(LOG_INFO, "config: offset=%d bright=%u/%u\n", cfg.utcoffset,
                    cfg.digits, cfg.panels);
+            snprintf(g_boot_note, sizeof(g_boot_note),
+                     "config: loaded bright=%u/%u sleep=%u wake=%u", cfg.digits,
+                     cfg.panels, cfg.sleepmin, cfg.wakemin);
+        } else {
+            snprintf(g_boot_note, sizeof(g_boot_note), "config: none stored");
         }
 
 #ifdef CONFIG_FS_SMARTFS
@@ -77,7 +92,7 @@ int stm32_bringup(void) {
          * without that file keeps the font of the firmware.
          */
 
-        fontext_load(HAZK03_FONT_PATH);
+        hazk03_display_loadfont(HAZK03_FONT_PATH);
 #endif
     }
 #endif

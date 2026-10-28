@@ -478,6 +478,95 @@ static void ipc_set_tempoff(struct ipc_ctx_s *ctx,
     ipc_ack(ctx, frame->corr_id);
 }
 
+static void ipc_set_exttemp(struct ipc_ctx_s *ctx,
+                            const struct ipc_frame_s *frame) {
+    bool set = false;
+    int16_t tenths = 0;
+    uint8_t err;
+
+    err = ipc_check_exttemp(frame->payload, frame->payload_len, &set, &tenths);
+    if (err != IPC_ERR_NONE) {
+        ipc_nack(ctx, frame->corr_id, err);
+        return;
+    }
+
+    hazk03_display_exttemp(set, tenths);
+    ipc_ack(ctx, frame->corr_id);
+}
+
+static void ipc_send_settings(struct ipc_ctx_s *ctx, uint16_t corr_id) {
+    uint8_t payload[IPC_SETTINGS_LEN];
+    struct hazk03_config_s cfg;
+    bool ext_set;
+    int16_t ext_tenths;
+
+    hazk03_display_getsettings(&cfg, &ext_set, &ext_tenths);
+
+    payload[IPC_SETTINGS_DIGITS] = cfg.digits;
+    payload[IPC_SETTINGS_PANELS] = cfg.panels;
+    ipc_put_u16(&payload[IPC_SETTINGS_SLEEP], cfg.sleepmin);
+    ipc_put_u16(&payload[IPC_SETTINGS_WAKE], cfg.wakemin);
+    ipc_put_u16(&payload[IPC_SETTINGS_UTCOFFSET], (uint16_t)cfg.utcoffset);
+    ipc_put_u16(&payload[IPC_SETTINGS_TEMPOFF], (uint16_t)cfg.tempoffset);
+    payload[IPC_SETTINGS_EXT_SET] = ext_set ? 1u : 0u;
+    ipc_put_u16(&payload[IPC_SETTINGS_EXT], (uint16_t)ext_tenths);
+
+    ipc_send(ctx, ipc_encode(ctx->tx, sizeof(ctx->tx), IPC_OP_SETTINGS, corr_id,
+                             payload, sizeof(payload)));
+}
+
+static void ipc_release(struct ipc_ctx_s *ctx,
+                        const struct ipc_frame_s *frame) {
+    uint8_t panel = 0;
+    uint8_t err = ipc_check_release(frame->payload, frame->payload_len, &panel);
+
+    if (err != IPC_ERR_NONE) {
+        ipc_nack(ctx, frame->corr_id, err);
+        return;
+    }
+
+    hazk03_display_release(panel == IPC_PANEL_SUB ? HAZK03_PANEL_SUB
+                                                  : HAZK03_PANEL_MAIN);
+    ipc_ack(ctx, frame->corr_id);
+}
+
+static void ipc_anim_stop(struct ipc_ctx_s *ctx,
+                          const struct ipc_frame_s *frame) {
+    uint8_t panel = 0;
+    uint8_t err =
+        ipc_check_animstop(frame->payload, frame->payload_len, &panel);
+
+    if (err != IPC_ERR_NONE) {
+        ipc_nack(ctx, frame->corr_id, err);
+        return;
+    }
+
+    if (panel != IPC_PANEL_SUB) {
+        hazk03_display_animstop(HAZK03_PANEL_MAIN);
+    }
+
+    if (panel != IPC_PANEL_MAIN) {
+        hazk03_display_animstop(HAZK03_PANEL_SUB);
+    }
+
+    ipc_ack(ctx, frame->corr_id);
+}
+
+/* A failed save of the settings has no reply to carry it, thus it goes out as
+ * a log line.
+ */
+
+static void ipc_report_saveerr(struct ipc_ctx_s *ctx) {
+    int err = hazk03_display_saveerr();
+
+    if (err != 0) {
+        char note[IPC_TEXT_MAX];
+
+        snprintf(note, sizeof(note), "config: save failed (%d)", err);
+        ipc_log(ctx, note);
+    }
+}
+
 static void ipc_set_sleep(struct ipc_ctx_s *ctx,
                           const struct ipc_frame_s *frame) {
     uint16_t start;
@@ -1159,6 +1248,14 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         ipc_set_tempoff(ctx, frame);
         break;
 
+    case IPC_OP_SET_EXTTEMP:
+        ipc_set_exttemp(ctx, frame);
+        break;
+
+    case IPC_OP_GET_SETTINGS:
+        ipc_send_settings(ctx, frame->corr_id);
+        break;
+
         /* A flash operation uses the system bootloader. The edge MCU holds
          * BOOT0 and it applies a reset. Thus this firmware needs no support.
          */
@@ -1217,7 +1314,7 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
             break;
         }
 
-        if (fontext_load(path) < 0) {
+        if (hazk03_display_loadfont(path) < 0) {
             ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
         } else {
             ipc_ack(ctx, frame->corr_id);
@@ -1246,9 +1343,11 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         break;
 
     case IPC_OP_ANIM_STOP:
-        hazk03_display_animstop(HAZK03_PANEL_MAIN);
-        hazk03_display_animstop(HAZK03_PANEL_SUB);
-        ipc_ack(ctx, frame->corr_id);
+        ipc_anim_stop(ctx, frame);
+        break;
+
+    case IPC_OP_RELEASE:
+        ipc_release(ctx, frame);
         break;
 
 #ifdef CONFIG_FS_SMARTFS
@@ -1295,6 +1394,8 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
         ipc_nack(ctx, frame->corr_id, IPC_ERR_BAD_OPCODE);
         break;
     }
+
+    ipc_report_saveerr(ctx);
 }
 
 static int ipc_server(int argc, char *argv[]) {
@@ -1312,6 +1413,10 @@ static int ipc_server(int argc, char *argv[]) {
 
     hazk03_hse_probe(hse, sizeof(hse));
     ipc_log(ctx, hse);
+
+    if (hazk03_boot_note()[0] != '\0') {
+        ipc_log(ctx, hazk03_boot_note());
+    }
 
     for (;;) {
         struct pollfd pfd;

@@ -30,7 +30,7 @@ FLASHER_IMAGE := hazk-pio
 FLASHER_ENV   := xiao_esp32s3
 
 .PHONY: help image shell configure build all clean distclean menuconfig \
-        savedefconfig test version font compactfont sprites \
+        savedefconfig test version font compactfont fontcompact sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
         ota-image wapp-push require-registry require-broker deploy \
         lint-format format-fix tidy cppcheck
@@ -54,7 +54,8 @@ help:
 	@echo "  all           build both firmware images"
 	@echo "  version       write the version header from the git tags"
 	@echo "  font          build the extended font for the flash"
-	@echo "  compactfont   build the compact font, for two lines"
+	@echo "  compactfont   build the compact font file, for two lines"
+	@echo "  fontcompact   regenerate the compact font built into the firmware"
 	@echo "  sprites       build the sprites of the animation"
 	@echo "  test          build and run the host tests of the IPC library and the time policy"
 	@echo "  lint-format   reject any clang-format drift in boards/ and ipc/"
@@ -125,6 +126,12 @@ compactfont:
 	@python3 tools/mkcompactfont.py -o $(COMPACT_FILE)
 	@echo "Send it with: curl -s --get --data-urlencode \"cmd=putfile \
 $(COMPACT_PATH) $$(xxd -p -c 100000 $(COMPACT_FILE))\" http://<address>/ipc"
+
+# The compact font, as the C table the firmware draws two lines from. The
+# formatter runs after the generator, so the file matches the lint.
+fontcompact:
+	python3 tools/mkcompactfont.py --emit-c $(BOARD_DIR)/src/fontcompact.c
+	$(RUN) clang-format -i $(BOARD_DIR)/src/fontcompact.c
 
 # The sprites of the animation. The board reads them from its own flash, thus
 # no pixels go over the link while one plays.
@@ -276,13 +283,40 @@ TEST_BIN  := $(BUILD)/test_ipc
 POLICY_SRC := wapps/lib/timepolicy.c
 POLICY_BIN := $(BUILD)/test_timepolicy
 
+# The format of the temperature digits is pure code, thus it builds for the
+# host too.
+TEMPFMT_SRC  := $(BOARD_DIR)/src/tempfmt.c
+TEMPFMT_TEST := $(BOARD_DIR)/tests/test_tempfmt.c
+TEMPFMT_BIN  := $(BUILD)/test_tempfmt
+
+# The lookup in a font and the compact font table are pure code too. The stub
+# header stands in for the NuttX one.
+FONT_SRC  := $(BOARD_DIR)/src/fontlookup.c $(BOARD_DIR)/src/fontcompact.c \
+             $(BOARD_DIR)/src/font5x7.c
+FONT_TEST := $(BOARD_DIR)/tests/test_font.c
+FONT_BIN  := $(BUILD)/test_font
+FONT_CF   := -std=c99 -Wall -Wextra -Werror -Iipc/include \
+             -I$(BOARD_DIR)/tests/include -I$(BOARD_DIR)/src
+
+# The parsing of tg-hass is pure code, thus it builds for the host too.
+HASSPARSE_SRC  := wapps/lib/hassparse.c
+HASSPARSE_TEST := wapps/tests/test_hassparse.c
+HASSPARSE_BIN  := $(BUILD)/test_hassparse
+
 test:
 	$(RUN) sh -c 'mkdir -p $(BUILD) && \
 	  cc $(IPC_CF) -I$(UNITY)/src $(IPC_SRC) ipc/tests/test_ipc.c \
 	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN) && \
 	  cc $(IPC_CF) -Iwapps/include -I$(UNITY)/src $(POLICY_SRC) \
 	     wapps/tests/test_timepolicy.c $(UNITY)/src/unity.c \
-	     -o $(POLICY_BIN) && $(POLICY_BIN)'
+	     -o $(POLICY_BIN) && $(POLICY_BIN) && \
+	  cc $(IPC_CF) -I$(UNITY)/src $(TEMPFMT_SRC) $(TEMPFMT_TEST) \
+	     $(UNITY)/src/unity.c -o $(TEMPFMT_BIN) && $(TEMPFMT_BIN) && \
+	  cc $(FONT_CF) -I$(UNITY)/src $(FONT_SRC) $(FONT_TEST) \
+	     $(UNITY)/src/unity.c -o $(FONT_BIN) && $(FONT_BIN) && \
+	  cc $(IPC_CF) -Iwapps/include -I$(UNITY)/src $(HASSPARSE_SRC) \
+	     $(HASSPARSE_TEST) $(UNITY)/src/unity.c -o $(HASSPARSE_BIN) && \
+	  $(HASSPARSE_BIN)'
 
 # The formatter covers this repository's own C sources only: boards/ is the
 # board port, ipc/ is the shared framing library. third_party/ is vendored

@@ -45,6 +45,10 @@
 #define TG_DSP_OP_TIME 0x45u      /* client -> display: the clock          */
 #define TG_DSP_OP_CLEAR 0x46u     /* client -> display: clear the panels   */
 #define TG_DSP_OP_SLEEP 0x47u     /* client -> display: no light in a window */
+#define TG_DSP_OP_EXTTEMP 0x48u   /* client -> display: outside temp. */
+#define TG_DSP_OP_RELEASE 0x49u   /* client -> display: panel to board */
+#define TG_DSP_OP_GET_SETTINGS 0x4Au /* client -> display: the settings */
+#define TG_DSP_OP_SETTINGS 0x4Bu     /* display -> client: the settings */
 
 /* A request takes IPC_OP_ACK, or IPC_OP_NACK with one byte of IPC_ERR_*.
  * IPC_ERR_BUSY means the board gave no reply, thus it says nothing about the
@@ -70,6 +74,7 @@
  * IPC_VALIGN_*, and 0 puts the text in the middle.
  */
 
+#define TG_DSP_TEXT_MAX 64u /* the longest text the board takes, in bytes */
 #define TG_DSP_TEXT_PANEL 0u
 #define TG_DSP_TEXT_ATTRS 1u
 #define TG_DSP_TEXT_BODY 2u
@@ -118,6 +123,20 @@
 #define TG_DSP_SLEEP_LEN 4u
 
 /* TG_DSP_OP_CLEAR takes no payload. */
+
+/* TG_DSP_OP_EXTTEMP: the payload of IPC_OP_SET_EXTTEMP, forwarded. Tenths of
+ * a degree Celsius from IPC_EXTTEMP_MIN to IPC_EXTTEMP_MAX; empty clears it.
+ */
+
+/* TG_DSP_OP_RELEASE: [panel u8]. The panel returns to the content of the
+ * board.
+ */
+
+#define TG_DSP_RELEASE_PANEL 0u
+#define TG_DSP_RELEASE_LEN 1u
+
+/* TG_DSP_OP_SETTINGS carries the payload of IPC_OP_SETTINGS, forwarded whole.
+ */
 
 /* TG_DSP_OP_STATE carries the payload of IPC_OP_STATE, forwarded whole. */
 

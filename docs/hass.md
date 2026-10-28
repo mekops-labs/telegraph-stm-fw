@@ -10,12 +10,13 @@ wapp to its desired state, and removing it is dropping that wapp.
 
 | Entity | Platform | What it does |
 | :--- | :--- | :--- |
-| Main panel | `text` | the text of the large panel |
-| Sub panel | `text` | the text of the small panel |
+| Main panel | `text` | the text of the large panel; `\n` makes two lines; empty gives the panel back to the board |
+| Sub panel | `text` | the text of the small panel; empty shows the day of the week |
+| External temperature | `text` | a decimal degree for the temperature digits; empty returns them to the DS3231 |
 | Digit brightness | `number`, config | 0 turns the digits off, 8 is the full level |
 | Panel brightness | `number`, config | the same for both panels |
 | Display off at, Display on at | `time`, config | the period without light; equal values disable it |
-| Temperature | `sensor` | what the DS3231 reads, in °C |
+| Temperature | `sensor` | what the DS3231 reads, in °C, to one decimal |
 | Frames, CRC errors, Resyncs | `sensor`, diagnostic | the counters of the link |
 | Display firmware | `sensor`, diagnostic | the version the STM32 reports |
 
@@ -28,6 +29,34 @@ The device carries the identifier the control plane publishes for it, thus
 Home Assistant shows one Telegraph and not two — the sensors of
 [Deputy](https://gitlab.com/mekops/wanted/deputy) and these entities on one
 device page.
+
+**The board is the source of truth for the settings.** The adapter reads the
+levels, the period without light and the outside temperature from the board at
+its start and with every reading, and it publishes them as the read-backs. A
+restart of the adapter thus shows what a person set before, and a change to one
+entity keeps its partner: the request to the board carries both levels, and both
+times of the period. A command that arrives while the settings are unknown is
+dropped. **A read-back follows the board**: a command the board refuses, or
+one that is dropped, publishes nothing, and the next reading restores what the
+board holds. A disabled period shows as two equal times.
+
+**An empty text gives the panel back to the board.** The sub panel then shows
+the day of the week, and the main panel stays empty. A text of the main panel
+turns the two characters `\n` into a line feed, thus Home Assistant, whose
+input is one line, can set two lines. The board takes 64 bytes of text and a
+Polish letter takes two, thus the adapter cuts a longer text at a character
+boundary, logs the cut, and Home Assistant offers 32 characters for the main
+panel. The read-back of a panel is the document `{"text":"…"}`, never an empty
+message: an empty retained message would delete the read-back, and Home
+Assistant would show the entity as unknown after its own restart.
+
+**The outside temperature is a number or nothing.** The entity takes `-12.5`,
+`21` or an empty value, from -99.0 to 199.9. Anything else leaves the board
+as it was and the next reading shows the true value. The digits round to whole
+degrees, and a value of three characters alternates its parts every 3 s. The
+value lives in the RAM of the board: a reset of the STM32 clears it, a restart
+of the adapter does not. The state document carries it as `ext_temperature`,
+empty when the board holds none.
 
 **Availability comes from the last will.** The broker publishes `offline` on
 the availability topic the moment the session drops, thus a board that loses
@@ -43,13 +72,14 @@ With the defaults, and a device named `telegraph-01`:
 | `homeassistant/device/telegraph-01/config` | the discovery, retained |
 | `telegraph/telegraph-01/availability` | `online`, or `offline` from the will |
 | `telegraph/telegraph-01/main/set` | the text of the main panel |
-| `telegraph/telegraph-01/main` | what that entity reads back, retained |
+| `telegraph/telegraph-01/main` | what that entity reads back, as `{"text":"…"}`, retained |
 | `telegraph/telegraph-01/sub/set`, `…/sub` | the same for the sub panel |
 | `telegraph/telegraph-01/brightness/digits/set`, `…/digits` | the digits |
 | `telegraph/telegraph-01/brightness/panels/set`, `…/panels` | the panels |
 | `telegraph/telegraph-01/dnd/start/set`, `…/start` | the minute the display stops |
 | `telegraph/telegraph-01/dnd/end/set`, `…/end` | the minute it starts again |
-| `telegraph/telegraph-01/state` | the readings, retained |
+| `telegraph/telegraph-01/temperature/ext/set` | the outside temperature |
+| `telegraph/telegraph-01/state` | the readings and the outside temperature, retained |
 
 ## The configuration
 

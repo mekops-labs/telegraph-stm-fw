@@ -83,7 +83,8 @@ sleep 1
 A=$(readlink -f ptyA)
 B=$(readlink -f ptyB)
 
-nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
+STUB_SECONDS=${STUB_SECONDS:-100} STUB_DIGITS=2 STUB_PANELS=3 STUB_SLEEP=1320 \
+STUB_WAKE=360 nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
 stub_pid=$!
 sleep 1
 
@@ -101,8 +102,8 @@ HCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"
   sleep 2; echo "create tg-hass"
   sleep 1; echo "set_config tg-hass $HCFG"
   sleep 1; echo "start tg-hass"
-  sleep 20
-} | timeout 70 "$WANTED" config.json > "$WORK/engine.log" 2>&1 &
+  sleep 70
+} | timeout 130 "$WANTED" config.json > "$WORK/engine.log" 2>&1 &
 engine_pid=$!
 
 # The wapps need a moment before the broker holds their messages.
@@ -140,7 +141,7 @@ mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" \
 sleep 3
 
 check "a command reaches the board" 'opcode 0x13' "$(cat "$WORK/stub.log")"
-check "the entity reads back what was set" 'hello from HA' \
+check "the entity reads back what was set" '{"text":"hello from HA"}' \
       "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
              -t "telegraph/$DEVICE/main" -C 1 -W 5 2>&1)"
 
@@ -149,6 +150,8 @@ mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" \
 sleep 3
 
 check "a brightness command reaches the board" 'opcode 0x11' \
+      "$(cat "$WORK/stub.log")"
+check "a panel level keeps the board's digit level" 'set brightness 2 6' \
       "$(cat "$WORK/stub.log")"
 
 mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" \
@@ -169,6 +172,77 @@ check "the board publishes its readings" '"temperature"' "$state"
 check "the readings carry the counters of the link" '"resyncs"' "$state"
 check "the readings carry the firmware of the display" '"firmware"' "$state"
 check "the discovery names the temperature entity" '"dev_cla":"temperature"' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
+
+pub() { mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" -t "telegraph/$DEVICE/$1" -m "$2" >/dev/null 2>&1; }
+sub() { mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" -t "telegraph/$DEVICE/$1" -C 1 -W 6 2>&1; }
+
+# The board holds the settings, and the adapter shows them: the stub was seeded
+# with levels 2 and 3 and a period from 22:00 to 06:00. The commands above set
+# the panel level to 6 and the start of the period to 22:00.
+check "the digit level read back is the board's" '^2$' "$(sub brightness/digits)"
+check "the panel level read back is the last one set" '^6$' "$(sub brightness/panels)"
+check "the period start read back is the board's" '22:00' "$(sub dnd/start)"
+check "the period end read back is the board's" '06:00' "$(sub dnd/end)"
+
+# A digit level keeps the panel level, which the adapter took from the board.
+pub brightness/digits/set 7
+sleep 3
+check "a digit level keeps the panel level" 'set brightness 7 6' \
+      "$(cat "$WORK/stub.log")"
+
+# The outside temperature.
+pub temperature/ext/set "-12.5"
+sleep 3
+check "the outside temperature reaches the board in tenths" 'set exttemp -125' \
+      "$(cat "$WORK/stub.log")"
+check "the state document carries the outside temperature" \
+      '"ext_temperature":"-12.5"' "$(sub state)"
+pub temperature/ext/set "abc"
+sleep 3
+check "text is refused and the board keeps its value" \
+      'is not a number in range' "$(grep -a 'hass:' "$WORK/engine.log")"
+check "the state document still carries the old value" \
+      '"ext_temperature":"-12.5"' "$(sub state)"
+pub temperature/ext/set ""
+sleep 3
+check "an empty value clears the outside temperature" 'clear exttemp' \
+      "$(cat "$WORK/stub.log")"
+check "the state document shows it empty" '"ext_temperature":""' "$(sub state)"
+check "the discovery names the outside temperature entity" \
+      '"External temperature"' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
+
+# Empty panel texts give the panels back to the board.
+pub main/set ""
+sleep 3
+check "an empty main text releases the main panel" 'release panel 0' \
+      "$(cat "$WORK/stub.log")"
+check "an empty text reads back as a document, not an empty message" \
+      '{"text":""}' "$(sub main)"
+pub sub/set ""
+sleep 3
+check "an empty sub text releases the sub panel" 'release panel 1' \
+      "$(cat "$WORK/stub.log")"
+
+# A line break: the two characters become a line feed on the main panel.
+pub main/set 'Dom\nOK'
+sleep 3
+check "the two characters \\n become a line feed" '446f6d0a4f4b' \
+      "$(cat "$WORK/stub.log")"
+
+# A text of 40 two-byte letters is cut to 64 bytes, never refused.
+long=$(python3 -c "print('\u017c' * 40)")
+pub main/set "$long"
+sleep 3
+check "a long text is cut to the 64 bytes the board takes" \
+      'text hex \(c5bc\)\{32\}$' "$(grep -a 'text hex' "$WORK/stub.log" | tail -1)"
+check "the cut is logged" 'was cut to 64 bytes' "$(grep -a 'hass:' "$WORK/engine.log")"
+check "a level reads back as the board took it" '^7$' "$(sub brightness/digits)"
+check "the panel entities read their text from a document" \
+      '"val_tpl":"{{value_json.text}}"' \
       "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
              -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
 
