@@ -384,6 +384,26 @@ STM32 does, thus it needs no hardware. That build needs
 `CONFIG_WANTED_VFS_RTC=y`, and `wapps/tests/http.sh` also needs
 `CONFIG_WANTED_VFS_SOCKET_LISTEN=y` and four wapp slots.
 
+### The engine firmware of the edge MCU
+
+The directory `configs/` is a board directory of the WANTED engine. It holds the
+engine configuration of the board, the launch configuration the firmware embeds
+and the wapp that the firmware seeds. The engine builds from it in its own
+container, and the engine checkout stays unmodified.
+
+```sh
+make edge-build                          # firmware into dist/
+make edge-flash PORT=/dev/ttyACM0        # the merged image, over USB
+make edge-ota-image REGISTRY=<host:port> # an OCI firmware image, not pushed
+```
+
+The engine checkout is `ENGINE_DIR`, `../../wanted/wanted-engine` by default.
+The image tag is `<engine release>-telegraph-<version of this repository>`, thus
+a change of the board configuration on one engine release gets a new tag.
+`mise run build`, `mise run flash-edge` and `mise run ota-image` run the same
+targets for both MCUs. `REGISTRY` and `PORT` come from the environment, or from
+an untracked `.mise.local.toml`.
+
 ## License
 
 The license is Apache-2.0. Refer to [LICENSE](LICENSE) and [NOTICE](NOTICE).

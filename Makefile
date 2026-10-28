@@ -33,7 +33,9 @@ FLASHER_ENV   := xiao_esp32s3
         savedefconfig test version font compactfont fontcompact sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
         ota-image wapp-push require-registry require-broker deploy \
-        lint-format format-fix tidy cppcheck
+        lint-format format-fix tidy cppcheck require-ipc \
+        check-engine edge-seeds edge-build edge-flash edge-monitor \
+        edge-ota-image
 
 help:
 	@echo "Targets:"
@@ -52,6 +54,10 @@ help:
 	@echo "  wapp-test     run the round trip of the broker (WANTED=<wanted-cli>)"
 	@echo "  ota-image     stage the STM32 firmware into the wapp that writes it"
 	@echo "  all           build both firmware images"
+	@echo "  edge-build    build the engine firmware of the edge MCU into dist/"
+	@echo "  edge-flash    write that firmware to PORT with esptool"
+	@echo "  edge-monitor  read the serial console of the edge MCU on PORT"
+	@echo "  edge-ota-image  tag the engine firmware as an OCI image for REGISTRY"
 	@echo "  version       write the version header from the git tags"
 	@echo "  font          build the extended font for the flash"
 	@echo "  compactfont   build the compact font file, for two lines"
@@ -97,6 +103,14 @@ $(NUTTX)/.config:
 	  ./tools/configure.sh -l "$$top/$(BOARD_DIR)/configs/$(CONFIG)"'
 
 configure: $(NUTTX)/.config
+
+# A configured tree keeps its configuration, thus CONFIG=ipc does not change a
+# tree configured as nsh. The firmware that tg-ota writes must serve the
+# protocol: a console build answers the edge MCU with nothing.
+require-ipc: configure
+	@grep -qx 'CONFIG_NO_SERIAL_CONSOLE=y' $(NUTTX)/.config || \
+	    { echo "the configured STM32 firmware is not ipc;" \
+	      "run make distclean, then make CONFIG=ipc" >&2; exit 1; }
 
 # The header changes with the git state, thus this target runs every time. The
 # script keeps the file untouched when the version is the same.
@@ -261,11 +275,62 @@ FORCE:
 deploy: wapp-push $(DEPLOY_OUT)
 	deputy device desired-state push --file=$(DEPLOY_OUT) $(DEVICE)
 
+# The engine firmware of the edge MCU. The board directory configs/ plugs into the
+# engine's own container build, and the engine checkout is not modified.
+#
+#   make edge-build                      # firmware into dist/
+#   make edge-flash PORT=/dev/ttyACM0
+#   make edge-ota-image REGISTRY=host:5000  # OCI firmware image, not pushed
+
+# A WANTED engine checkout, relative to this repository.
+ENGINE_DIR ?= ../../wanted/wanted-engine
+EDGE_BOARD ?= telegraph-sheriff
+PORT       ?= /dev/ttyACM0
+BAUD       ?= 921600
+# The project in the firmware image tag; it may not hold a '-'.
+FW_PROJECT ?= telegraph
+
+EDGE_DIST = $(ENGINE_DIR)/dist/esp-idf
+EDGE_MERGED = dist/$(EDGE_BOARD)-merged.bin
+EDGE_OTA    = dist/$(EDGE_BOARD)-ota.bin
+PUBLISH     = $(ENGINE_DIR)/docker/publish-images.sh
+
+check-engine:
+	@test -f $(ENGINE_DIR)/Makefile || \
+	    { echo "no engine checkout at $(ENGINE_DIR); set ENGINE_DIR" >&2; exit 1; }
+
+# The firmware carries the log reader, so a board with no console always has
+# a wapp it can start. The engine build mounts configs/ alone, thus the wapp is
+# staged there.
+edge-seeds: wapps
+	install -D -m 0644 $(WAPP_DIR)/tg-logs/tg-logs.wasm configs/seeds/tg-logs.wasm
+
+edge-build: check-engine edge-seeds
+	$(MAKE) -C $(ENGINE_DIR) build BOARD_DIR=$(CURDIR)/configs \
+	    DEFCONFIG=$(EDGE_BOARD) BUILD_DIR=build-$(EDGE_BOARD)
+	install -D -m 0644 $(EDGE_DIST)/wanted-esp32s3-merged.bin $(EDGE_MERGED)
+	install -D -m 0644 $(EDGE_DIST)/wanted-esp32s3-ota.bin $(EDGE_OTA)
+	tools/check-fw-config.py $(EDGE_OTA) configs/config.json
+
+edge-flash:
+	esptool --chip esp32s3 -p $(PORT) -b $(BAUD) write-flash 0x0 $(EDGE_MERGED)
+
+edge-monitor:
+	python3 -m serial.tools.miniterm --raw $(PORT) 115200
+
+# The image is $(REGISTRY)/wanted-engine:<engine release>-$(FW_PROJECT)-<version>.
+edge-ota-image: require-registry edge-build
+	@grep -q -- '--config' $(PUBLISH) || \
+	    { echo "$(PUBLISH) lacks -C; update the engine checkout" >&2; exit 1; }
+	REGISTRY=$(REGISTRY) $(PUBLISH) -b $(FW_PROJECT) -i $(EDGE_OTA) \
+	    -c "$$(scripts/fw-variant)" \
+	    -C $(ENGINE_DIR)/build-$(EDGE_BOARD)/.config firmware
+
 # The firmware of the STM32 is a file of the wapp that writes it, thus a new
 # firmware ships as a new version of that wapp.
 OTA_ROOT := $(WAPP_DIR)/tg-ota/root
 
-ota-image: build
+ota-image: require-ipc build
 	@mkdir -p $(OTA_ROOT)
 	@cp $(NUTTX)/nuttx.bin $(OTA_ROOT)/firmware.bin
 	@sed -n 's/.*HAZK03_VERSION "\(.*\)".*/\1/p' $(VERSION_H) \

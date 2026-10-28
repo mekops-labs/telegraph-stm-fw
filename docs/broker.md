@@ -91,13 +91,13 @@ offers, and it holds the shared IPC library of this repository.
 
 ## The board of the edge MCU
 
-The engine image of the edge MCU comes from the WANTED engine repository, with
-the profile `s3-telegraph`: the serial-port driver is built in, wsh is the
-supervisor, and the wapps of this directory are seeded into the registry from
-the firmware. That build takes the path of this directory:
+The engine image of the edge MCU builds from the board directory `edge/` of this
+repository, with the WANTED engine's container build: the serial-port driver is
+built in, Sheriff is the supervisor, and the wapp `tg-logs` is seeded into the
+firmware. The build compiles the wapps of this directory first:
 
 ```sh
-OTA_PROFILE=s3-telegraph TELEGRAPH_WAPPS=<this repo>/wapps just build
+make edge-build
 ```
 
 The shell of the engine takes its commands on the USB console, and

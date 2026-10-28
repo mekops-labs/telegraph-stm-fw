@@ -20,6 +20,16 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tg-display` requests `0x48` to `0x4b` carry the new opcodes.
 - `tg-hass` has the entity "External temperature".
 - `make fontcompact` regenerates the compact font of the firmware.
+- `configs/` is a board directory of the WANTED engine for the edge MCU: the
+  defconfigs `telegraph-sheriff` and `telegraph-sheriff-trace`, the launch
+  configuration and the seeded wapp.
+- `make edge-build`, `edge-flash`, `edge-monitor` and `edge-ota-image` build,
+  flash and tag the engine firmware of the edge MCU.
+- `.mise.toml` tasks `build`, `flash-edge` and `ota-image`.
+- `tools/check-fw-config.py` checks that the firmware embeds
+  `configs/config.json`.
+- `scripts/fw-variant` prints the version of this repository as an image
+  variant.
 
 ### Changed
 
@@ -35,17 +45,19 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tg-hass` publishes no read-back for a command the board refused.
 - A failed save of the settings and the result of their load go to the edge
   MCU as log lines.
+- `make ota-image` refuses an STM32 build that is not configured as `ipc`.
+- The engine firmware image is tagged
+  `<engine release>-telegraph-<version of this repository>`.
 
 ### Fixed
 
+- The temperature digits show a negative reading, and round it.
 - The temperature digits never show a cleared or stale outside value for a
   tick after a change.
-- `tg-hass` prints `the broker refused the session` when the connect fails
-  with no errno.
-
-- The temperature digits show a negative reading, and round it.
 - A restart of `tg-hass` no longer resets the other level or the other time
   of a pair on the next change.
+- `tg-hass` prints `the broker refused the session` when the connect fails
+  with no errno.
 
 ## [0.7.0] - 2026-10-07
 

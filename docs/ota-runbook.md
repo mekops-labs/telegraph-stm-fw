@@ -25,41 +25,43 @@ credential. Thus the registry has to serve that image anonymously.
 
 ```sh
 # 1. build the engine image, with the Sheriff supervisor it embeds
-cd <wanted-engine>
-make build DEFCONFIG=xiao_esp32s3-telegraph-sheriff BUILD_DIR=build-tgs \
-    RUNNER_CMD='podman run --userns=keep-id -v <telegraph-fw>/wapps:/tgwapps:ro,z -e TELEGRAPH_WAPPS=/tgwapps'
-                                                # -> dist/esp-idf/wanted-esp32s3-ota.bin
+cd <telegraph-fw>
+make edge-build                             # -> dist/telegraph-sheriff-ota.bin
 
-# 2. publish it as an OCI image, tagged <release>-telegraph
-REGISTRY=<host:port> docker/publish-images.sh -p -k -b telegraph \
-    -i dist/esp-idf/wanted-esp32s3-ota.bin -C build-tgs/.config firmware
+# 2. tag it as an OCI image, <release>-telegraph-<version>, and push it
+make edge-ota-image REGISTRY=<host:port>
+podman push --tls-verify=false <host:port>/wanted-engine:<release>-telegraph-<version>
 
 # 3. tell the device to take it
-deputy device firmware push --image <host:port>/wanted-engine:<release>-telegraph telegraph-01
+deputy device firmware push --image <host:port>/wanted-engine:<release>-telegraph-<version> telegraph-01
 
 # 4. watch it land
 deputy device show telegraph-01      # Engine.OTAStatus and Engine.Version
 ```
 
-This board seeds `tg-logs` into the firmware, thus the build needs the wapps of
-this repository at `/tgwapps`, which `RUNNER_CMD` mounts. The `z` option
-relabels the directory for SELinux; without it, a host that enforces SELinux
-refuses the container the files, and the build reports them missing. Run
-`make wapps` in this repository before the engine build. A missing `.wasm`
-stops the engine build at the configure step with `registry-seed: … missing`.
+The engine checkout is `ENGINE_DIR`, `../../wanted/wanted-engine` by default.
+The build mounts the board directory `configs/` into the engine's container and
+leaves the checkout unmodified. This board seeds `tg-logs` into the firmware,
+thus `make edge-build` compiles the wapps and stages that one in `configs/seeds/`.
+A missing `.wasm` stops the engine build at the configure step with
+`registry-seed: … missing`.
 
-`make build` builds the wapps and the Sheriff supervisor itself. The last
+The engine's `make build` builds its wapps and the Sheriff supervisor itself. The last
 `Supervisor image:` line of the configure output names
 `wasm/supervisor/sheriff/supervisor.tar`, which identifies the supervisor the
 image carries.
 
 The image holds one layer, and its labels `firmware.digest` and `firmware.size`
 name the binary inside it. The label `firmware.config` hashes the `.config`
-that `-C` names, which is the configuration of `build-tgs`. Deputy reads the
+that `-C` names, which is the configuration of `build-telegraph-sheriff` in the
+engine checkout. Deputy reads the
 tag, the digest and the size from the image, and a wrong digest stops the
 update at the device and latches the version as failed. A clean checkout of a
-release tag publishes under that release, such as `0.24.0-telegraph`. The
-suffix `-telegraph` is the board.
+release tag publishes under that release. The tag is
+`<engine release>-telegraph-<version of this repository>`, such as
+`0.28.0-telegraph-0.8.0`. The version of this repository is the variant, thus
+a change of the board code or configuration on one engine release gets a new
+tag.
 
 The tool `docker/publish-images.sh` of the engine uses `sha256sum` and
 `stat -c`, thus a macOS host needs a `stat` that accepts `-c %s`.
