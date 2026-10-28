@@ -8,7 +8,7 @@
 include $(TOPDIR)/Make.defs
 
 CSRCS  = stm32_boot.c stm32_bringup.c stm32_clockconfig.c stm32_hse.c
-CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c
+CSRCS += stm32_display.c stm32_rtc.c tm1629a.c sm1626d.c ds3231.c tempfmt.c
 
 # Every configuration shows the version on the main panel at start.
 #
@@ -45,7 +45,7 @@ CSRCS += ipc_crc16.c
 
 ifeq ($(CONFIG_NO_SERIAL_CONSOLE),y)
 CSRCS   += stm32_ipc.c
-CSRCS   += ipc_encode.c ipc_parser.c
+CSRCS   += ipc_encode.c ipc_parser.c ipc_payload.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

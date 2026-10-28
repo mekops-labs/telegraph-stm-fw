@@ -343,6 +343,107 @@ static void test_push_rejects_bad_arguments(void) {
 }
 
 /****************************************************************************
+ * Payload checks
+ ****************************************************************************/
+
+static void put_i16(uint8_t *bytes, int16_t value) {
+    ipc_put_u16(bytes, (uint16_t)value);
+}
+
+static void test_exttemp_empty_clears(void) {
+    const uint8_t none[1] = {0};
+    bool set = true;
+    int16_t tenths = 77;
+
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_exttemp(none, 0, &set, &tenths));
+    TEST_ASSERT_FALSE(set);
+    TEST_ASSERT_EQUAL_INT16(77, tenths);
+}
+
+static void test_exttemp_takes_a_signed_value(void) {
+    uint8_t bytes[2];
+    bool set = false;
+    int16_t tenths = 0;
+
+    put_i16(bytes, -125);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_exttemp(bytes, 2, &set, &tenths));
+    TEST_ASSERT_TRUE(set);
+    TEST_ASSERT_EQUAL_INT16(-125, tenths);
+}
+
+static void test_exttemp_range_edges(void) {
+    uint8_t bytes[2];
+    bool set = false;
+    int16_t tenths = 0;
+
+    put_i16(bytes, IPC_EXTTEMP_MIN);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_exttemp(bytes, 2, &set, &tenths));
+    put_i16(bytes, IPC_EXTTEMP_MAX);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_exttemp(bytes, 2, &set, &tenths));
+    put_i16(bytes, IPC_EXTTEMP_MIN - 1);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_PAYLOAD,
+                           ipc_check_exttemp(bytes, 2, &set, &tenths));
+    put_i16(bytes, IPC_EXTTEMP_MAX + 1);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_PAYLOAD,
+                           ipc_check_exttemp(bytes, 2, &set, &tenths));
+}
+
+static void test_exttemp_rejects_a_bad_length(void) {
+    const uint8_t bytes[3] = {0};
+    bool set = false;
+    int16_t tenths = 0;
+
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_LENGTH,
+                           ipc_check_exttemp(bytes, 1, &set, &tenths));
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_LENGTH,
+                           ipc_check_exttemp(bytes, 3, &set, &tenths));
+}
+
+static void test_release_names_one_panel(void) {
+    const uint8_t none[1] = {0};
+    uint8_t panel = 9;
+    uint8_t main_panel = IPC_PANEL_MAIN;
+    uint8_t sub_panel = IPC_PANEL_SUB;
+    uint8_t bad_panel = 2;
+    const uint8_t two[2] = {0, 0};
+
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_release(&main_panel, 1, &panel));
+    TEST_ASSERT_EQUAL_UINT8(IPC_PANEL_MAIN, panel);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_release(&sub_panel, 1, &panel));
+    TEST_ASSERT_EQUAL_UINT8(IPC_PANEL_SUB, panel);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_PAYLOAD,
+                           ipc_check_release(&bad_panel, 1, &panel));
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_LENGTH,
+                           ipc_check_release(none, 0, &panel));
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_LENGTH,
+                           ipc_check_release(two, 2, &panel));
+}
+
+static void test_animstop_empty_names_both(void) {
+    const uint8_t none[1] = {0};
+    uint8_t panel = 0;
+    uint8_t sub_panel = IPC_PANEL_SUB;
+    uint8_t bad_panel = 5;
+    const uint8_t two[2] = {0, 0};
+
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE, ipc_check_animstop(none, 0, &panel));
+    TEST_ASSERT_EQUAL_UINT8(IPC_PANEL_BOTH, panel);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_NONE,
+                           ipc_check_animstop(&sub_panel, 1, &panel));
+    TEST_ASSERT_EQUAL_UINT8(IPC_PANEL_SUB, panel);
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_PAYLOAD,
+                           ipc_check_animstop(&bad_panel, 1, &panel));
+    TEST_ASSERT_EQUAL_HEX8(IPC_ERR_BAD_LENGTH,
+                           ipc_check_animstop(two, 2, &panel));
+}
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -369,6 +470,13 @@ int main(void) {
     RUN_TEST(test_parse_stalls_on_a_possible_length);
     RUN_TEST(test_timeout_discards_a_partial_frame);
     RUN_TEST(test_push_rejects_bad_arguments);
+
+    RUN_TEST(test_exttemp_empty_clears);
+    RUN_TEST(test_exttemp_takes_a_signed_value);
+    RUN_TEST(test_exttemp_range_edges);
+    RUN_TEST(test_exttemp_rejects_a_bad_length);
+    RUN_TEST(test_release_names_one_panel);
+    RUN_TEST(test_animstop_empty_names_both);
 
     return UNITY_END();
 }

@@ -276,13 +276,21 @@ TEST_BIN  := $(BUILD)/test_ipc
 POLICY_SRC := wapps/lib/timepolicy.c
 POLICY_BIN := $(BUILD)/test_timepolicy
 
+# The format of the temperature digits is pure code, thus it builds for the
+# host too.
+TEMPFMT_SRC  := $(BOARD_DIR)/src/tempfmt.c
+TEMPFMT_TEST := $(BOARD_DIR)/tests/test_tempfmt.c
+TEMPFMT_BIN  := $(BUILD)/test_tempfmt
+
 test:
 	$(RUN) sh -c 'mkdir -p $(BUILD) && \
 	  cc $(IPC_CF) -I$(UNITY)/src $(IPC_SRC) ipc/tests/test_ipc.c \
 	     $(UNITY)/src/unity.c -o $(TEST_BIN) && $(TEST_BIN) && \
 	  cc $(IPC_CF) -Iwapps/include -I$(UNITY)/src $(POLICY_SRC) \
 	     wapps/tests/test_timepolicy.c $(UNITY)/src/unity.c \
-	     -o $(POLICY_BIN) && $(POLICY_BIN)'
+	     -o $(POLICY_BIN) && $(POLICY_BIN) && \
+	  cc $(IPC_CF) -I$(UNITY)/src $(TEMPFMT_SRC) $(TEMPFMT_TEST) \
+	     $(UNITY)/src/unity.c -o $(TEMPFMT_BIN) && $(TEMPFMT_BIN)'
 
 # The formatter covers this repository's own C sources only: boards/ is the
 # board port, ipc/ is the shared framing library. third_party/ is vendored

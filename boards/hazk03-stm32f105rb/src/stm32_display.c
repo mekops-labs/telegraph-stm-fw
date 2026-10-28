@@ -34,6 +34,7 @@
 #include "fontext.h"
 #include "hazk03.h"
 #include "sm1626d.h"
+#include "tempfmt.h"
 #include "tm1629a.h"
 #include "version.h"
 
@@ -169,6 +170,25 @@ static uint8_t g_bright_panels = BRIGHTNESS;
 
 static int16_t g_tempoffset;
 
+/* The outside temperature in tenths. It replaces the reading of the DS3231 on
+ * the digits while set, and it is never persisted.
+ */
+
+static bool g_ext_set;
+static int16_t g_ext_tenths;
+
+/* The seconds the digits have shown; a value of three characters alternates
+ * its two frames every TEMP_FRAME_S.
+ */
+
+#define TEMP_FRAME_S 3
+
+static unsigned int g_temp_secs;
+
+/* The error of the last save of the settings that failed. */
+
+static int g_save_err;
+
 /* The period that stops the display, in minutes of the local day. */
 
 static uint16_t g_sleepmin = HAZK03_SLEEP_OFF;
@@ -237,6 +257,7 @@ static struct display_anim_s g_anim[2];
 static void display_persist(void) {
 #ifdef CONFIG_MTD_W25
     struct hazk03_config_s cfg;
+    int ret;
 
     cfg.utcoffset = g_utcoffset;
     cfg.digits = g_bright_digits;
@@ -245,7 +266,10 @@ static void display_persist(void) {
     cfg.sleepmin = g_sleepmin;
     cfg.wakemin = g_wakemin;
 
-    hazk03_config_save(&cfg);
+    ret = hazk03_config_save(&cfg);
+    if (ret < 0) {
+        g_save_err = ret;
+    }
 #endif
 }
 
@@ -646,7 +670,10 @@ static void display_defaults(const struct tm *t) {
 }
 
 static void show_time(const struct tm *t, int16_t temp) {
+    char frames[TEMPFMT_MAX_FRAMES][TEMPFMT_DIGITS];
     int mon = t->tm_mon + 1;
+    int count;
+    int frame;
 
     tm1629a_setchar(0, (t->tm_hour / 10) ? '0' + t->tm_hour / 10 : ' ');
     tm1629a_setchar(1, '0' + t->tm_hour % 10);
@@ -660,8 +687,12 @@ static void show_time(const struct tm *t, int16_t temp) {
     tm1629a_setchar(8, (t->tm_mday / 10) ? '0' + t->tm_mday / 10 : ' ');
     tm1629a_setchar(9, '0' + t->tm_mday % 10);
 
-    tm1629a_setchar(10, '0' + (temp / 100) % 10);
-    tm1629a_setchar(11, '0' + (temp / 10) % 10);
+    count = tempfmt_frames(tempfmt_degrees(g_ext_set ? g_ext_tenths : temp),
+                           frames);
+    frame = (int)((g_temp_secs / TEMP_FRAME_S) % (unsigned int)count);
+
+    tm1629a_setchar(10, frames[frame][0]);
+    tm1629a_setchar(11, frames[frame][1]);
 
     tm1629a_flush();
 }
@@ -802,6 +833,7 @@ static int display_scanner(int argc, char *argv[]) {
 
             display_update_sleep(&tm);
 
+            g_temp_secs++;
             show_time(&tm, g_temp);
         }
     }
@@ -1122,6 +1154,50 @@ void hazk03_display_setconfig(const struct hazk03_config_s *cfg) {
 #endif
 
 int16_t hazk03_display_temperature(void) { return g_temp; }
+
+void hazk03_display_exttemp(bool set, int16_t tenths) {
+    g_ext_set = set;
+
+    if (set) {
+        g_ext_tenths = tenths;
+    }
+
+    g_temp_secs = 0;
+}
+
+void hazk03_display_getsettings(struct hazk03_config_s *cfg, bool *ext_set,
+                                int16_t *ext_tenths) {
+    cfg->utcoffset = g_utcoffset;
+    cfg->digits = g_bright_digits;
+    cfg->panels = g_bright_panels;
+    cfg->tempoffset = g_tempoffset;
+    cfg->sleepmin = g_sleepmin;
+    cfg->wakemin = g_wakemin;
+
+    *ext_set = g_ext_set;
+    *ext_tenths = g_ext_tenths;
+}
+
+int hazk03_display_saveerr(void) {
+    int err = g_save_err;
+
+    g_save_err = 0;
+
+    return err;
+}
+
+void hazk03_display_release(int panel) {
+    hazk03_display_clear(panel);
+
+    /* The sub panel draws the day at the next tick of the scan loop. The main
+     * panel stays empty, so it keeps its flag clear and no greeting returns.
+     */
+
+    if (panel == HAZK03_PANEL_SUB) {
+        g_sub_wday = -1;
+        g_sub_default = true;
+    }
+}
 
 int hazk03_display_init(void) {
     int ret;
