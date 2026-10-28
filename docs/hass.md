@@ -49,6 +49,10 @@ boundary, logs the cut, and Home Assistant offers 32 characters for the main
 panel. The read-back of a panel is the document `{"text":"…"}`, never an empty
 message: an empty retained message would delete the read-back, and Home
 Assistant would show the entity as unknown after its own restart.
+Home Assistant shows an empty text, and an entity whose read-back it cannot
+read, as `unknown` in the field of the entity. The panel is not affected, and a
+text set from Home Assistant replaces the read-back. A read-back published as
+plain text by an earlier version reads this way until the next text is set.
 
 **The outside temperature is a number or nothing.** The entity takes `-12.5`,
 `21` or an empty value, from -99.0 to 199.9. Anything else leaves the board
