@@ -387,7 +387,8 @@ test:
 	     $(UNITY)/src/unity.c -o $(FONT_BIN) && $(FONT_BIN) && \
 	  cc $(IPC_CF) -Iwapps/include -I$(UNITY)/src $(HASSPARSE_SRC) \
 	     $(HASSPARSE_TEST) $(UNITY)/src/unity.c -o $(HASSPARSE_BIN) && \
-	  $(HASSPARSE_BIN)'
+	  $(HASSPARSE_BIN) && \
+	  python3 -B -m unittest discover -s tools/tests'
 
 # The formatter covers this repository's own C sources only: boards/ is the
 # board port, ipc/ is the shared framing library. third_party/ is vendored

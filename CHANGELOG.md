@@ -5,6 +5,17 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `make test` runs the unit tests of `tools/wapppush.py`.
+
+### Fixed
+
+- `tools/wapppush.py` records the digest of the uncompressed layer as the
+  `diff_id` of an image. It recorded the digest of the gzip blob.
+
 ## [0.8.0] - 2026-10-28
 
 ### Added

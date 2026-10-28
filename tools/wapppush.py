@@ -5,7 +5,8 @@
 The control plane hands a device an image reference, and the engine of that
 device stores what the layers hold. One wapp is one layer: the gzip of the
 ustar that `make wapp-images` builds, which carries app.wasm and every data
-file of that wapp.
+file of that wapp. The digest of the blob is that of the gzip, and the
+`diff_id` in the image config is that of the ustar.
 
 Usage:
   tools/wapppush.py <registry-host:port> <image.wapp>...
@@ -34,6 +35,20 @@ LAYER_TYPE = "application/vnd.oci.image.layer.v1.tar+gzip"
 
 def digest(data):
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def layer_and_config(tar):
+    """The gzip layer of a ustar, and the image config that describes it.
+
+    The layer is deterministic: it carries no time stamp.
+    """
+    layer = gzip.compress(tar, mtime=0)
+    config = json.dumps({
+        "architecture": "wasm",
+        "os": "wanted",
+        "rootfs": {"type": "layers", "diff_ids": [digest(tar)]},
+    }, separators=(",", ":")).encode()
+    return layer, config
 
 
 def request(method, url, data=None, headers=None):
@@ -79,15 +94,9 @@ def push(base, path):
     repo = "tg/" + name[len("tg-"):] if name.startswith("tg-") else name
 
     with open(path, "rb") as handle:
-        layer = gzip.compress(handle.read(), mtime=0)
+        layer, config = layer_and_config(handle.read())
 
     layer_digest = push_blob(base, repo, layer)
-
-    config = json.dumps({
-        "architecture": "wasm",
-        "os": "wanted",
-        "rootfs": {"type": "layers", "diff_ids": [layer_digest]},
-    }, separators=(",", ":")).encode()
     config_digest = push_blob(base, repo, config)
 
     manifest = json.dumps({
