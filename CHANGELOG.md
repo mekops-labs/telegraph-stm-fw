@@ -28,6 +28,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `.mise.toml` tasks `build`, `flash-edge` and `ota-image`.
 - `tools/check-fw-config.py` checks that the firmware embeds
   `configs/config.json`.
+- `tools/check-launch-config.py` rejects the settings that engine v0.29.0 and
+  later refuse in a launch config, and `make edge-build` runs it first.
 - `scripts/fw-variant` prints the version of this repository as an image
   variant.
 

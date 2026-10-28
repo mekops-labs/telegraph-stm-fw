@@ -34,7 +34,8 @@ FLASHER_ENV   := xiao_esp32s3
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
         ota-image wapp-push require-registry require-broker deploy \
         lint-format format-fix tidy cppcheck require-ipc \
-        check-engine edge-seeds edge-build edge-flash edge-monitor \
+        check-engine check-launch-config edge-seeds edge-build edge-flash \
+        edge-monitor \
         edge-ota-image
 
 help:
@@ -299,13 +300,18 @@ check-engine:
 	@test -f $(ENGINE_DIR)/Makefile || \
 	    { echo "no engine checkout at $(ENGINE_DIR); set ENGINE_DIR" >&2; exit 1; }
 
+# An engine refuses some settings of a launch config at startup, and a firmware
+# that embeds such a config never starts its supervisor.
+check-launch-config:
+	python3 tools/check-launch-config.py configs/config.json
+
 # The firmware carries the log reader, so a board with no console always has
 # a wapp it can start. The engine build mounts configs/ alone, thus the wapp is
 # staged there.
 edge-seeds: wapps
 	install -D -m 0644 $(WAPP_DIR)/tg-logs/tg-logs.wasm configs/seeds/tg-logs.wasm
 
-edge-build: check-engine edge-seeds
+edge-build: check-engine check-launch-config edge-seeds
 	$(MAKE) -C $(ENGINE_DIR) build BOARD_DIR=$(CURDIR)/configs \
 	    DEFCONFIG=$(EDGE_BOARD) BUILD_DIR=build-$(EDGE_BOARD)
 	install -D -m 0644 $(EDGE_DIST)/wanted-esp32s3-merged.bin $(EDGE_MERGED)

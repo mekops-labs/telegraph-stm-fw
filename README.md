@@ -398,7 +398,8 @@ make edge-ota-image REGISTRY=<host:port> # an OCI firmware image, not pushed
 ```
 
 The engine checkout is `ENGINE_DIR`, `../../wanted/wanted-engine` by default, at
-v0.29.2 or later: that release holds no copy of the board.
+v0.29.2 or later: that release holds no copy of the board. `make edge-build`
+first rejects the settings an engine refuses in `configs/config.json`.
 The image tag is `<engine release>-telegraph-<version of this repository>`, thus
 a change of the board configuration on one engine release gets a new tag.
 `mise run build`, `mise run flash-edge` and `mise run ota-image` run the same
