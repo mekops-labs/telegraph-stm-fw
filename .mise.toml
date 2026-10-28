@@ -1,0 +1,22 @@
+# Tasks over the Makefile. REGISTRY and PORT come from the environment, or
+# from an untracked .mise.local.toml.
+[tasks.build-stm32]
+description = "Build the STM32 firmware"
+run = "make build CONFIG=ipc"
+
+[tasks.build-edge]
+description = "Build the engine firmware of the edge MCU into dist/"
+run = "make edge-build"
+
+[tasks.build]
+description = "Build the firmware of both MCUs"
+depends = ["build-stm32", "build-edge"]
+
+[tasks.flash-edge]
+description = "Build the engine firmware and write the merged image to PORT"
+depends = ["build-edge"]
+run = "make edge-flash"
+
+[tasks.ota-image]
+description = "Build the OTA images of both MCUs for REGISTRY, not pushed"
+run = "make CONFIG=ipc ota-image wapp-images edge-ota-image"
