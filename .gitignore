@@ -37,5 +37,5 @@ wapps/*/root/
 # The engine firmware of the edge MCU is a build output, and so is the wapp
 # staged for its seeds
 /dist/
-/edge/seeds/
+/configs/seeds/
 /.mise.local.toml

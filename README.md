@@ -383,7 +383,7 @@ STM32 does, thus it needs no hardware. That build needs
 
 ### The engine firmware of the edge MCU
 
-The directory `edge/` is a board directory of the WANTED engine. It holds the
+The directory `configs/` is a board directory of the WANTED engine. It holds the
 engine configuration of the board, the launch configuration the firmware embeds
 and the wapp that the firmware seeds. The engine builds from it in its own
 container, and the engine checkout stays unmodified.

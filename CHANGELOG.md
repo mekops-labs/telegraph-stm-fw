@@ -9,13 +9,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `edge/` is a board directory of the WANTED engine for the edge MCU: the
+- `configs/` is a board directory of the WANTED engine for the edge MCU: the
   defconfigs `telegraph-sheriff` and `telegraph-sheriff-trace`, the launch
   configuration and the seeded wapp.
 - `make edge-build`, `edge-flash`, `edge-monitor` and `edge-ota-image` build,
   flash and tag the engine firmware of the edge MCU.
 - `.mise.toml` tasks `build`, `flash-edge` and `ota-image`.
-- `tools/check-fw-config.py` checks that the firmware embeds `edge/config.json`.
+- `tools/check-fw-config.py` checks that the firmware embeds `configs/config.json`.
 - `scripts/fw-variant` prints the version of this repository as an image
   variant.
 

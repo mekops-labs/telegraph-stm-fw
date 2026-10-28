@@ -260,7 +260,7 @@ FORCE:
 deploy: wapp-push $(DEPLOY_OUT)
 	deputy device desired-state push --file=$(DEPLOY_OUT) $(DEVICE)
 
-# The engine firmware of the edge MCU. The board directory edge/ plugs into the
+# The engine firmware of the edge MCU. The board directory configs/ plugs into the
 # engine's own container build, and the engine checkout is not modified.
 #
 #   make edge-build                      # firmware into dist/
@@ -285,17 +285,17 @@ check-engine:
 	    { echo "no engine checkout at $(ENGINE_DIR); set ENGINE_DIR" >&2; exit 1; }
 
 # The firmware carries the log reader, so a board with no console always has
-# a wapp it can start. The engine build mounts edge/ alone, thus the wapp is
+# a wapp it can start. The engine build mounts configs/ alone, thus the wapp is
 # staged there.
 edge-seeds: wapps
-	install -D -m 0644 $(WAPP_DIR)/tg-logs/tg-logs.wasm edge/seeds/tg-logs.wasm
+	install -D -m 0644 $(WAPP_DIR)/tg-logs/tg-logs.wasm configs/seeds/tg-logs.wasm
 
 edge-build: check-engine edge-seeds
-	$(MAKE) -C $(ENGINE_DIR) build BOARD_DIR=$(CURDIR)/edge \
+	$(MAKE) -C $(ENGINE_DIR) build BOARD_DIR=$(CURDIR)/configs \
 	    DEFCONFIG=$(EDGE_BOARD) BUILD_DIR=build-$(EDGE_BOARD)
 	install -D -m 0644 $(EDGE_DIST)/wanted-esp32s3-merged.bin $(EDGE_MERGED)
 	install -D -m 0644 $(EDGE_DIST)/wanted-esp32s3-ota.bin $(EDGE_OTA)
-	tools/check-fw-config.py $(EDGE_OTA) edge/config.json
+	tools/check-fw-config.py $(EDGE_OTA) configs/config.json
 
 edge-flash:
 	esptool --chip esp32s3 -p $(PORT) -b $(BAUD) write-flash 0x0 $(EDGE_MERGED)

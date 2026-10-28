@@ -40,9 +40,9 @@ deputy device show telegraph-01      # Engine.OTAStatus and Engine.Version
 ```
 
 The engine checkout is `ENGINE_DIR`, `../../wanted/wanted-engine` by default.
-The build mounts the board directory `edge/` into the engine's container and
+The build mounts the board directory `configs/` into the engine's container and
 leaves the checkout unmodified. This board seeds `tg-logs` into the firmware,
-thus `make edge-build` compiles the wapps and stages that one in `edge/seeds/`.
+thus `make edge-build` compiles the wapps and stages that one in `configs/seeds/`.
 A missing `.wasm` stops the engine build at the configure step with
 `registry-seed: … missing`.
 
