@@ -36,7 +36,9 @@ its start and with every reading, and it publishes them as the read-backs. A
 restart of the adapter thus shows what a person set before, and a change to one
 entity keeps its partner: the request to the board carries both levels, and both
 times of the period. A command that arrives while the settings are unknown is
-dropped. A disabled period shows as two equal times.
+dropped. **A read-back follows the board**: a command the board refuses, or
+one that is dropped, publishes nothing, and the next reading restores what the
+board holds. A disabled period shows as two equal times.
 
 **An empty text gives the panel back to the board.** The sub panel then shows
 the day of the week, and the main panel stays empty. A text of the main panel
@@ -44,7 +46,9 @@ turns the two characters `\n` into a line feed, thus Home Assistant, whose
 input is one line, can set two lines. The board takes 64 bytes of text and a
 Polish letter takes two, thus the adapter cuts a longer text at a character
 boundary, logs the cut, and Home Assistant offers 32 characters for the main
-panel.
+panel. The read-back of a panel is the document `{"text":"…"}`, never an empty
+message: an empty retained message would delete the read-back, and Home
+Assistant would show the entity as unknown after its own restart.
 
 **The outside temperature is a number or nothing.** The entity takes `-12.5`,
 `21` or an empty value, from -99.0 to 199.9. Anything else leaves the board
@@ -68,7 +72,7 @@ With the defaults, and a device named `telegraph-01`:
 | `homeassistant/device/telegraph-01/config` | the discovery, retained |
 | `telegraph/telegraph-01/availability` | `online`, or `offline` from the will |
 | `telegraph/telegraph-01/main/set` | the text of the main panel |
-| `telegraph/telegraph-01/main` | what that entity reads back, retained |
+| `telegraph/telegraph-01/main` | what that entity reads back, as `{"text":"…"}`, retained |
 | `telegraph/telegraph-01/sub/set`, `…/sub` | the same for the sub panel |
 | `telegraph/telegraph-01/brightness/digits/set`, `…/digits` | the digits |
 | `telegraph/telegraph-01/brightness/panels/set`, `…/panels` | the panels |

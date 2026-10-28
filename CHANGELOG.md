@@ -24,16 +24,24 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - `IPC_OP_ANIM_STOP` stops the panel its payload names.
-- A font file is checked in full before it replaces the big font.
+- A font file loads into a second table, which replaces the big font only when
+  the whole file is good; the board holds 1.5 KiB more RAM for it.
 - `tg-hass` reads the levels and the period from the board, and no longer
   starts from its own defaults.
 - `tg-hass` turns `\n` in a main text into a line feed, shows an empty text as
   the default of its panel, and cuts a text to 64 bytes.
 - The main panel entity of `tg-hass` offers 32 characters.
+- `tg-hass` publishes the read-back of a panel as `{"text":"…"}`.
+- `tg-hass` publishes no read-back for a command the board refused.
 - A failed save of the settings and the result of their load go to the edge
   MCU as log lines.
 
 ### Fixed
+
+- The temperature digits never show a cleared or stale outside value for a
+  tick after a change.
+- `tg-hass` prints `the broker refused the session` when the connect fails
+  with no errno.
 
 - The temperature digits show a negative reading, and round it.
 - A restart of `tg-hass` no longer resets the other level or the other time
