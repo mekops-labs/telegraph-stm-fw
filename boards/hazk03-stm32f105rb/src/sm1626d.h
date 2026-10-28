@@ -9,6 +9,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "fontext.h"
+
 /* There are 16 scan rows. The main screen sends 80 column bits, thus 10 bytes
  * are sufficient for one row.
  */
@@ -123,31 +125,33 @@ void sm1626d_output(bool enable);
 
 int sm1626d_ontime(const struct sm1626d_dev_s *dev, int rowtime_us);
 
-/* Draw a text with the 5x7 font, x,y the top left of the first character. It
- * stops at the right edge of the panel.
+/* Draw a text in a font, x,y the top left of the first character. It stops at
+ * the right edge of the panel.
  */
 
-void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y, const char *s,
-                      size_t len);
+void sm1626d_drawtext(struct sm1626d_dev_s *dev, const struct fontext_s *font,
+                      int x, int y, const char *s, size_t len);
 
 /* The width of a text in pixels. The text is UTF-8, thus its characters are
  * not its bytes.
  */
 
-int sm1626d_textwidth(const char *s, size_t len);
+int sm1626d_textwidth(const struct fontext_s *font, const char *s, size_t len);
 
 /* Draw a text into a bitmap of the caller: rows in order, each starting at a
  * byte, bit 7 the pixel at the left.
  */
 
-void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s, size_t len);
+void sm1626d_rendertext(const struct fontext_s *font, uint8_t *bits, int w,
+                        int h, const char *s, size_t len);
 
 /* Draw n texts into one bitmap of sm1626d_rendertext, one below the other,
  * each taking a line of the font's height.
  */
 
-void sm1626d_rendertextlines(uint8_t *bits, int w, int totalh,
-                             const size_t *starts, const size_t *lens,
-                             const int *xoffs, int n, const char *s);
+void sm1626d_rendertextlines(const struct fontext_s *font, uint8_t *bits, int w,
+                             int totalh, const size_t *starts,
+                             const size_t *lens, const int *xoffs, int n,
+                             const char *s);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_SM1626D_H */

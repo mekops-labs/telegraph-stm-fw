@@ -1314,7 +1314,7 @@ static void ipc_on_frame(void *arg, const struct ipc_frame_s *frame) {
             break;
         }
 
-        if (fontext_load(path) < 0) {
+        if (hazk03_display_loadfont(path) < 0) {
             ipc_nack(ctx, frame->corr_id, IPC_ERR_FAILED);
         } else {
             ipc_ack(ctx, frame->corr_id);

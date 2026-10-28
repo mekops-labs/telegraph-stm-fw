@@ -92,7 +92,7 @@ int stm32_bringup(void) {
          * without that file keeps the font of the firmware.
          */
 
-        fontext_load(HAZK03_FONT_PATH);
+        hazk03_display_loadfont(HAZK03_FONT_PATH);
 #endif
     }
 #endif

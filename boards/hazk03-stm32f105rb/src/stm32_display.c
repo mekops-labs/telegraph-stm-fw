@@ -333,9 +333,10 @@ static void display_update_sleep(const struct tm *t) {
  * end goes past that panel, and its start stays visible.
  */
 
-static int text_column(const struct sm1626d_dev_s *dev, const char *s,
+static int text_column(const struct fontext_s *font,
+                       const struct sm1626d_dev_s *dev, const char *s,
                        size_t len, uint8_t align) {
-    int space = dev->width - sm1626d_textwidth(s, len);
+    int space = dev->width - sm1626d_textwidth(font, s, len);
 
     if (space <= 0) {
         return 0;
@@ -357,26 +358,28 @@ static int text_column(const struct sm1626d_dev_s *dev, const char *s,
 
 /* Give the top row of a line of text on one panel. */
 
-static int text_row(const struct sm1626d_dev_s *dev, uint8_t valign) {
-    int line = fontext_lineheight();
+static int text_row(const struct fontext_s *font,
+                    const struct sm1626d_dev_s *dev, uint8_t valign) {
+    int line = fontext_lineheight(font);
 
     switch (valign) {
     case HAZK03_VALIGN_TOP:
-        return fontext_ascent();
+        return fontext_ascent(font);
 
     case HAZK03_VALIGN_BOTTOM:
-        return dev->height - line + fontext_ascent();
+        return dev->height - line + fontext_ascent(font);
 
     default:
-        return ((dev->height - line) / 2) + fontext_ascent();
+        return ((dev->height - line) / 2) + fontext_ascent(font);
     }
 }
 
-static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
-                      uint8_t align, uint8_t valign) {
-    int x = text_column(dev, s, len, align);
-    int y = text_row(dev, valign);
-    int line = fontext_lineheight();
+static void draw_text(const struct fontext_s *font, struct sm1626d_dev_s *dev,
+                      const char *s, size_t len, uint8_t align,
+                      uint8_t valign) {
+    int x = text_column(font, dev, s, len, align);
+    int y = text_row(font, dev, valign);
+    int line = fontext_lineheight(font);
     int row;
     int col;
 
@@ -387,13 +390,14 @@ static void draw_text(struct sm1626d_dev_s *dev, const char *s, size_t len,
      * the bottom where it is.
      */
 
-    for (row = y - fontext_ascent(); row < y - fontext_ascent() + line; row++) {
+    for (row = y - fontext_ascent(font); row < y - fontext_ascent(font) + line;
+         row++) {
         for (col = 0; col < dev->width; col++) {
             sm1626d_drawpixel(dev, col, row, false);
         }
     }
 
-    sm1626d_drawtext(dev, x, y, s, len);
+    sm1626d_drawtext(dev, font, x, y, s, len);
     sm1626d_commit(dev);
     nxmutex_unlock(&g_fblock);
 }
@@ -476,8 +480,8 @@ static void anim_tick(void) {
  * needing more has lost its remainder.
  */
 
-static int wrap_text(const char *s, size_t len, int maxw, size_t *starts,
-                     size_t *lens, int maxlines) {
+static int wrap_text(const struct fontext_s *font, const char *s, size_t len,
+                     int maxw, size_t *starts, size_t *lens, int maxlines) {
     size_t i = 0;
     int n = 0;
 
@@ -488,10 +492,11 @@ static int wrap_text(const char *s, size_t len, int maxw, size_t *starts,
         size_t j = i;
 
         while (j < len) {
-            const uint16_t *cols;
-            size_t next = j + fontext_next(&s[j], len - j, &cols);
+            uint16_t cols[FONTEXT_WIDTH];
+            size_t next = j + fontext_next(font, &s[j], len - j, cols);
 
-            if (sm1626d_textwidth(&s[linestart], next - linestart) > maxw) {
+            if (sm1626d_textwidth(font, &s[linestart], next - linestart) >
+                maxw) {
                 break;
             }
 
@@ -531,10 +536,11 @@ static int wrap_text(const char *s, size_t len, int maxw, size_t *starts,
  * per-line version a multi-line static draw calls once per line.
  */
 
-static void draw_line_at(struct sm1626d_dev_s *dev, const char *s, size_t len,
+static void draw_line_at(const struct fontext_s *font,
+                         struct sm1626d_dev_s *dev, const char *s, size_t len,
                          uint8_t align, int ytop) {
-    int x = text_column(dev, s, len, align);
-    int line = fontext_lineheight();
+    int x = text_column(font, dev, s, len, align);
+    int line = fontext_lineheight(font);
     int row;
     int col;
 
@@ -544,7 +550,7 @@ static void draw_line_at(struct sm1626d_dev_s *dev, const char *s, size_t len,
         }
     }
 
-    sm1626d_drawtext(dev, x, ytop + fontext_ascent(), s, len);
+    sm1626d_drawtext(dev, font, x, ytop + fontext_ascent(font), s, len);
 }
 
 /* Draw a text on one panel, or scroll it when it does not fit. draw_text()
@@ -553,11 +559,12 @@ static void draw_line_at(struct sm1626d_dev_s *dev, const char *s, size_t len,
 
 static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
                                 size_t len, uint8_t align, uint8_t valign) {
-    int width = sm1626d_textwidth(s, len);
+    const struct fontext_s *font = fontext_big();
+    int width = sm1626d_textwidth(font, s, len);
 
     if (width > dev->width) {
         int panel = (dev == &g_sub) ? HAZK03_PANEL_SUB : HAZK03_PANEL_MAIN;
-        int line = fontext_lineheight();
+        int line = fontext_lineheight(font);
         int maxlines = dev->height / line;
 
         /* The font's own line height decides whether a second line fits at
@@ -568,7 +575,7 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
         if (maxlines > 1) {
             size_t starts[TEXT_WRAP_MAX_LINES];
             size_t lens[TEXT_WRAP_MAX_LINES];
-            int n = wrap_text(s, len, dev->width, starts, lens,
+            int n = wrap_text(font, s, len, dev->width, starts, lens,
                               TEXT_WRAP_MAX_LINES);
 
             if (n > 1) {
@@ -582,7 +589,7 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
                     sm1626d_begin(dev);
 
                     for (k = 0; k < n; k++) {
-                        draw_line_at(dev, &s[starts[k]], lens[k], align,
+                        draw_line_at(font, dev, &s[starts[k]], lens[k], align,
                                      voff + k * line);
                     }
 
@@ -606,12 +613,12 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
                     int k;
 
                     for (k = 0; k < n; k++) {
-                        xoffs[k] =
-                            text_column(dev, &s[starts[k]], lens[k], align);
+                        xoffs[k] = text_column(font, dev, &s[starts[k]],
+                                               lens[k], align);
                     }
 
-                    sm1626d_rendertextlines(scratch, dev->width, srch, starts,
-                                            lens, xoffs, n, s);
+                    sm1626d_rendertextlines(font, scratch, dev->width, srch,
+                                            starts, lens, xoffs, n, s);
                     ret = hazk03_display_animate(
                         panel, 0, 0, dev->width, dev->height, true,
                         IPC_TEXT_SCROLL_PERIOD_MS, IPC_TEXT_SCROLL_STEP, false,
@@ -631,7 +638,7 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
         }
 
         {
-            int y = text_row(dev, valign) - fontext_ascent();
+            int y = text_row(font, dev, valign) - fontext_ascent(font);
             int ret = hazk03_display_animate(panel, 0, y, dev->width, line,
                                              false, IPC_TEXT_SCROLL_PERIOD_MS,
                                              IPC_TEXT_SCROLL_STEP, true, false,
@@ -648,7 +655,37 @@ static void draw_text_or_scroll(struct sm1626d_dev_s *dev, const char *s,
         }
     }
 
-    draw_text(dev, s, len, align, valign);
+    draw_text(font, dev, s, len, align, valign);
+}
+
+/* Two static lines of the compact font on a panel, split at the first line
+ * feed and each centred. A later line feed has no shape and draws as a space.
+ * Returns false when the text holds no line feed.
+ */
+
+static bool draw_two_lines(struct sm1626d_dev_s *dev, const char *s,
+                           size_t len) {
+    const struct fontext_s *font = fontext_compact();
+    const char *feed = memchr(s, '\n', len);
+    size_t first;
+    int line = fontext_lineheight(font);
+
+    if (feed == NULL) {
+        return false;
+    }
+
+    first = (size_t)(feed - s);
+
+    nxmutex_lock(&g_fblock);
+    sm1626d_begin(dev);
+    sm1626d_clear(dev);
+    draw_line_at(font, dev, s, first, HAZK03_ALIGN_CENTRE, 0);
+    draw_line_at(font, dev, feed + 1, len - first - 1, HAZK03_ALIGN_CENTRE,
+                 line);
+    sm1626d_commit(dev);
+    nxmutex_unlock(&g_fblock);
+
+    return true;
 }
 
 /* Put a text of the board on one panel. These texts go in the middle. */
@@ -865,6 +902,12 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
 
     hazk03_display_animstop(panel);
 
+    /* A line feed on the main panel gives two lines in the compact font. */
+
+    if (panel == HAZK03_PANEL_MAIN && draw_two_lines(dev, s, len)) {
+        return OK;
+    }
+
     /* A second line must not erase the first, thus a text that takes the top or
      * the bottom clears its own rows alone.
      */
@@ -880,6 +923,16 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
     draw_text_or_scroll(dev, s, len, align, valign);
 
     return OK;
+}
+
+int hazk03_display_loadfont(const char *path) {
+    int ret;
+
+    nxmutex_lock(&g_fblock);
+    ret = fontext_load(path);
+    nxmutex_unlock(&g_fblock);
+
+    return ret;
 }
 
 int hazk03_display_pixels(int panel, int x, int y, int w, int h,
@@ -1000,8 +1053,8 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
          * text running into itself.
          */
 
-        srcw = sm1626d_textwidth((const char *)src, srclen) +
-               (TEXT_SCROLL_GAP_CHARS * fontext_advance());
+        srcw = sm1626d_textwidth(fontext_big(), (const char *)src, srclen) +
+               (TEXT_SCROLL_GAP_CHARS * fontext_advance(fontext_big()));
         srch = h;
 
         if (srcw < w) {
@@ -1022,7 +1075,8 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
     nxmutex_lock(&g_fblock);
 
     if (text) {
-        sm1626d_rendertext(buf, srcw, srch, (const char *)src, srclen);
+        sm1626d_rendertext(fontext_big(), buf, srcw, srch, (const char *)src,
+                           srclen);
     } else if (!file) {
         memcpy(buf, src, (srclen < need) ? srclen : need);
     }

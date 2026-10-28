@@ -13,13 +13,13 @@
 #include "fontext.h"
 #include "sm1626d.h"
 
-int sm1626d_textwidth(const char *s, size_t len) {
-    const uint16_t *cols;
+int sm1626d_textwidth(const struct fontext_s *font, const char *s, size_t len) {
+    uint16_t cols[FONTEXT_WIDTH];
     size_t i = 0;
     int count = 0;
 
     while (i < len) {
-        i += fontext_next(&s[i], len - i, &cols);
+        i += fontext_next(font, &s[i], len - i, cols);
         count++;
     }
 
@@ -31,36 +31,36 @@ int sm1626d_textwidth(const char *s, size_t len) {
      * last.
      */
 
-    return (count * fontext_advance()) - 1;
+    return (count * fontext_advance(font)) - 1;
 }
 
-void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y, const char *s,
-                      size_t len) {
+void sm1626d_drawtext(struct sm1626d_dev_s *dev, const struct fontext_s *font,
+                      int x, int y, const char *s, size_t len) {
     size_t i = 0;
 
     /* The cell is taller than the letter. Thus the top of the cell goes above
      * the top of the letter, and a mark such as an acute has its own rows.
      */
 
-    y -= fontext_ascent();
+    y -= fontext_ascent(font);
 
     while (i < len) {
-        const uint16_t *cols;
+        uint16_t cols[FONTEXT_WIDTH];
         int col;
 
-        i += fontext_next(&s[i], len - i, &cols);
+        i += fontext_next(font, &s[i], len - i, cols);
 
-        for (col = 0; col < fontext_width(); col++) {
+        for (col = 0; col < fontext_width(font); col++) {
             int row;
 
-            for (row = 0; row < fontext_rows(); row++) {
+            for (row = 0; row < fontext_rows(font); row++) {
                 if (cols[col] & (1u << row)) {
                     sm1626d_drawpixel(dev, x + col, y + row, true);
                 }
             }
         }
 
-        x += fontext_advance();
+        x += fontext_advance(font);
 
         if (x >= dev->width) {
             break;
@@ -73,34 +73,34 @@ void sm1626d_drawtext(struct sm1626d_dev_s *dev, int x, int y, const char *s,
  * one text this way; the second calls this once per wrapped line.
  */
 
-static void rendertext_at(uint8_t *bits, int w, int totalh, int stride,
-                          int xoff, int ytop, int cellheight, const char *s,
-                          size_t len) {
+static void rendertext_at(const struct fontext_s *font, uint8_t *bits, int w,
+                          int totalh, int stride, int xoff, int ytop,
+                          int cellheight, const char *s, size_t len) {
     size_t i = 0;
     int x = xoff;
 
     while (i < len && x < w) {
-        const uint16_t *cols;
+        uint16_t cols[FONTEXT_WIDTH];
         int col;
 
-        i += fontext_next(&s[i], len - i, &cols);
+        i += fontext_next(font, &s[i], len - i, cols);
 
-        for (col = 0; col < fontext_width(); col++) {
+        for (col = 0; col < fontext_width(font); col++) {
             int row;
 
             if (x + col >= w) {
                 break;
             }
 
-            for (row = 0; row < fontext_rows(); row++) {
+            for (row = 0; row < fontext_rows(font); row++) {
                 /* The cell is taller than the letter. The row 0 of the cell
                  * belongs above the letter, thus it moves down here.
                  */
 
-                int y =
-                    ytop + row - fontext_ascent() +
-                    ((cellheight - (fontext_rows() - fontext_ascent() - 1)) /
-                     2);
+                int y = ytop + row - fontext_ascent(font) +
+                        ((cellheight -
+                          (fontext_rows(font) - fontext_ascent(font) - 1)) /
+                         2);
 
                 if (y < 0 || y >= totalh) {
                     continue;
@@ -113,29 +113,30 @@ static void rendertext_at(uint8_t *bits, int w, int totalh, int stride,
             }
         }
 
-        x += fontext_advance();
+        x += fontext_advance(font);
     }
 }
 
-void sm1626d_rendertext(uint8_t *bits, int w, int h, const char *s,
-                        size_t len) {
+void sm1626d_rendertext(const struct fontext_s *font, uint8_t *bits, int w,
+                        int h, const char *s, size_t len) {
     int stride = (w + 7) / 8;
 
     memset(bits, 0, (size_t)(stride * h));
-    rendertext_at(bits, w, h, stride, 0, 0, h, s, len);
+    rendertext_at(font, bits, w, h, stride, 0, 0, h, s, len);
 }
 
-void sm1626d_rendertextlines(uint8_t *bits, int w, int totalh,
-                             const size_t *starts, const size_t *lens,
-                             const int *xoffs, int n, const char *s) {
+void sm1626d_rendertextlines(const struct fontext_s *font, uint8_t *bits, int w,
+                             int totalh, const size_t *starts,
+                             const size_t *lens, const int *xoffs, int n,
+                             const char *s) {
     int stride = (w + 7) / 8;
-    int lineheight = fontext_lineheight();
+    int lineheight = fontext_lineheight(font);
     int k;
 
     memset(bits, 0, (size_t)(stride * totalh));
 
     for (k = 0; k < n; k++) {
-        rendertext_at(bits, w, totalh, stride, xoffs[k], k * lineheight,
+        rendertext_at(font, bits, w, totalh, stride, xoffs[k], k * lineheight,
                       lineheight, &s[starts[k]], lens[k]);
     }
 }

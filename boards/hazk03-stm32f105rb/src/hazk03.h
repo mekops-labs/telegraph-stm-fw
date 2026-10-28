@@ -234,6 +234,12 @@ void hazk03_hse_probe(char *buf, size_t len);
 int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
                         uint8_t valign);
 
+/* Read the big font from a file, with the lock of the framebuffer held. A bad
+ * file leaves the font as it was.
+ */
+
+int hazk03_display_loadfont(const char *path);
+
 /* Put a rectangle of pixels on one panel, row by row with bit 7 leftmost. The
  * rest of the panel keeps its content.
  */

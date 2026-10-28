@@ -38,36 +38,64 @@
 
 #define FONTEXT_MAX_GLYPHS 128
 
-/* Read the extended font from a file. Negative when it is absent, too large
- * or not a font, and the renderer then uses the firmware's own.
+/* One font: a sorted table of code points and the columns of each. The font in
+ * the flash and the one built into the firmware share this type, and every
+ * drawing call names the font it uses.
+ */
+
+struct fontext_s {
+    const uint16_t *cp;   /* code points, ascending                    */
+    const uint16_t *cols; /* `stride` columns per entry, bit 0 the top */
+    uint16_t count;
+    uint8_t width; /* columns in use for a character */
+    uint8_t rows;
+    uint8_t ascent; /* rows of the cell above the top of a letter */
+    uint8_t stride; /* columns stored per entry                   */
+
+    /* ASCII that the font lacks comes from the 5x7 font of the firmware; false
+     * gives a space.
+     */
+
+    bool ascii_fallback;
+};
+
+/* The font read from the flash, drawn on both panels for a single line. It
+ * starts with no entries, thus every ASCII character comes from the firmware's.
+ */
+
+const struct fontext_s *fontext_big(void);
+
+/* The font built into the firmware for two lines on 14 rows. */
+
+const struct fontext_s *fontext_compact(void);
+
+/* Read the big font from a file. The whole file is checked before the table
+ * changes, thus a bad file leaves the font as it was. Negative when the file
+ * is absent, too large or not a font. The caller holds the lock of the
+ * framebuffer, since a drawing call reads the table.
  */
 
 int fontext_load(const char *path);
 
-/* Take one UTF-8 character and give its columns and its length in bytes. The
- * extended font first, then the firmware's for ASCII, then the space. Row 0
- * of the cell draws FONTEXT_ASCENT rows above the top of the letter.
+/* Take one UTF-8 character and copy its FONTEXT_WIDTH columns to `cols`; give
+ * its length in bytes. Row 0 of the cell draws `ascent` rows above the top of
+ * the letter.
  */
 
-size_t fontext_next(const char *s, size_t len, const uint16_t **cols);
+size_t fontext_next(const struct fontext_s *font, const char *s, size_t len,
+                    uint16_t *cols);
 
-/* The cell of the font in use, or the firmware's without one from the flash.
- * A font carries its own cell, thus a compact one gives two lines on 14 rows.
+/* The cell of a font. A font carries its own cell, thus a compact one gives
+ * two lines on 14 rows.
  */
 
-int fontext_width(void);
-int fontext_rows(void);
-int fontext_ascent(void);
-int fontext_advance(void);
+int fontext_width(const struct fontext_s *font);
+int fontext_rows(const struct fontext_s *font);
+int fontext_ascent(const struct fontext_s *font);
+int fontext_advance(const struct fontext_s *font);
 
-/****************************************************************************
- * Name: fontext_lineheight
- *
- * Description:
- *   Give the rows that one line of text needs.
- *
- ****************************************************************************/
+/* The rows that one line of text needs. */
 
-int fontext_lineheight(void);
+int fontext_lineheight(const struct fontext_s *font);
 
 #endif /* __BOARDS_ARM_STM32_HAZK03_STM32F105RB_SRC_FONTEXT_H */
