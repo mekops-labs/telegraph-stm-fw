@@ -5,6 +5,7 @@
  * reaches neither the broker of the link nor the STM32.
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -16,6 +17,7 @@
 #include <unistd.h>
 
 #include <telegraph/display.h>
+#include <telegraph/hassparse.h>
 
 #include "mqtt.h"
 
@@ -57,10 +59,13 @@
 #define INTERVAL_DEFAULT_S 30u
 #define INTERVAL_MIN_S 5u
 
-/* The panels hold this many characters of the compiled-in font. */
+/* The panels hold this many characters of the compiled-in font. The board
+ * takes TG_DSP_TEXT_MAX bytes, and a Polish letter takes two of them.
+ */
 
-#define MAIN_CHARS 40u
+#define MAIN_CHARS 32u
 #define SUB_CHARS 10u
+#define EXT_CHARS 8u
 
 #define TOPIC_MAX 160u
 #define VALUE_MAX 128u
@@ -129,21 +134,43 @@ static void topic(char *out, size_t cap, const char *leaf) {
  * The display
  ****************************************************************************/
 
-/* Text on a panel, and the text HA shows for that entity. */
+/* Text on a panel. The cap counts the text as received, and a main text turns
+ * the two characters \n into a line feed. An empty text gives the panel back
+ * to the board.
+ */
 
-static void set_text(uint8_t panel, const char *body, size_t len) {
-    uint8_t payload[VALUE_MAX + TG_DSP_TEXT_BODY];
+static void set_text(uint8_t panel, char *body, size_t len) {
+    uint8_t payload[TG_DSP_TEXT_MAX + TG_DSP_TEXT_BODY];
+    size_t cut = hass_utf8_prefix(body, len, TG_DSP_TEXT_MAX);
+    int rc;
 
-    if (len > VALUE_MAX) {
-        len = VALUE_MAX;
+    if (cut < len) {
+        emitf("hass: the text of panel %u was cut to %u bytes\n", panel,
+              (unsigned int)cut);
+        len = cut;
+        body[len] = '\0';
     }
 
-    payload[TG_DSP_TEXT_PANEL] = panel;
-    payload[TG_DSP_TEXT_ATTRS] = IPC_ALIGN_CENTRE;
-    memcpy(&payload[TG_DSP_TEXT_BODY], body, len);
+    if (len == 0) {
+        payload[TG_DSP_RELEASE_PANEL] = panel;
+        rc = tg_dsp_ask(&g_display, TG_DSP_OP_RELEASE, payload,
+                        TG_DSP_RELEASE_LEN);
+    } else {
+        size_t sent = len;
 
-    int rc = tg_dsp_ask(&g_display, TG_DSP_OP_TEXT, payload,
-                        (uint16_t)(TG_DSP_TEXT_BODY + len));
+        memcpy(&payload[TG_DSP_TEXT_BODY], body, len);
+
+        if (panel == TG_DSP_PANEL_MAIN) {
+            sent =
+                hass_unescape_newlines((char *)&payload[TG_DSP_TEXT_BODY], len);
+        }
+
+        payload[TG_DSP_TEXT_PANEL] = panel;
+        payload[TG_DSP_TEXT_ATTRS] = IPC_ALIGN_CENTRE;
+        rc = tg_dsp_ask(&g_display, TG_DSP_OP_TEXT, payload,
+                        (uint16_t)(TG_DSP_TEXT_BODY + sent));
+    }
+
     if (rc != TG_DSP_OK) {
         emitf("hass: the panel %u refused the text (%d)\n", panel, rc);
     }
@@ -156,8 +183,14 @@ static void set_text(uint8_t panel, const char *body, size_t len) {
 static uint8_t g_digits = 4;
 static uint8_t g_panels = 4;
 
+static bool ensure_synced(void);
+
 static void set_bright(bool digits, unsigned int level) {
     uint8_t payload[2];
+
+    if (!ensure_synced()) {
+        return;
+    }
 
     if (level > IPC_BRIGHT_MAX) {
         level = IPC_BRIGHT_MAX;
@@ -185,8 +218,84 @@ static void set_bright(bool digits, unsigned int level) {
 static uint16_t g_dnd_start;
 static uint16_t g_dnd_end;
 
+/* The board keeps the levels, the period and the outside value, and it is the
+ * only place that knows them after a restart of this wapp. Until one reading
+ * arrives, a command would send the stale default of its partner value.
+ */
+
+static bool g_synced;
+static bool g_ext_set;
+static int16_t g_ext_tenths;
+
+static void format_tenths(char *out, size_t cap, int tenths) {
+    int mag = tenths < 0 ? -tenths : tenths;
+
+    snprintf(out, cap, "%s%d.%d", tenths < 0 ? "-" : "", mag / 10, mag % 10);
+}
+
+static void echo_state(const char *leaf, const char *value);
+
+static bool sync_settings(void) {
+    const uint8_t *st = g_display.reply;
+    uint16_t sleepmin;
+    uint16_t wakemin;
+    char text[16];
+    int rc = tg_dsp_ask(&g_display, TG_DSP_OP_GET_SETTINGS, NULL, 0);
+
+    if (rc != TG_DSP_OK || g_display.reply_op != TG_DSP_OP_SETTINGS ||
+        g_display.reply_len < IPC_SETTINGS_LEN) {
+        emitf("hass: no settings (rc %d, op 0x%02x, len %u)\n", rc,
+              g_display.reply_op, g_display.reply_len);
+        return false;
+    }
+
+    g_digits = st[IPC_SETTINGS_DIGITS];
+    g_panels = st[IPC_SETTINGS_PANELS];
+    sleepmin = ipc_get_u16(&st[IPC_SETTINGS_SLEEP]);
+    wakemin = ipc_get_u16(&st[IPC_SETTINGS_WAKE]);
+    g_ext_set = st[IPC_SETTINGS_EXT_SET] != 0;
+    g_ext_tenths = (int16_t)ipc_get_u16(&st[IPC_SETTINGS_EXT]);
+
+    /* A disabled period shows as equal times. */
+
+    if (sleepmin >= IPC_MINUTES_PER_DAY || wakemin >= IPC_MINUTES_PER_DAY) {
+        sleepmin = 0;
+        wakemin = 0;
+    }
+
+    g_dnd_start = sleepmin;
+    g_dnd_end = wakemin;
+    g_synced = true;
+
+    snprintf(text, sizeof(text), "%u", g_digits);
+    echo_state("brightness/digits", text);
+    snprintf(text, sizeof(text), "%u", g_panels);
+    echo_state("brightness/panels", text);
+    snprintf(text, sizeof(text), "%02u:%02u:00", g_dnd_start / 60u,
+             g_dnd_start % 60u);
+    echo_state("dnd/start", text);
+    snprintf(text, sizeof(text), "%02u:%02u:00", g_dnd_end / 60u,
+             g_dnd_end % 60u);
+    echo_state("dnd/end", text);
+
+    return true;
+}
+
+static bool ensure_synced(void) {
+    if (g_synced || sync_settings()) {
+        return true;
+    }
+
+    emit("hass: the settings of the board are unknown, command dropped\n");
+    return false;
+}
+
 static void set_dnd(bool is_start, unsigned int minute) {
     uint8_t payload[TG_DSP_SLEEP_LEN];
+
+    if (!ensure_synced()) {
+        return;
+    }
 
     if (minute >= IPC_MINUTES_PER_DAY) {
         minute = IPC_MINUTES_PER_DAY - 1;
@@ -204,6 +313,32 @@ static void set_dnd(bool is_start, unsigned int minute) {
     int rc = tg_dsp_ask(&g_display, TG_DSP_OP_SLEEP, payload, sizeof(payload));
     if (rc != TG_DSP_OK) {
         emitf("hass: the DND period was refused (%d)\n", rc);
+    }
+}
+
+/* The outside temperature as HA's text entity sends it: a decimal degree, or
+ * nothing to return the digits to the DS3231. Anything else changes nothing.
+ */
+
+static void set_ext(const char *value, size_t len) {
+    int tenths = 0;
+    int rc;
+
+    if (len == 0) {
+        rc = tg_dsp_ask(&g_display, TG_DSP_OP_EXTTEMP, NULL, 0);
+    } else if (hass_parse_tenths(value, &tenths)) {
+        uint8_t payload[IPC_SET_EXTTEMP_LEN];
+
+        ipc_put_u16(payload, (uint16_t)(int16_t)tenths);
+        rc =
+            tg_dsp_ask(&g_display, TG_DSP_OP_EXTTEMP, payload, sizeof(payload));
+    } else {
+        emit("hass: the outside temperature is not a number in range\n");
+        return;
+    }
+
+    if (rc != TG_DSP_OK) {
+        emitf("hass: the outside temperature was refused (%d)\n", rc);
     }
 }
 
@@ -265,7 +400,11 @@ static void read_config(void) {
 
 static void publish_state(void) {
     char body[256];
+    char temp_text[16];
+    char ext_text[16] = "";
     const uint8_t *st = g_display.reply;
+
+    sync_settings();
 
     int rc = tg_dsp_ask(&g_display, TG_DSP_OP_GET_STATE, NULL, 0);
 
@@ -279,13 +418,19 @@ static void publish_state(void) {
     unsigned int vlen = g_display.reply_len > IPC_STATE_FWVER
                             ? g_display.reply_len - IPC_STATE_FWVER
                             : 0;
-    int temp = (int16_t)ipc_get_u16(&st[IPC_STATE_TEMP]);
+
+    format_tenths(temp_text, sizeof(temp_text),
+                  (int16_t)ipc_get_u16(&st[IPC_STATE_TEMP]));
+
+    if (g_ext_set) {
+        format_tenths(ext_text, sizeof(ext_text), g_ext_tenths);
+    }
 
     int n = snprintf(body, sizeof(body),
-                     "{\"temperature\":%d.%d,\"frames\":%u,"
-                     "\"crc_errors\":%u,\"resyncs\":%u,\"firmware\":\"%.*s\"}",
-                     temp / 10, (temp < 0 ? -temp : temp) % 10,
-                     ipc_get_u16(&st[IPC_STATE_FRAMES]),
+                     "{\"temperature\":%s,\"ext_temperature\":\"%s\","
+                     "\"frames\":%u,\"crc_errors\":%u,\"resyncs\":%u,"
+                     "\"firmware\":\"%.*s\"}",
+                     temp_text, ext_text, ipc_get_u16(&st[IPC_STATE_FRAMES]),
                      ipc_get_u16(&st[IPC_STATE_CRC_ERR]), st[IPC_STATE_RESYNC],
                      (int)vlen, (const char *)&st[IPC_STATE_FWVER]);
 
@@ -321,6 +466,7 @@ static int publish_discovery(void) {
     char dnds_stat[TOPIC_MAX];
     char dnde_cmd[TOPIC_MAX];
     char dnde_stat[TOPIC_MAX];
+    char ext_cmd[TOPIC_MAX];
 
     topic(main_cmd, sizeof(main_cmd), "main/set");
     topic(main_stat, sizeof(main_stat), "main");
@@ -334,6 +480,7 @@ static int publish_discovery(void) {
     topic(dnds_stat, sizeof(dnds_stat), "dnd/start");
     topic(dnde_cmd, sizeof(dnde_cmd), "dnd/end/set");
     topic(dnde_stat, sizeof(dnde_stat), "dnd/end");
+    topic(ext_cmd, sizeof(ext_cmd), "temperature/ext/set");
 
     int n = snprintf(
         doc, sizeof(doc),
@@ -359,6 +506,10 @@ static int publish_discovery(void) {
         "\"dnd_end\":{\"p\":\"time\",\"name\":\"Display on at\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"ent_cat\":\"config\","
         "\"uniq_id\":\"%s_dnd_end\"},"
+        "\"ext\":{\"p\":\"text\",\"name\":\"External temperature\","
+        "\"cmd_t\":\"%s\",\"stat_t\":\"%s\","
+        "\"val_tpl\":\"{{value_json.ext_temperature}}\",\"max\":%u,"
+        "\"uniq_id\":\"%s_ext\"},"
         /* The readings. One document on the state topic serves them all, and
          * each component reads its own field of it. */
         "\"temperature\":{\"p\":\"sensor\",\"name\":\"Temperature\","
@@ -383,9 +534,9 @@ static int publish_discovery(void) {
         g_device, g_name, g_avail, main_cmd, main_stat, MAIN_CHARS, g_device,
         sub_cmd, sub_stat, SUB_CHARS, g_device, dig_cmd, dig_stat,
         IPC_BRIGHT_MAX, g_device, pan_cmd, pan_stat, IPC_BRIGHT_MAX, g_device,
-        dnds_cmd, dnds_stat, g_device, dnde_cmd, dnde_stat, g_device, g_state,
-        g_device, g_state, g_device, g_state, g_device, g_state, g_device,
-        g_state, g_device);
+        dnds_cmd, dnds_stat, g_device, dnde_cmd, dnde_stat, g_device, ext_cmd,
+        g_state, EXT_CHARS, g_device, g_state, g_device, g_state, g_device,
+        g_state, g_device, g_state, g_device, g_state, g_device);
 
     if (n < 0 || (size_t)n >= sizeof(doc)) {
         emit("hass: the discovery document does not fit\n");
@@ -406,6 +557,7 @@ static int subscribe_all(void) {
         "brightness/panels/set",
         "dnd/start/set",
         "dnd/end/set",
+        "temperature/ext/set",
     };
     size_t i;
 
@@ -456,6 +608,9 @@ static void on_message(const struct mqtt_msg_s *msg) {
     } else if (is_topic(msg->topic, "sub/set")) {
         set_text(TG_DSP_PANEL_SUB, value, len);
         echo_state("sub", value);
+    } else if (is_topic(msg->topic, "temperature/ext/set")) {
+        set_ext(value, len);
+        publish_state();
     } else if (is_topic(msg->topic, "brightness/digits/set")) {
         set_bright(true, (unsigned int)strtoul(value, NULL, 10));
         echo_state("brightness/digits", value);
@@ -492,14 +647,14 @@ static int session(void) {
     int fd = open(g_socket_path, O_RDWR | O_NONBLOCK);
 
     if (fd < 0) {
-        emitf("hass: %s is out of reach\n", g_socket_path);
+        emitf("hass: %s did not open (errno %d)\n", g_socket_path, errno);
         return -1;
     }
 
     snprintf(client_id, sizeof(client_id), "tg-hass-%s", g_device);
     if (mqtt_connect(&g_mqtt, fd, client_id, g_user, g_pass, g_avail, "offline",
                      KEEPALIVE_S) < 0) {
-        emit("hass: the broker took no connection\n");
+        emitf("hass: the broker took no connection (errno %d)\n", errno);
         close(fd);
         return -1;
     }

@@ -74,6 +74,7 @@
  * IPC_VALIGN_*, and 0 puts the text in the middle.
  */
 
+#define TG_DSP_TEXT_MAX 64u /* the longest text the board takes, in bytes */
 #define TG_DSP_TEXT_PANEL 0u
 #define TG_DSP_TEXT_ATTRS 1u
 #define TG_DSP_TEXT_BODY 2u
