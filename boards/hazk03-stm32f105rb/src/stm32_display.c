@@ -928,6 +928,10 @@ int hazk03_display_text(int panel, const char *s, size_t len, uint8_t align,
 int hazk03_display_loadfont(const char *path) {
     int ret;
 
+    /* A load fills the table a draw is not using; the lock keeps two loads
+     * from refilling the one a draw still holds.
+     */
+
     nxmutex_lock(&g_fblock);
     ret = fontext_load(path);
     nxmutex_unlock(&g_fblock);
@@ -964,6 +968,7 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
     uint8_t *buf =
         (panel == HAZK03_PANEL_SUB) ? g_anim_src_sub : g_anim_src_main;
     size_t cap = (panel == HAZK03_PANEL_SUB) ? ANIM_SRC_SUB : ANIM_SRC_MAIN;
+    const struct fontext_s *font = fontext_big();
     size_t need;
 
     /* A sprite in the flash carries its own step. The caller sends none.
@@ -1053,8 +1058,8 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
          * text running into itself.
          */
 
-        srcw = sm1626d_textwidth(fontext_big(), (const char *)src, srclen) +
-               (TEXT_SCROLL_GAP_CHARS * fontext_advance(fontext_big()));
+        srcw = sm1626d_textwidth(font, (const char *)src, srclen) +
+               (TEXT_SCROLL_GAP_CHARS * fontext_advance(font));
         srch = h;
 
         if (srcw < w) {
@@ -1075,8 +1080,7 @@ int hazk03_display_animate(int panel, int x, int y, int w, int h, bool vertical,
     nxmutex_lock(&g_fblock);
 
     if (text) {
-        sm1626d_rendertext(fontext_big(), buf, srcw, srch, (const char *)src,
-                           srclen);
+        sm1626d_rendertext(font, buf, srcw, srch, (const char *)src, srclen);
     } else if (!file) {
         memcpy(buf, src, (srclen < need) ? srclen : need);
     }
@@ -1210,12 +1214,13 @@ void hazk03_display_setconfig(const struct hazk03_config_s *cfg) {
 int16_t hazk03_display_temperature(void) { return g_temp; }
 
 void hazk03_display_exttemp(bool set, int16_t tenths) {
-    g_ext_set = set;
+    /* The value goes first, thus the scan thread never shows a stale one. */
 
     if (set) {
         g_ext_tenths = tenths;
     }
 
+    g_ext_set = set;
     g_temp_secs = 0;
 }
 

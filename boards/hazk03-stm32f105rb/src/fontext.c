@@ -16,25 +16,47 @@
 
 #define FONTEXT_MAX_ROWS 16
 
-static uint16_t g_cp[FONTEXT_MAX_GLYPHS];
-static uint16_t g_cols[FONTEXT_MAX_GLYPHS][FONTEXT_WIDTH];
+/* Two tables: a load fills the one not in use and then publishes it, thus a
+ * drawing call that took the font keeps a consistent table throughout.
+ */
 
-static struct fontext_s g_big = {
-    .cp = g_cp,
-    .cols = &g_cols[0][0],
-    .count = 0,
-    .width = FONTEXT_WIDTH,
-    .rows = FONTEXT_ROWS,
-    .ascent = FONTEXT_ASCENT,
-    .stride = FONTEXT_WIDTH,
-    .ascii_fallback = true,
+#define FONTEXT_BANKS 2
+
+static uint16_t g_cp[FONTEXT_BANKS][FONTEXT_MAX_GLYPHS];
+static uint16_t g_cols[FONTEXT_BANKS][FONTEXT_MAX_GLYPHS][FONTEXT_WIDTH];
+
+static struct fontext_s g_banks[FONTEXT_BANKS] = {
+    {
+        .cp = g_cp[0],
+        .cols = &g_cols[0][0][0],
+        .count = 0,
+        .width = FONTEXT_WIDTH,
+        .rows = FONTEXT_ROWS,
+        .ascent = FONTEXT_ASCENT,
+        .stride = FONTEXT_WIDTH,
+        .ascii_fallback = true,
+    },
+    {
+        .cp = g_cp[1],
+        .cols = &g_cols[1][0][0],
+        .count = 0,
+        .width = FONTEXT_WIDTH,
+        .rows = FONTEXT_ROWS,
+        .ascent = FONTEXT_ASCENT,
+        .stride = FONTEXT_WIDTH,
+        .ascii_fallback = true,
+    },
 };
+
+/* One word, written after the table is complete. */
+
+static struct fontext_s *volatile g_big = &g_banks[0];
 
 static uint16_t fontext_get_u16(const uint8_t *p) {
     return (uint16_t)(p[0] | (p[1] << 8));
 }
 
-const struct fontext_s *fontext_big(void) { return &g_big; }
+const struct fontext_s *fontext_big(void) { return g_big; }
 
 /* Read the header and check it. Returns the entry count, or a negative errno.
  */
@@ -74,44 +96,15 @@ static int fontext_header(int fd, const char *path, uint8_t *header) {
     return count;
 }
 
-/* Read every entry without storing it: the code points must ascend, and the
- * file must hold all of them.
- */
-
-static int fontext_check(int fd, const char *path, const uint8_t *header,
-                         uint16_t count) {
-    uint8_t entry[FONTEXT_ENTRY_LEN];
-    size_t entrylen = 2 + ((size_t)header[6] * 2);
-    int prev = -1;
-    uint16_t i;
-
-    for (i = 0; i < count; i++) {
-        int cp;
-
-        if (read(fd, entry, entrylen) != (ssize_t)entrylen) {
-            syslog(LOG_ERR, "font: %s ends in entry %u\n", path, i);
-            return -EINVAL;
-        }
-
-        cp = fontext_get_u16(&entry[0]);
-
-        if (cp <= prev) {
-            syslog(LOG_ERR, "font: %s is not in code point order\n", path);
-            return -EINVAL;
-        }
-
-        prev = cp;
-    }
-
-    return OK;
-}
-
 int fontext_load(const char *path) {
     uint8_t header[FONTEXT_HEADER_LEN];
     uint8_t entry[FONTEXT_ENTRY_LEN];
+    int bank = (g_big == &g_banks[0]) ? 1 : 0;
+    struct fontext_s *next = &g_banks[bank];
     size_t entrylen;
     uint16_t count;
     uint16_t i;
+    int prev = -1;
     int fd;
     int ret;
 
@@ -126,48 +119,44 @@ int fontext_load(const char *path) {
     }
 
     count = (uint16_t)ret;
-
-    ret = fontext_check(fd, path, header, count);
-    if (ret < 0) {
-        goto done;
-    }
-
-    /* The file is good. A read error from here on empties the table, since the
-     * entries before it are already replaced.
-     */
-
     entrylen = 2 + ((size_t)header[6] * 2);
-
-    if (lseek(fd, FONTEXT_HEADER_LEN, SEEK_SET) != FONTEXT_HEADER_LEN) {
-        ret = -EIO;
-        goto done;
-    }
 
     for (i = 0; i < count; i++) {
         int col;
+        int cp;
 
         if (read(fd, entry, entrylen) != (ssize_t)entrylen) {
-            g_big.count = 0;
-            ret = -EIO;
+            syslog(LOG_ERR, "font: %s ends in entry %u\n", path, i);
+            ret = -EINVAL;
             goto done;
         }
 
-        g_cp[i] = fontext_get_u16(&entry[0]);
+        cp = fontext_get_u16(&entry[0]);
+
+        if (cp <= prev) {
+            syslog(LOG_ERR, "font: %s is not in code point order\n", path);
+            ret = -EINVAL;
+            goto done;
+        }
+
+        prev = cp;
+        g_cp[bank][i] = (uint16_t)cp;
 
         for (col = 0; col < FONTEXT_WIDTH; col++) {
-            g_cols[i][col] =
+            g_cols[bank][i][col] =
                 (col < header[6]) ? fontext_get_u16(&entry[2 + (col * 2)]) : 0;
         }
     }
 
-    g_big.count = count;
-    g_big.width = header[6];
-    g_big.rows = header[7];
-    g_big.ascent = header[8];
+    next->count = count;
+    next->width = header[6];
+    next->rows = header[7];
+    next->ascent = header[8];
+    g_big = next;
     ret = OK;
 
     syslog(LOG_INFO, "font: %s gives %u characters in a cell of %d by %d\n",
-           path, count, g_big.width, g_big.rows);
+           path, count, next->width, next->rows);
 
 done:
     close(fd);
