@@ -48,6 +48,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `make ota-image` refuses an STM32 build that is not configured as `ipc`.
 - The engine firmware image is tagged
   `<engine release>-telegraph-<version of this repository>`.
+- The engine firmware builds on engine v0.29.2, which holds no copy of the
+  Telegraph board, and the wapp tests run on it.
 
 ### Fixed
 

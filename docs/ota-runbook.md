@@ -59,7 +59,7 @@ tag, the digest and the size from the image, and a wrong digest stops the
 update at the device and latches the version as failed. A clean checkout of a
 release tag publishes under that release. The tag is
 `<engine release>-telegraph-<version of this repository>`, such as
-`0.28.0-telegraph-0.8.0`. The version of this repository is the variant, thus
+`0.29.2-telegraph-0.8.0`. The version of this repository is the variant, thus
 a change of the board code or configuration on one engine release gets a new
 tag.
 
