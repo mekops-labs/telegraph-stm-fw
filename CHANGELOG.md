@@ -5,6 +5,25 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `edge/` is a board directory of the WANTED engine for the edge MCU: the
+  defconfigs `telegraph-sheriff` and `telegraph-sheriff-trace`, the launch
+  configuration and the seeded wapp.
+- `make edge-build`, `edge-flash`, `edge-monitor` and `edge-ota-image` build,
+  flash and tag the engine firmware of the edge MCU.
+- `.mise.toml` tasks `build`, `flash-edge` and `ota-image`.
+- `tools/check-fw-config.py` checks that the firmware embeds `edge/config.json`.
+- `scripts/fw-variant` prints the version of this repository as an image
+  variant.
+
+### Changed
+
+- The engine firmware image is tagged
+  `<engine release>-telegraph-<version of this repository>`.
+
 ## [0.7.0] - 2026-10-07
 
 ### Added
