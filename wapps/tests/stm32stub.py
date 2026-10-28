@@ -29,7 +29,22 @@ def state(time_s, frames):
     fixed = struct.pack("<IhHHBB", time_s, 215, frames & 0xFFFF, 0, 0, 1)
     return fixed + b"v0.0.0-stub"
 
+def settings_reply(st):
+    """The SETTINGS reply: levels, period, offsets, then the outside value."""
+    ext = st["ext"]
+    return struct.pack("<BBHHhhBh", st["digits"], st["panels"], st["sleep"],
+                       st["wake"], 0, 0, 0 if ext is None else 1, ext or 0)
+
 def main(dev):
+    # What the board holds. STUB_* seeds it the way a stored record would.
+    st = {
+        "digits": int(os.environ.get("STUB_DIGITS", "5")),
+        "panels": int(os.environ.get("STUB_PANELS", "8")),
+        "sleep": int(os.environ.get("STUB_SLEEP", "65535")),
+        "wake": int(os.environ.get("STUB_WAKE", "65535")),
+        "ext": None,
+    }
+    lifetime = int(os.environ.get("STUB_SECONDS", "20"))
     fd = os.open(dev, os.O_RDWR | os.O_NOCTTY)
     buf = b""
     started = time.time()
@@ -41,7 +56,7 @@ def main(dev):
     delta = int(os.environ.get("STUB_TIME", "0")) - time.time()
     reset_at = int(os.environ.get("STUB_RESET_AT", "0"))
     frames = 0
-    while time.time() - started < 20:
+    while time.time() - started < lifetime:
         try:
             chunk = os.read(fd, 256)
         except BlockingIOError:
@@ -95,6 +110,34 @@ def main(dev):
                 if frame[7]:
                     time.sleep(0.05)
                     os.write(fd, encode(0x33, 0x0000, b"\x00" + b"device says hello"))
+            elif op == 0x11:  # SET_BRIGHT -> ACK, one byte sets both
+                st["digits"] = frame[6]
+                st["panels"] = frame[7] if ln >= 2 else frame[6]
+                print(f"stub: set brightness {st['digits']} {st['panels']}", flush=True)
+                os.write(fd, encode(0xF0, corr, bytes([8])))
+            elif op == 0x12:  # SET_SLEEP -> ACK
+                st["sleep"], st["wake"] = struct.unpack("<HH", frame[6:10])
+                print(f"stub: set sleep {st['sleep']} {st['wake']}", flush=True)
+                os.write(fd, encode(0xF0, corr, bytes([8])))
+            elif op == 0x07:  # SET_EXTTEMP -> ACK, an empty payload clears it
+                if ln == 0:
+                    st["ext"] = None
+                    print("stub: clear exttemp", flush=True)
+                    os.write(fd, encode(0xF0, corr, bytes([8])))
+                elif ln == 2:
+                    st["ext"] = struct.unpack("<h", frame[6:8])[0]
+                    print(f"stub: set exttemp {st['ext']}", flush=True)
+                    os.write(fd, encode(0xF0, corr, bytes([8])))
+                else:
+                    os.write(fd, encode(0xF1, corr, bytes([2])))
+            elif op == 0x08:  # GET_SETTINGS -> SETTINGS
+                os.write(fd, encode(0x09, corr, settings_reply(st)))
+            elif op == 0x13:  # SET_TEXT -> ACK, the body in hex
+                print(f"stub: text hex {frame[8:6 + ln].hex()}", flush=True)
+                os.write(fd, encode(0xF0, corr, bytes([8])))
+            elif op == 0x19:  # RELEASE -> ACK
+                print(f"stub: release panel {frame[6]}", flush=True)
+                os.write(fd, encode(0xF0, corr, bytes([8])))
             else:
                 os.write(fd, encode(0xF0, corr, bytes([8])))  # ACK, credits
             if not pushed:
