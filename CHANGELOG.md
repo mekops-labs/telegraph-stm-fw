@@ -5,7 +5,7 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-10-28
 
 ### Added
 
@@ -482,6 +482,7 @@ hardware and answers a binary protocol on the edge MCU's UART.
 - The scan loop is CPU-driven, not DMA-driven.
 - The firmware has no animation support and reads no USB device.
 
+[0.8.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.8.0
 [0.7.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.7.0
 [0.6.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.6.0
 [0.5.0]: https://github.com/mekops-labs/telegraph-stm-fw/releases/tag/v0.5.0
