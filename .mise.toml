@@ -2,7 +2,7 @@
 # from an untracked .mise.local.toml.
 [tasks.build-stm32]
 description = "Build the STM32 firmware"
-run = "make build CONFIG=ipc"
+run = "make CONFIG=ipc require-ipc build"
 
 [tasks.build-edge]
 description = "Build the engine firmware of the edge MCU into dist/"

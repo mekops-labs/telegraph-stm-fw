@@ -21,6 +21,7 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `make ota-image` refuses an STM32 build that is not configured as `ipc`.
 - The engine firmware image is tagged
   `<engine release>-telegraph-<version of this repository>`.
 

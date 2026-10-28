@@ -33,7 +33,7 @@ FLASHER_ENV   := xiao_esp32s3
         savedefconfig test version font compactfont sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
         ota-image wapp-push require-registry require-broker deploy \
-        lint-format format-fix tidy cppcheck \
+        lint-format format-fix tidy cppcheck require-ipc \
         check-engine edge-seeds edge-build edge-flash edge-monitor \
         edge-ota-image
 
@@ -102,6 +102,14 @@ $(NUTTX)/.config:
 	  ./tools/configure.sh -l "$$top/$(BOARD_DIR)/configs/$(CONFIG)"'
 
 configure: $(NUTTX)/.config
+
+# A configured tree keeps its configuration, thus CONFIG=ipc does not change a
+# tree configured as nsh. The firmware that tg-ota writes must serve the
+# protocol: a console build answers the edge MCU with nothing.
+require-ipc: configure
+	@grep -qx 'CONFIG_NO_SERIAL_CONSOLE=y' $(NUTTX)/.config || \
+	    { echo "the configured STM32 firmware is not ipc;" \
+	      "run make distclean, then make CONFIG=ipc" >&2; exit 1; }
 
 # The header changes with the git state, thus this target runs every time. The
 # script keeps the file untouched when the version is the same.
@@ -315,7 +323,7 @@ edge-ota-image: require-registry edge-build
 # firmware ships as a new version of that wapp.
 OTA_ROOT := $(WAPP_DIR)/tg-ota/root
 
-ota-image: build
+ota-image: require-ipc build
 	@mkdir -p $(OTA_ROOT)
 	@cp $(NUTTX)/nuttx.bin $(OTA_ROOT)/firmware.bin
 	@sed -n 's/.*HAZK03_VERSION "\(.*\)".*/\1/p' $(VERSION_H) \

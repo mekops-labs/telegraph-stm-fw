@@ -54,7 +54,9 @@ Those files are build outputs and the repository does not hold them.
 Note: the configuration `ipc` carries the protocol on USART1. The default
 `nsh` puts a console there and serves no protocol, thus a board that runs it
 answers the edge MCU with nothing. Run a `distclean` when the configuration
-changes.
+changes. `make ota-image` refuses a tree that is not configured as `ipc`, since
+a board that runs such an image answers no request and `tg-ota` cannot write it
+again.
 
 Note: the version comes from `git describe`, and the comparison is exact. Thus
 a build from a tree with local changes carries the suffix `-dirty`, never
