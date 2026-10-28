@@ -41,10 +41,14 @@ did not ask for.
 | `0x45` | the clock | `[epoch u32] [offset i16]` |
 | `0x46` | clear both panels | — |
 | `0x47` | the period without light | `[start u16] [end u16]` |
+| `0x48` | the outside temperature | `[tenths i16]`, empty clears it |
+| `0x49` | a panel to the board | `[panel]` |
+| `0x4a` | the settings of the board | — |
 
 The state comes back as opcode `0x41`, carrying the payload of the board's own
-state frame. Every other request takes an ACK, or a NACK with one byte of
-`IPC_ERR_*`. A `IPC_ERR_BUSY` means the board gave no reply in time; it is the
+state frame. The settings come back as opcode `0x4b`, carrying the payload of
+the board's settings frame. Every other request takes an ACK, or a NACK with
+one byte of `IPC_ERR_*`. A `IPC_ERR_BUSY` means the board gave no reply in time; it is the
 one code that says nothing about the request.
 
 The header `wapps/include/telegraph/display.h` carries the offsets and the

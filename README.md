@@ -171,17 +171,20 @@ gives a space.
 
 **The compact font gives two lines.** The font of 5x7 takes 10 rows of a panel
 of 14, thus one line fills it. The compact font takes 5 rows for a letter in a
-cell of 7, and two of those fit.
+cell of 7, and two of those fit. The firmware holds it, and the main panel
+draws a text with a line feed (`0x0A`) as two lines in it. The big font keeps
+drawing every single line, on both panels, at the same time.
 
 ```sh
-make compactfont            # build it, and print the command that sends it
+make fontcompact            # regenerate the compact font of the firmware
+make compactfont            # build it as a file, and print the command that sends it
 make sprites                # build the sprites for the animation
 ```
 
-The board takes a font from the flash at any time, thus one panel shows a large
-line and later two small ones.
+The board takes the big font from the flash at any time. The compact font is
+part of the firmware, and no request replaces it.
 
-A request names a font alone, such as `compact`, and a sprite alone, such as
+A request names a font alone, such as `default`, and a sprite alone, such as
 `heart`. The board keeps the fonts in `/assets/fonts` and the sprites in
 `/assets/animations`, and it takes one format for each kind. Thus the name
 needs neither a directory nor an ending. **A request without a name gives the

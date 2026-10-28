@@ -116,6 +116,9 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x04` | edge to STM32 | Set the RTC |
 | `0x05` | edge to STM32 | Correct the temperature |
 | `0x06` | edge to STM32 | Start the flash mode |
+| `0x07` | edge to STM32 | Set the outside temperature |
+| `0x08` | edge to STM32 | Request the settings |
+| `0x09` | STM32 to edge | The settings |
 | | | **The display** |
 | `0x10` | edge to STM32 | Clear a panel, or both |
 | `0x11` | edge to STM32 | Set the brightness |
@@ -126,6 +129,7 @@ one caller shares the UART, and the callers need no lock between them.
 | `0x16` | edge to STM32 | Animate a rectangle, or give the names of the sprites |
 | `0x17` | edge to STM32 | Change the rate of an animation |
 | `0x18` | edge to STM32 | Stop the animations |
+| `0x19` | edge to STM32 | Give a panel to the board |
 | | | **The storage** |
 | `0x20` | edge to STM32 | List a directory |
 | `0x21` | edge to STM32 | Read one part of a file |
@@ -226,6 +230,50 @@ This opcode is a reservation. The STM32 answers with a NACK and the error code
 Note: a flash operation uses the system bootloader. The edge MCU holds BOOT0
 and it applies a reset. Thus the application firmware needs no support.
 
+### `0x07` Set the outside temperature
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 2 | The temperature in tenths of a degree Celsius, signed |
+
+The temperature digits show this value instead of the reading of the DS3231.
+The board rounds it to whole degrees, half away from zero, and accepts -99.0 to
+199.9 °C. Another value gets a NACK with the code `0x03`, and a payload of
+another length gets one with the code `0x02`.
+
+**An empty payload clears the value**, and the digits show the DS3231 again.
+The board keeps the value in RAM alone, thus a reset clears it.
+
+The digits hold two characters. A value of three characters, such as `-12` or
+`100`, alternates two frames every 3 s: its first character, then its last two.
+`-12` shows ` -` and `12`, and `100` shows ` 1` and `00`. A value of one
+character is right-aligned, such as ` 5`.
+
+The reading of the DS3231 uses the same rounding and the same frames.
+
+The reply is an ACK.
+
+### `0x08` Request the settings, `0x09` the settings
+
+The request has an empty payload. The reply is a `0x09` frame with the same
+correlation ID. It carries the values the board holds:
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The brightness of the digits |
+| 1 | 1 | The brightness of the panels |
+| 2 | 2 | The minute that stops the light, `0xFFFF` when the period is off |
+| 4 | 2 | The minute that starts the light again |
+| 6 | 2 | The offset of the local time, signed |
+| 8 | 2 | The correction of the temperature, signed |
+| 10 | 1 | 1 when an outside temperature is set |
+| 11 | 2 | The outside temperature in tenths, signed |
+
+The first six fields are the settings of the store in the flash. Thus a caller
+that restarts reads what a person set before, and not its own defaults.
+
+Note: a `0x09` frame gets no ACK. The frame is itself the reply.
+
 ## The display
 
 These opcodes reach the two panels.
@@ -301,7 +349,8 @@ The reply is an ACK.
 | 1 | 1 | The attributes |
 | 2 | n | The text in UTF-8, without a terminator |
 
-A payload of the panel alone clears that panel.
+A payload of the panel alone clears that panel. The text holds at most 64
+bytes; a longer one gets a NACK with the code `0x02`.
 
 The bits 0 and 1 of the attributes give the place of the text across the
 panel:
@@ -329,6 +378,15 @@ The other bits are 0. Any other value gets a NACK with the code `0x03`.
 
 The font of the firmware holds the ASCII table. The extended font in the flash
 holds the other letters. A character that neither font holds gives a space.
+
+**A line feed (`0x0A`) in a text of the main panel gives two lines.** The board
+splits the text at the first line feed and draws both parts, each one centred,
+in the compact font built into the firmware. The compact font holds capitals,
+the digits, the Polish letters and some punctuation; a small letter takes the
+shape of its capital, and any other character gives a space. A line wider than
+the panel (17 characters) is cut and does not scroll. A later line feed draws as
+a space, and the attributes of the text do not apply. A text of the sub panel
+holds no line feed meaning: it draws as a space.
 
 **A text wider than its panel scrolls.** The board compares the rendered width
 against the panel and starts the same window/source scroll that `0x16` uses,
@@ -374,7 +432,9 @@ The reply is an ACK.
 
 ### `0x15` Take a font from the flash
 
-The payload is the name of a font, such as `compact`. **An empty payload gives
+The payload is the name of a font, such as `compact`. **The font replaces the
+big font**, which draws every single-line text on both panels. The compact font
+of two lines is part of the firmware and no request replaces it. **An empty payload gives
 the names of the fonts**, refer to
 [The names of the assets](#the-names-of-the-assets).
 
@@ -382,7 +442,9 @@ A font carries its own cell. The font of the firmware takes 7 rows for a
 letter, thus one line fills a panel of 14 rows. The compact font takes 5 rows
 in a cell of 7, thus **two lines fit**.
 
-A file that is absent or not a font gets a NACK with the code `0x05`.
+The board checks the whole file before it replaces the font, thus a file that
+is absent, not a font, or not in code point order gets a NACK with the code
+`0x05` and leaves the font as it was.
 
 The reply is an ACK.
 
@@ -472,7 +534,21 @@ The reply is an ACK.
 
 ### `0x18` Stop the animations
 
-The payload names a panel, or it is empty for both. Each rectangle keeps the pixels of its last step.
+The payload names a panel, or it is empty for both. Each rectangle keeps the pixels of its last step. A panel above 1 gets a NACK with the code `0x03`.
+
+The reply is an ACK.
+
+### `0x19` Give a panel to the board
+
+| Offset | Size | Field |
+| :--- | :--- | :--- |
+| 0 | 1 | The panel |
+
+The panel loses its animation and its pixels, and the board owns its content
+again. The sub panel shows the day of the week within one second, and the main
+panel stays empty. The greeting of the start does not return.
+
+A text, a clear or an animation on the panel takes it from the board again.
 
 The reply is an ACK.
 

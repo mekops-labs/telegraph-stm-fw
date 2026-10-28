@@ -5,6 +5,40 @@ All notable changes to this project go into this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Opcode `0x07` sets an outside temperature on the temperature digits, and an
+  empty payload clears it.
+- Opcodes `0x08` and `0x09` give the settings the board holds.
+- Opcode `0x19` gives a panel back to the board.
+- A line feed in a text of the main panel draws two lines in a compact font
+  built into the firmware.
+- The digits round to whole degrees, show the sign, and alternate a value of
+  three characters every 3 s.
+- `tg-display` requests `0x48` to `0x4b` carry the new opcodes.
+- `tg-hass` has the entity "External temperature".
+- `make fontcompact` regenerates the compact font of the firmware.
+
+### Changed
+
+- `IPC_OP_ANIM_STOP` stops the panel its payload names.
+- A font file is checked in full before it replaces the big font.
+- `tg-hass` reads the levels and the period from the board, and no longer
+  starts from its own defaults.
+- `tg-hass` turns `\n` in a main text into a line feed, shows an empty text as
+  the default of its panel, and cuts a text to 64 bytes.
+- The main panel entity of `tg-hass` offers 32 characters.
+- A failed save of the settings and the result of their load go to the edge
+  MCU as log lines.
+
+### Fixed
+
+- The temperature digits show a negative reading, and round it.
+- A restart of `tg-hass` no longer resets the other level or the other time
+  of a pair on the next change.
+
 ## [0.7.0] - 2026-10-07
 
 ### Added
