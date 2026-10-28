@@ -141,7 +141,7 @@ mqtt mosquitto_pub -h 127.0.0.1 -p "$PORT" \
 sleep 3
 
 check "a command reaches the board" 'opcode 0x13' "$(cat "$WORK/stub.log")"
-check "the entity reads back what was set" 'hello from HA' \
+check "the entity reads back what was set" '{"text":"hello from HA"}' \
       "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
              -t "telegraph/$DEVICE/main" -C 1 -W 5 2>&1)"
 
@@ -220,6 +220,8 @@ pub main/set ""
 sleep 3
 check "an empty main text releases the main panel" 'release panel 0' \
       "$(cat "$WORK/stub.log")"
+check "an empty text reads back as a document, not an empty message" \
+      '{"text":""}' "$(sub main)"
 pub sub/set ""
 sleep 3
 check "an empty sub text releases the sub panel" 'release panel 1' \
@@ -238,6 +240,11 @@ sleep 3
 check "a long text is cut to the 64 bytes the board takes" \
       'text hex \(c5bc\)\{32\}$' "$(grep -a 'text hex' "$WORK/stub.log" | tail -1)"
 check "the cut is logged" 'was cut to 64 bytes' "$(grep -a 'hass:' "$WORK/engine.log")"
+check "a level reads back as the board took it" '^7$' "$(sub brightness/digits)"
+check "the panel entities read their text from a document" \
+      '"val_tpl":"{{value_json.text}}"' \
+      "$(mqtt mosquitto_sub -h 127.0.0.1 -p "$PORT" \
+             -t "homeassistant/device/$DEVICE/config" -C 1 -W 5 2>&1)"
 
 check "the cadence comes from the config mount" 'every 5 s' \
       "$(grep -a 'hass:' "$WORK/engine.log")"

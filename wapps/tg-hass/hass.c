@@ -136,10 +136,10 @@ static void topic(char *out, size_t cap, const char *leaf) {
 
 /* Text on a panel. The cap counts the text as received, and a main text turns
  * the two characters \n into a line feed. An empty text gives the panel back
- * to the board.
+ * to the board. True when the board took the text.
  */
 
-static void set_text(uint8_t panel, char *body, size_t len) {
+static bool set_text(uint8_t panel, char *body, size_t len) {
     uint8_t payload[TG_DSP_TEXT_MAX + TG_DSP_TEXT_BODY];
     size_t cut = hass_utf8_prefix(body, len, TG_DSP_TEXT_MAX);
     int rc;
@@ -173,7 +173,10 @@ static void set_text(uint8_t panel, char *body, size_t len) {
 
     if (rc != TG_DSP_OK) {
         emitf("hass: the panel %u refused the text (%d)\n", panel, rc);
+        return false;
     }
+
+    return true;
 }
 
 /* One brightness level, for the digits or for the panels. The request carries
@@ -185,30 +188,30 @@ static uint8_t g_panels = 4;
 
 static bool ensure_synced(void);
 
-static void set_bright(bool digits, unsigned int level) {
+static bool set_bright(bool digits, unsigned int level) {
     uint8_t payload[2];
 
     if (!ensure_synced()) {
-        return;
+        return false;
     }
 
     if (level > IPC_BRIGHT_MAX) {
         level = IPC_BRIGHT_MAX;
     }
 
-    if (digits) {
-        g_digits = (uint8_t)level;
-    } else {
-        g_panels = (uint8_t)level;
-    }
-
-    payload[TG_DSP_BRIGHT_DIGITS] = g_digits;
-    payload[TG_DSP_BRIGHT_PANELS] = g_panels;
+    payload[TG_DSP_BRIGHT_DIGITS] = digits ? (uint8_t)level : g_digits;
+    payload[TG_DSP_BRIGHT_PANELS] = digits ? g_panels : (uint8_t)level;
 
     int rc = tg_dsp_ask(&g_display, TG_DSP_OP_BRIGHT, payload, sizeof(payload));
     if (rc != TG_DSP_OK) {
         emitf("hass: the brightness was refused (%d)\n", rc);
+        return false;
     }
+
+    g_digits = payload[TG_DSP_BRIGHT_DIGITS];
+    g_panels = payload[TG_DSP_BRIGHT_PANELS];
+
+    return true;
 }
 
 /* The period without light, as two minutes of the local day. Equal values
@@ -290,30 +293,33 @@ static bool ensure_synced(void) {
     return false;
 }
 
-static void set_dnd(bool is_start, unsigned int minute) {
+static bool set_dnd(bool is_start, unsigned int minute) {
     uint8_t payload[TG_DSP_SLEEP_LEN];
 
     if (!ensure_synced()) {
-        return;
+        return false;
     }
 
     if (minute >= IPC_MINUTES_PER_DAY) {
         minute = IPC_MINUTES_PER_DAY - 1;
     }
 
-    if (is_start) {
-        g_dnd_start = (uint16_t)minute;
-    } else {
-        g_dnd_end = (uint16_t)minute;
-    }
+    uint16_t start = is_start ? (uint16_t)minute : g_dnd_start;
+    uint16_t end = is_start ? g_dnd_end : (uint16_t)minute;
 
-    ipc_put_u16(&payload[TG_DSP_SLEEP_START], g_dnd_start);
-    ipc_put_u16(&payload[TG_DSP_SLEEP_END], g_dnd_end);
+    ipc_put_u16(&payload[TG_DSP_SLEEP_START], start);
+    ipc_put_u16(&payload[TG_DSP_SLEEP_END], end);
 
     int rc = tg_dsp_ask(&g_display, TG_DSP_OP_SLEEP, payload, sizeof(payload));
     if (rc != TG_DSP_OK) {
         emitf("hass: the DND period was refused (%d)\n", rc);
+        return false;
     }
+
+    g_dnd_start = start;
+    g_dnd_end = end;
+
+    return true;
 }
 
 /* The outside temperature as HA's text entity sends it: a decimal degree, or
@@ -491,9 +497,11 @@ static int publish_discovery(void) {
         "\"offline\","
         "\"cmps\":{"
         "\"main\":{\"p\":\"text\",\"name\":\"Main panel\",\"cmd_t\":\"%s\","
-        "\"stat_t\":\"%s\",\"max\":%u,\"uniq_id\":\"%s_main\"},"
+        "\"stat_t\":\"%s\",\"val_tpl\":\"{{value_json.text}}\",\"max\":%u,"
+        "\"uniq_id\":\"%s_main\"},"
         "\"sub\":{\"p\":\"text\",\"name\":\"Sub panel\",\"cmd_t\":\"%s\","
-        "\"stat_t\":\"%s\",\"max\":%u,\"uniq_id\":\"%s_sub\"},"
+        "\"stat_t\":\"%s\",\"val_tpl\":\"{{value_json.text}}\",\"max\":%u,"
+        "\"uniq_id\":\"%s_sub\"},"
         "\"digits\":{\"p\":\"number\",\"name\":\"Digit brightness\","
         "\"cmd_t\":\"%s\",\"stat_t\":\"%s\",\"min\":0,\"max\":%u,\"step\":1,"
         "\"ent_cat\":\"config\",\"uniq_id\":\"%s_digits\"},"
@@ -582,6 +590,33 @@ static void echo_state(const char *leaf, const char *value) {
     mqtt_publish(&g_mqtt, t, value, true);
 }
 
+/* The text of a panel, as the document {"text":"..."}. A document is never
+ * empty, and an empty retained message would delete the read-back.
+ */
+
+static void echo_text(const char *leaf, const char *value) {
+    static char doc[(VALUE_MAX * 6u) + 16u];
+    size_t n = 0;
+
+    n += (size_t)snprintf(doc, sizeof(doc), "{\"text\":\"");
+
+    for (; *value != '\0' && n + 8u < sizeof(doc); value++) {
+        unsigned char c = (unsigned char)*value;
+
+        if (c == '"' || c == '\\') {
+            doc[n++] = '\\';
+            doc[n++] = (char)c;
+        } else if (c < 0x20u) {
+            n += (size_t)snprintf(&doc[n], sizeof(doc) - n, "\\u%04x", c);
+        } else {
+            doc[n++] = (char)c;
+        }
+    }
+
+    snprintf(&doc[n], sizeof(doc) - n, "\"}");
+    echo_state(leaf, doc);
+}
+
 /* Does `topic` end with "<prefix>/<device>/<leaf>"? */
 
 static bool is_topic(const char *got, const char *leaf) {
@@ -603,32 +638,36 @@ static void on_message(const struct mqtt_msg_s *msg) {
     value[len] = '\0';
 
     if (is_topic(msg->topic, "main/set")) {
-        set_text(TG_DSP_PANEL_MAIN, value, len);
-        echo_state("main", value);
+        if (set_text(TG_DSP_PANEL_MAIN, value, len)) {
+            echo_text("main", value);
+        }
     } else if (is_topic(msg->topic, "sub/set")) {
-        set_text(TG_DSP_PANEL_SUB, value, len);
-        echo_state("sub", value);
+        if (set_text(TG_DSP_PANEL_SUB, value, len)) {
+            echo_text("sub", value);
+        }
     } else if (is_topic(msg->topic, "temperature/ext/set")) {
         set_ext(value, len);
         publish_state();
     } else if (is_topic(msg->topic, "brightness/digits/set")) {
-        set_bright(true, (unsigned int)strtoul(value, NULL, 10));
-        echo_state("brightness/digits", value);
+        if (set_bright(true, (unsigned int)strtoul(value, NULL, 10))) {
+            snprintf(value, sizeof(value), "%u", g_digits);
+            echo_state("brightness/digits", value);
+        }
     } else if (is_topic(msg->topic, "brightness/panels/set")) {
-        set_bright(false, (unsigned int)strtoul(value, NULL, 10));
-        echo_state("brightness/panels", value);
+        if (set_bright(false, (unsigned int)strtoul(value, NULL, 10))) {
+            snprintf(value, sizeof(value), "%u", g_panels);
+            echo_state("brightness/panels", value);
+        }
     } else if (is_topic(msg->topic, "dnd/start/set")) {
         unsigned int minute;
 
-        if (parse_hhmm(value, &minute)) {
-            set_dnd(true, minute);
+        if (parse_hhmm(value, &minute) && set_dnd(true, minute)) {
             echo_state("dnd/start", value);
         }
     } else if (is_topic(msg->topic, "dnd/end/set")) {
         unsigned int minute;
 
-        if (parse_hhmm(value, &minute)) {
-            set_dnd(false, minute);
+        if (parse_hhmm(value, &minute) && set_dnd(false, minute)) {
             echo_state("dnd/end", value);
         }
     }
@@ -652,9 +691,14 @@ static int session(void) {
     }
 
     snprintf(client_id, sizeof(client_id), "tg-hass-%s", g_device);
+    errno = 0;
     if (mqtt_connect(&g_mqtt, fd, client_id, g_user, g_pass, g_avail, "offline",
                      KEEPALIVE_S) < 0) {
-        emitf("hass: the broker took no connection (errno %d)\n", errno);
+        if (errno != 0) {
+            emitf("hass: the broker took no connection (errno %d)\n", errno);
+        } else {
+            emit("hass: the broker refused the session\n");
+        }
         close(fd);
         return -1;
     }
