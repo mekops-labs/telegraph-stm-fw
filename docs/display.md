@@ -25,6 +25,11 @@ The launch config names the clients as the arguments of the display:
 A launch config that names none gets that pair. The display serves four
 clients, and the prefix `tgd-` keeps its pipes apart from the broker's.
 
+The display lists `read=tgd-<client>-req,write=tgd-<client>-rsp` in its `pipe`
+grant for each client, and a client lists the other ends,
+`write=tgd-<client>-req,read=tgd-<client>-rsp`. The display also lists the
+pipes it holds to the broker, `write=tg-display-req,read=tg-display-rsp`.
+
 ## The frames
 
 The framing is [the one of the link](ipc-protocol.md) — the same encoder, the

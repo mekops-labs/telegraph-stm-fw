@@ -52,6 +52,7 @@ the wapp. The wapp does not follow a rule of the time zone.
 | :--- | :--- |
 | `{"name":"rtc","options":"devices=main,set"}` | The wapp reads the engine clock and writes it. |
 | The peer `time` in the arguments of `tg-broker` | The pipes `/dev/pipe/tg-time-req` and `tg-time-rsp`. |
+| `{"name":"pipe","options":"write=tg-time-req,read=tg-time-rsp"}` | The wapp writes its requests and reads its replies. |
 
 The peer asks for no frame that nobody requested.
 

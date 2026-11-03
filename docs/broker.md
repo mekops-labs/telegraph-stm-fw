@@ -25,6 +25,18 @@ the frames of that kind that no request asked for.
 "args": ["display", "usb:0x33", "ota", "time"]
 ```
 
+Each wapp opens only the pipes its `pipe` grant lists. The broker lists the
+request pipe to read and the reply pipe to write for every peer it serves:
+
+```json
+{"name": "pipe", "options": "read=tg-display-req,write=tg-display-rsp"}
+```
+
+A peer lists the other ends, `write=tg-<peer>-req,read=tg-<peer>-rsp`. One
+entry holds 127 characters, thus the broker repeats the entry for its peers.
+An engine built with `CONFIG_WANTED_VFS_PIPE_AMBIENT` lets a wapp that has no
+`pipe` grant open every pipe.
+
 The broker serves four peers: the display, the USB port, the firmware writer and
 the clock. The pipe table of the engine is wider than the eight pipes of its
 default, because the display serves clients of its own over the same table.
