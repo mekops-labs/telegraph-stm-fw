@@ -89,9 +89,9 @@ STUB_WAKE=360 nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
 stub_pid=$!
 sleep 1
 
-BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["display"]}'
-DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"args":["hass"]}'
-HCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"mqtt","address":"tcp://127.0.0.1:'"$PORT"'"}],"envs":["HASS_DEVICE='"$DEVICE"'","HASS_PREFIX=telegraph"],"mounts":[{"name":"config","path":"/etc/tg-hass.conf","options":"interval_s=5"}]}'
+BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"},{"name":"pipe","options":"read=tg-display-req,write=tg-display-rsp"}],"args":["display"]}'
+DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tg-display-req,read=tg-display-rsp,read=tgd-hass-req,write=tgd-hass-rsp"}],"args":["hass"]}'
+HCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tgd-hass-req,read=tgd-hass-rsp"}],"sockets":[{"name":"mqtt","address":"tcp://127.0.0.1:'"$PORT"'"}],"envs":["HASS_DEVICE='"$DEVICE"'","HASS_PREFIX=telegraph"],"mounts":[{"name":"config","path":"/etc/tg-hass.conf","options":"interval_s=5"}]}'
 
 {
   sleep 1; echo "create tg-broker"

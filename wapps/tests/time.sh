@@ -106,8 +106,8 @@ CFG
     sleep 1
 
     local BCFG TCFG
-    BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["time"]}'
-    TCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"rtc","options":"devices=main,set"}],"envs":["TELEGRAPH_TIME_INTERVAL_S=1","TELEGRAPH_TIME_LOOPS='"$loops"'"]}'
+    BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"},{"name":"pipe","options":"read=tg-time-req,write=tg-time-rsp"}],"args":["time"]}'
+    TCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"rtc","options":"devices=main,set"},{"name":"pipe","options":"write=tg-time-req,read=tg-time-rsp"}],"envs":["TELEGRAPH_TIME_INTERVAL_S=1","TELEGRAPH_TIME_LOOPS='"$loops"'"]}'
 
     {
         sleep 1; echo "create tg-broker"
