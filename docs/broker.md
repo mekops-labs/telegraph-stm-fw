@@ -33,7 +33,9 @@ request pipe to read and the reply pipe to write for every peer it serves:
 ```
 
 A peer lists the other ends, `write=tg-<peer>-req,read=tg-<peer>-rsp`. One
-entry holds 127 characters, thus the broker repeats the entry for its peers.
+entry holds 127 characters, which lists the request and reply pipes of three
+peers. On Sheriff 0.16.0 the broker and the display did not start at boot with
+two `pipe` entries, and started with one.
 An engine built with `CONFIG_WANTED_VFS_PIPE_AMBIENT` lets a wapp that has no
 `pipe` grant open every pipe.
 
