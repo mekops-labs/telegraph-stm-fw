@@ -13,6 +13,11 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `deploy/telegraph.json` and the host tests grant each wapp the pipes it
   opens, with a `pipe` driver entry.
 
+### Changed
+
+- The engine firmware builds without ambient pipes: each wapp opens only the
+  pipes its grant lists.
+
 ### Fixed
 
 - `tools/wapppush.py` records the digest of the uncompressed layer as the
