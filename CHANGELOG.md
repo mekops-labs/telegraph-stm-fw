@@ -10,6 +10,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `make test` runs the unit tests of `tools/wapppush.py`.
+- `make deploy` first checks that each pipe pair the broker and display
+  arguments name has a grant on both ends (`make check-pipe-grants`).
 - `deploy/telegraph.json` and the host tests grant each wapp the pipes it
   opens, with a `pipe` driver entry.
 

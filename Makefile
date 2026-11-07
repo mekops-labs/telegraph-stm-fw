@@ -33,6 +33,7 @@ FLASHER_ENV   := xiao_esp32s3
         savedefconfig test version font compactfont fontcompact sprites \
         flasher flasher-image flasher-ota wapps wapp-images wapp-test \
         ota-image wapp-push require-registry require-broker deploy \
+        check-pipe-grants \
         lint-format format-fix tidy cppcheck require-ipc \
         check-engine check-launch-config edge-seeds edge-build edge-flash \
         edge-monitor \
@@ -273,7 +274,12 @@ $(DEPLOY_OUT): $(DEPLOY_SPEC) FORCE
 
 FORCE:
 
-deploy: wapp-push $(DEPLOY_OUT)
+# Each pair of pipes the broker and the display arguments name needs a grant on
+# both ends: an engine without ambient pipes opens no other pipe.
+check-pipe-grants:
+	python3 tools/check_pipe_grants.py $(DEPLOY_SPEC)
+
+deploy: check-pipe-grants wapp-push $(DEPLOY_OUT)
 	deputy device desired-state push --file=$(DEPLOY_OUT) $(DEVICE)
 
 # The engine firmware of the edge MCU. The board directory configs/ plugs into the

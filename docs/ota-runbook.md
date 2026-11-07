@@ -84,7 +84,7 @@ them from an OCI registry:
 ```sh
 cd <telegraph-fw>
 make ota-image                    # the STM32 firmware into the wapp that writes it
-make deploy REGISTRY=<host>:5000  # push the images, then the desired state
+make deploy REGISTRY=<host>:5000  # check the grants, push the images, then the desired state
 ```
 
 Refer to [the broker](broker.md) for what each wapp is granted.
