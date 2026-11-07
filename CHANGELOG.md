@@ -17,6 +17,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The engine check looks for `pipe` grants, not the ambient-pipe option, so
+  the build also runs on engine v0.31.0, which removes that option.
 - The engine firmware builds without ambient pipes: each wapp opens only the
   pipes its grant lists.
 - The firmware needs engine v0.30.0 or later, and `make edge-build` stops on an

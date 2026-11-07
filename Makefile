@@ -305,7 +305,7 @@ PUBLISH     = $(ENGINE_DIR)/docker/publish-images.sh
 check-engine:
 	@test -f $(ENGINE_DIR)/Makefile || \
 	    { echo "no engine checkout at $(ENGINE_DIR); set ENGINE_DIR" >&2; exit 1; }
-	@grep -q "^config WANTED_VFS_PIPE_AMBIENT$$" $(ENGINE_DIR)/Kconfig.engine || \
+	@grep -q "^config WANTED_PIPE_GRANTS$$" $(ENGINE_DIR)/Kconfig.engine || \
 	    { echo "engine lacks pipe grants; use v0.30.0 or later" >&2; exit 1; }
 
 # An engine refuses some settings of a launch config at startup, and a firmware
