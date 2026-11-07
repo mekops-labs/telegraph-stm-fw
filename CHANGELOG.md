@@ -17,6 +17,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The engine firmware builds without ambient pipes: each wapp opens only the
   pipes its grant lists.
+- The firmware needs engine v0.30.0 or later, and `make edge-build` stops on an
+  older engine. Update the engine image before `make deploy`.
 
 ### Fixed
 
