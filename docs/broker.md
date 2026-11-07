@@ -33,9 +33,13 @@ request pipe to read and the reply pipe to write for every peer it serves:
 ```
 
 A peer lists the other ends, `write=tg-<peer>-req,read=tg-<peer>-rsp`. One
-entry holds 127 characters, which lists the request and reply pipes of three
-peers. Sheriff 0.16.0 refuses a wapp with two `pipe` entries (`conflicting driver
-grant: pipe`), and Sheriff 0.17.0 merges them.
+entry holds 127 bytes, and the pair of one peer takes 29 to 57 bytes with its
+name, so a longer list repeats the entry and the engine merges the entries of
+one wapp. Sheriff 0.16.0 refuses a wapp with two `pipe` entries (`conflicting
+driver grant: pipe`); Sheriff 0.17.0 passes them to the engine. One wapp's
+grant names at most 8 pipes, so the broker serves at most four peers.
+A peer that takes another name from `TELEGRAPH_PEER` needs a grant that lists
+the pipes of that name.
 An engine built with `CONFIG_WANTED_VFS_PIPE_AMBIENT` lets a wapp that has no
 `pipe` grant open every pipe.
 
@@ -125,7 +129,8 @@ SETTLE=25 tools/wsh-console.py "create tg-broker" "set_config tg-broker {...}" \
 The launch config of the broker names the port and its pins:
 
 ```json
-{"drivers":[{"name":"uart","options":"port=1,tx=1,rx=2,baud=460800,format=8N1"}],
+{"drivers":[{"name":"uart","options":"port=1,tx=1,rx=2,baud=460800,format=8N1"},
+             {"name":"pipe","options":"read=tg-probe-req,write=tg-probe-rsp"}],
  "args":["probe:0x03"]}
 ```
 
