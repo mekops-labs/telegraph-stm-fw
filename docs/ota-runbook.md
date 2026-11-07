@@ -89,8 +89,8 @@ make deploy REGISTRY=<host>:5000  # check the grants, push the images, then the 
 
 Refer to [the broker](broker.md) for what each wapp is granted.
 
-The desired state grants pipes, which needs an engine of v0.30.0 or later with
-its Sheriff 0.17.0 on the board. Update the engine image first, then run
+The desired state grants pipes, which needs an engine of v0.31.0 or later on
+the board. Update the engine image first, then run
 `make deploy`: between the two the wapps open no pipe, so the display and its
 peers stop until the deploy lands.
 

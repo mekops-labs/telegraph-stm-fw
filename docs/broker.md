@@ -40,8 +40,8 @@ driver grant: pipe`); Sheriff 0.17.0 passes them to the engine. One wapp's
 grant names at most 8 pipes, so the broker serves at most four peers.
 A peer that takes another name from `TELEGRAPH_PEER` needs a grant that lists
 the pipes of that name.
-On engine v0.30.0, a build that keeps `CONFIG_WANTED_VFS_PIPE_AMBIENT` lets a
-wapp that has no `pipe` grant open every pipe; v0.31.0 removes the option.
+A wapp that has no `pipe` grant opens no pipe: engine v0.31.0, which the
+firmware needs, has no ambient pipes.
 
 The broker serves four peers: the display, the USB port, the firmware writer and
 the clock. The pipe table of the engine is wider than the eight pipes of its
