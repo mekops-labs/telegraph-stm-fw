@@ -7,7 +7,8 @@ it translates HTTP into [the request set of the display](display.md), which
 
 ```json
 {"sockets": [{"name": "http", "address": "tcp://0.0.0.0:8080",
-              "role": "listen", "backlog": 2, "max_conns": 2}]}
+              "role": "listen", "backlog": 2, "max_conns": 2}],
+ "drivers": [{"name": "pipe", "options": "write=tgd-rest-req,read=tgd-rest-rsp"}]}
 ```
 
 The launch config of the broker names `tg-display` as one of its peers

@@ -95,7 +95,8 @@ serves two boards.
 {
   "name": "tg-hass",
   "policy": {
-    "Sockets": [{"Name": "mqtt", "Address": "tcp://broker.lan:1883"}]
+    "Sockets": [{"Name": "mqtt", "Address": "tcp://broker.lan:1883"}],
+    "Drivers": [{"Name": "pipe", "Options": "write=tgd-hass-req,read=tgd-hass-rsp"}]
   },
   "envs": ["HASS_DEVICE=telegraph-01", "HASS_NAME=Telegraph"]
 }
@@ -108,7 +109,7 @@ serves two boards.
 | `HASS_PREFIX` | `telegraph` | the prefix of the topics above |
 | `HASS_DISCOVERY` | `homeassistant` | the discovery prefix of Home Assistant |
 | `HASS_USER`, `HASS_PASS` | unset | the credentials of the broker |
-| `TELEGRAPH_CLIENT` | `hass` | the name of this client of the display |
+| `TELEGRAPH_CLIENT` | `hass` | the name of this client of the display; the `pipe` grant lists `tgd-<name>-req` and `tgd-<name>-rsp` |
 | `TELEGRAPH_SOCKET` | `mqtt` | the socket grant to use |
 
 **The four variables above are every one the board allows**, thus the cadence

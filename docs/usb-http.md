@@ -6,7 +6,8 @@ this wapp reaches it through [the broker](broker.md).
 
 ```json
 {"sockets": [{"name": "http", "address": "tcp://0.0.0.0:8081",
-              "role": "listen", "backlog": 2, "max_conns": 2}]}
+              "role": "listen", "backlog": 2, "max_conns": 2}],
+ "drivers": [{"name": "pipe", "options": "write=tg-usb-req,read=tg-usb-rsp"}]}
 ```
 
 The launch config of the broker names this wapp as one of its peers **and the

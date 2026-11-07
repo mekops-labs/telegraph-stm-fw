@@ -29,7 +29,8 @@ a buffer of the whole firmware would not fit beside the rest of it.
 
 ```json
 {"drivers": [{"name": "gpio",
-              "options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"}]}
+              "options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"},
+             {"name": "pipe", "options": "write=tg-ota-req,read=tg-ota-rsp"}]}
 ```
 
 `init=1` is mandatory on NRST. Without it the pin drives low as the grant opens

@@ -69,9 +69,9 @@ nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
 stub_pid=$!
 sleep 1
 
-BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["display"]}'
-DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"args":["rest"]}'
-RCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
+BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"},{"name":"pipe","options":"read=tg-display-req,write=tg-display-rsp"}],"args":["display"]}'
+DCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tg-display-req,read=tg-display-rsp,read=tgd-rest-req,write=tgd-rest-rsp"}],"args":["rest"]}'
+RCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tgd-rest-req,read=tgd-rest-rsp"}],"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
 
 {
   sleep 1; echo "create tg-broker"

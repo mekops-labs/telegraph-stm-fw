@@ -72,8 +72,8 @@ nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
 stub_pid=$!
 sleep 1
 
-BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["probe:0x03"]}'
-PCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"envs":["TELEGRAPH_FULL=1"]}'
+BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"},{"name":"pipe","options":"read=tg-probe-req,write=tg-probe-rsp"}],"args":["probe:0x03"]}'
+PCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tg-probe-req,read=tg-probe-rsp"}],"envs":["TELEGRAPH_FULL=1"]}'
 
 out=$({
   sleep 1; echo "create tg-broker"

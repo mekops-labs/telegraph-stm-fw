@@ -68,8 +68,8 @@ nohup python3 "$HERE/stm32stub.py" "$B" > "$WORK/stub.log" 2>&1 &
 stub_pid=$!
 sleep 1
 
-BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"}],"args":["usb:0x33"]}'
-UCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
+BCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"uart","options":"port=1,dev='"$A"',baud=460800,format=8N1"},{"name":"pipe","options":"read=tg-usb-req,write=tg-usb-rsp"}],"args":["usb:0x33"]}'
+UCFG='{"console":{"in":{"name":"null"},"out":{"name":"platform"},"err":{"name":"platform"}},"drivers":[{"name":"pipe","options":"write=tg-usb-req,read=tg-usb-rsp"}],"sockets":[{"name":"http","address":"tcp://127.0.0.1:'"$PORT"'","role":"listen","backlog":2,"max_conns":2}]}'
 
 {
   sleep 1; echo "create tg-broker"

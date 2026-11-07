@@ -10,6 +10,16 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `make test` runs the unit tests of `tools/wapppush.py`.
+- `deploy/telegraph.json` and the host tests grant each wapp the pipes it
+  opens, with a `pipe` driver entry.
+
+### Changed
+
+- The engine firmware builds without ambient pipes: each wapp opens only the
+  pipes its grant lists.
+- The firmware needs engine v0.30.0 or later, and `make edge-build` stops on an
+  older engine. Update the engine image before `make deploy`.
+- `tg-display` holds its pipes in one `pipe` entry, and serves three clients.
 
 ### Fixed
 

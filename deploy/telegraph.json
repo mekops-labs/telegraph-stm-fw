@@ -9,6 +9,14 @@
           {
             "Name": "uart",
             "Options": "port=1,tx=1,rx=2,baud=460800,format=8N1"
+          },
+          {
+            "Name": "pipe",
+            "Options": "read=tg-display-req,write=tg-display-rsp,read=tg-ota-req,write=tg-ota-rsp"
+          },
+          {
+            "Name": "pipe",
+            "Options": "read=tg-time-req,write=tg-time-rsp,read=tg-usb-req,write=tg-usb-rsp"
           }
         ]
       },
@@ -23,6 +31,14 @@
       "name": "tg-display",
       "version": "VERSION",
       "image": "REGISTRY/tg/display:VERSION",
+      "policy": {
+        "Drivers": [
+          {
+            "Name": "pipe",
+            "Options": "write=tg-display-req,read=tg-display-rsp,read=tgd-rest-req,write=tgd-rest-rsp,read=tgd-hass-req,write=tgd-hass-rsp"
+          }
+        ]
+      },
       "args": [
         "rest",
         "hass"
@@ -33,6 +49,12 @@
       "version": "VERSION",
       "image": "REGISTRY/tg/rest:VERSION",
       "policy": {
+        "Drivers": [
+          {
+            "Name": "pipe",
+            "Options": "write=tgd-rest-req,read=tgd-rest-rsp"
+          }
+        ],
         "Sockets": [
           {
             "Name": "http",
@@ -49,6 +71,12 @@
       "version": "VERSION",
       "image": "REGISTRY/tg/hass:VERSION",
       "policy": {
+        "Drivers": [
+          {
+            "Name": "pipe",
+            "Options": "write=tgd-hass-req,read=tgd-hass-rsp"
+          }
+        ],
         "Sockets": [
           {
             "Name": "mqtt",
@@ -79,6 +107,10 @@
           {
             "Name": "gpio",
             "Options": "pins=boot0:4:out,nrst:5:out:init=1:drive=od"
+          },
+          {
+            "Name": "pipe",
+            "Options": "write=tg-ota-req,read=tg-ota-rsp"
           }
         ]
       }
@@ -92,6 +124,10 @@
           {
             "Name": "rtc",
             "Options": "devices=main,set"
+          },
+          {
+            "Name": "pipe",
+            "Options": "write=tg-time-req,read=tg-time-rsp"
           }
         ]
       }
@@ -101,6 +137,12 @@
       "version": "VERSION",
       "image": "REGISTRY/tg/usb:VERSION",
       "policy": {
+        "Drivers": [
+          {
+            "Name": "pipe",
+            "Options": "write=tg-usb-req,read=tg-usb-rsp"
+          }
+        ],
         "Sockets": [
           {
             "Name": "http",
