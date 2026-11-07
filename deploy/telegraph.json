@@ -35,11 +35,7 @@
         "Drivers": [
           {
             "Name": "pipe",
-            "Options": "write=tg-display-req,read=tg-display-rsp,read=tgd-rest-req,write=tgd-rest-rsp"
-          },
-          {
-            "Name": "pipe",
-            "Options": "read=tgd-hass-req,write=tgd-hass-rsp"
+            "Options": "write=tg-display-req,read=tg-display-rsp,read=tgd-rest-req,write=tgd-rest-rsp,read=tgd-hass-req,write=tgd-hass-rsp"
           }
         ]
       },

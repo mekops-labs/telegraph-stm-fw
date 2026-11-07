@@ -19,6 +19,7 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pipes its grant lists.
 - The firmware needs engine v0.30.0 or later, and `make edge-build` stops on an
   older engine. Update the engine image before `make deploy`.
+- `tg-display` holds its pipes in one `pipe` entry, and serves three clients.
 
 ### Fixed
 
