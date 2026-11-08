@@ -306,8 +306,8 @@ check-engine:
 	@test -f $(ENGINE_DIR)/Makefile || \
 	    { echo "no engine checkout at $(ENGINE_DIR); set ENGINE_DIR" >&2; exit 1; }
 	@K=$(ENGINE_DIR)/Kconfig.engine; ! grep -q "^config WANTED_VFS_PIPE_AMBIENT$$" $$K && \
-	    grep -q "^config WANTED_PIPE_GRANTS$$" $$K || \
-	    { echo "engine at $(ENGINE_DIR) predates v0.31.0" >&2; exit 1; }
+	    [ $$(grep -cE "^config WANTED_(PIPE_GRANTS|VFS_WBUS)$$" $$K) = 2 ] || \
+	    { echo "engine at $(ENGINE_DIR) predates v0.32.0" >&2; exit 1; }
 
 # An engine refuses some settings of a launch config at startup, and a firmware
 # that embeds such a config never starts its supervisor.

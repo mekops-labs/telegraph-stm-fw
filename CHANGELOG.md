@@ -19,8 +19,9 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The engine firmware builds without ambient pipes: each wapp opens only the
   pipes its grant lists.
-- The firmware needs engine v0.31.0 or later, which has no ambient pipes, and
+- The firmware needs engine v0.32.0 or later, which has no ambient pipes, and
   `make edge-build` stops on an older engine. Update it before `make deploy`.
+- The firmware grants Sheriff `serve=supervisor` on the engine's `wbus` bus.
 - `tg-display` holds its pipes in one `pipe` entry, and serves three clients.
 
 ### Fixed

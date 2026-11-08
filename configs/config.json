@@ -15,7 +15,8 @@
                 {"name": "sha256"},
                 {"name": "ed25519"},
                 {"name": "inflate"},
-                {"name": "rtc", "options": "devices=main,set"}
+                {"name": "rtc", "options": "devices=main,set"},
+                {"name": "wbus", "options": "serve=supervisor"}
             ],
             "sockets": [
                 {"name": "ntp", "address": "udp://pool.ntp.org:123", "role": "connect"}
